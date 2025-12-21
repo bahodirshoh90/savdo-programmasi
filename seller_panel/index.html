@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sotuv Paneli</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/seller/static/style.css">
+    <link rel="stylesheet" href="/seller/static/sale-styles.css">
+    <script src="/seller/static/barcode-scanner.js"></script>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login-page" class="page active" style="display: flex;">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <i class="fas fa-store"></i>
+                    <h1>Sotuv Paneli</h1>
+                    <p>Tizimga kirish uchun login va parolni kiriting</p>
+                </div>
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="login-username">
+                            <i class="fas fa-user"></i> Login
+                        </label>
+                        <input type="text" id="login-username" placeholder="Username yoki Email" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">
+                            <i class="fas fa-lock"></i> Parol
+                        </label>
+                        <input type="password" id="login-password" placeholder="Parol" required autocomplete="current-password">
+                    </div>
+                    <div id="login-error" class="error-message" style="display: none;"></div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Kirish
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Seller Panel -->
+    <div id="seller-panel" class="page" style="display: none;">
+        <!-- Header -->
+        <header class="panel-header">
+            <div class="header-left">
+                <h1><i class="fas fa-store"></i> Sotuv Paneli</h1>
+            </div>
+            <!-- Navigation in header -->
+            <nav class="panel-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-home"></i> Bosh sahifa
+                </a>
+                <a href="#" class="nav-item" data-page="products" data-permission="products.view">
+                    <i class="fas fa-box"></i> Mahsulotlar
+                </a>
+                <a href="#" class="nav-item" data-page="sales" data-permission="sales.view">
+                    <i class="fas fa-shopping-cart"></i> Sotuvlar
+                </a>
+                <a href="#" class="nav-item" data-page="new-sale" data-permission="sales.create">
+                    <i class="fas fa-plus-circle"></i> Yangi Sotuv
+                </a>
+                <a href="#" class="nav-item" data-page="customers" data-permission="customers.view">
+                    <i class="fas fa-users"></i> Mijozlar
+                </a>
+                <a href="#" class="nav-item" data-page="orders" data-permission="orders.view">
+                    <i class="fas fa-clipboard-list"></i> Buyurtmalar
+                </a>
+                <a href="#" class="nav-item" data-page="admin" id="admin-nav-item" style="display: none;">
+                    <i class="fas fa-shield-alt"></i> Admin Boshqaruvi
+                </a>
+            </nav>
+            <div class="header-right">
+                <div class="user-info" onclick="showProfileModal()" style="cursor: pointer;">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="seller-name">Sotuvchi</span>
+                    <span class="role-badge" id="seller-role">Role</span>
+                </div>
+                <button class="btn btn-secondary" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Chiqish
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="panel-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="panel-page active">
+                <h2><i class="fas fa-chart-line"></i> Statistika</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-box"></i></div>
+                        <div class="stat-info">
+                            <h3 id="dashboard-total-products">0</h3>
+                            <p>Jami Mahsulotlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+                        <div class="stat-info">
+                            <h3 id="dashboard-total-sales">0</h3>
+                            <p>Bugungi Sotuvlar soni</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <div class="stat-info">
+                            <h3 id="dashboard-today-revenue">0</h3>
+                            <p>Bugungi Savdo summasi</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <div class="stat-info">
+                            <h3 id="dashboard-pending-orders">0</h3>
+                            <p>Kutilayotgan Buyurtmalar</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Page -->
+            <div id="products-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-box"></i> Mahsulotlar</h2>
+                </div>
+                <!-- Filters -->
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+                    <input type="text" id="seller-products-search" placeholder="Qidirish..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; flex: 1; min-width: 200px;" onkeyup="handleSellerProductFilterChange()">
+                    <input type="text" id="seller-product-brand-filter" placeholder="Brend..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onkeyup="handleSellerProductFilterChange()">
+                    <input type="text" id="seller-product-supplier-filter" placeholder="Yetkazib beruvchi..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onkeyup="handleSellerProductFilterChange()">
+                    <input type="text" id="seller-product-location-filter" placeholder="Joylashuv..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onkeyup="handleSellerProductFilterChange()">
+                    <select id="seller-stock-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="handleSellerProductFilterChange()">
+                        <option value="all">Barchasi</option>
+                        <option value="low">Kam qolganlar</option>
+                        <option value="out">Tugagan</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearSellerProductFilters()" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-times"></i> Tozalash
+                    </button>
+                </div>
+                <div id="products-pagination" class="pagination" style="margin-bottom: 1rem;"></div>
+                <div class="table-container">
+                    <table id="products-table">
+                        <thead>
+                            <tr>
+                                <th>Rasm</th>
+                                <th>ID</th>
+                                <th>Nomi</th>
+                                <th>Ombordagi qop</th>
+                                <th>Ombordagi dona</th>
+                                <th>Ulgurji narx</th>
+                                <th>Dona narx</th>
+                                <th>Oddiy narx</th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-tbody">
+                            <tr>
+                                <td colspan="9" class="text-center">Yuklanmoqda...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="products-pagination-bottom" class="pagination" style="margin-top: 1rem;"></div>
+            </div>
+
+            <!-- Sales Page -->
+            <div id="sales-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Sotuvlar</h2>
+                </div>
+                <!-- Filters -->
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="date" id="seller-sale-start-date" placeholder="Boshlanish sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadSales()">
+                    <input type="date" id="seller-sale-end-date" placeholder="Tugash sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadSales()">
+                    <input type="text" id="seller-sale-customer-search" placeholder="Mijoz qidirish..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; flex: 1; min-width: 200px;" onkeyup="handleSellerSaleCustomerSearch()">
+                    <select id="seller-sale-status-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadSales()">
+                        <option value="">Barcha holatlar</option>
+                        <option value="approved">Tasdiqlangan</option>
+                        <option value="pending">Kutilmoqda</option>
+                        <option value="rejected">Rad etilgan</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearSellerSaleFilters()" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-times"></i> Tozalash
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="sales-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Summa</th>
+                                <th>To'lov usuli</th>
+                                <th>Sana</th>
+                                <th>Holat</th>
+                                <th>Harakatlar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center">Yuklanmoqda...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- New Sale Page -->
+            <div id="new-sale-page" class="panel-page">
+                <div class="sale-page-header">
+                    <h2><i class="fas fa-cash-register"></i> Yangi Sotuv</h2>
+                    <div class="sale-header-info">
+                        <span id="sale-seller-name"></span>
+                        <span class="sale-date" id="sale-current-date"></span>
+                    </div>
+                </div>
+                
+                <div class="sale-layout">
+                    <div class="sale-left-panel">
+                        <form id="new-sale-form" class="sale-form" onsubmit="event.preventDefault(); (window.completeSale || completeSale)(); return false;">
+                            <!-- Customer Selection -->
+                            <div class="sale-card">
+                                <div class="sale-card-header">
+                                    <i class="fas fa-user"></i>
+                                    <h3>Mijoz</h3>
+                                </div>
+                                <div class="sale-card-body">
+                                    <div class="form-group">
+                                        <input type="text" id="sale-customer-search" placeholder="Mijoz qidirish yoki yangi mijoz..." 
+                                               class="search-input-large" autocomplete="off"
+                                               oninput="(window.handleCustomerSearch || handleCustomerSearch)(event)"
+                                               onfocus="(window.handleCustomerSearch || handleCustomerSearch)(event)">
+                                        <select id="sale-customer" required style="display: none;">
+                                            <option value="">Mijozni tanlang...</option>
+                                        </select>
+                                        <div id="customer-search-results" class="search-results"></div>
+                                    </div>
+                                    <div id="selected-customer-info" class="selected-customer" style="display: none;">
+                                        <div class="customer-badge">
+                                            <i class="fas fa-user-check"></i>
+                                            <span id="selected-customer-name"></span>
+                                            <span class="customer-type-badge" id="selected-customer-type"></span>
+                                            <button type="button" class="btn-icon" onclick="(window.clearSelectedCustomer || clearSelectedCustomer)()">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Products Selection -->
+                            <div class="sale-card">
+                                <div class="sale-card-header">
+                                    <i class="fas fa-box"></i>
+                                    <h3>Mahsulotlar</h3>
+                                </div>
+                                <div class="sale-card-body">
+                                    <div class="product-search-container">
+                                        <input type="text" id="sale-product-search" placeholder="Mahsulot nomi yoki barcode bo'yicha qidiring..." 
+                                               class="search-input-large" autocomplete="off"
+                                               oninput="(window.handleProductSearch || handleProductSearch)(event)">
+                                        <button type="button" class="btn btn-icon" onclick="(window.clearProductSearch || clearProductSearch)()">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div id="product-search-results" class="product-search-results"></div>
+                                    
+                                    <!-- Products Grid -->
+                                    <div id="products-grid-container" class="products-grid-container">
+                                        <h4 style="margin: 1rem 0 0.5rem 0; color: var(--text-color);">Barcha mahsulotlar</h4>
+                                        <div id="products-grid" class="products-grid">
+                                            <div class="products-loading">Yuklanmoqda...</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="sale-items-container" class="sale-items-list">
+                                        <div class="empty-state">
+                                            <i class="fas fa-shopping-cart"></i>
+                                            <p>Mahsulot qo'shish uchun qidiruvdan yoki ro'yxatdan tanlang</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Right Panel - Summary & Payment -->
+                    <div class="sale-right-panel">
+                        <div class="sale-summary-card">
+                            <div class="sale-summary-header">
+                                <i class="fas fa-receipt"></i>
+                                <h3>To'lov</h3>
+                            </div>
+                            <div class="sale-summary-body">
+                                <div class="summary-items" id="summary-items-list">
+                                    <p class="empty-summary">Mahsulotlar qo'shilmagan</p>
+                                </div>
+                                
+                                <div class="summary-totals">
+                                    <div class="summary-row">
+                                        <span>Jami mahsulotlar:</span>
+                                        <span id="summary-items-count">0</span>
+                                    </div>
+                                    <div class="summary-row">
+                                        <span>Jami summa:</span>
+                                        <span class="summary-total" id="sale-total">0 so'm</span>
+                                    </div>
+                                </div>
+
+                                <!-- Payment Amount Input -->
+                                <div class="payment-amount-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                                    <label for="payment-amount-input" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-color);">
+                                        <i class="fas fa-money-bill"></i> Mijoz bergan summa (so'm)
+                                    </label>
+                                    <input type="number" id="payment-amount-input" min="0" step="0.01" placeholder="0" 
+                                           style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1.1rem; font-weight: 600;"
+                                           oninput="(window.updatePaymentInfo || updatePaymentInfo)()">
+                                    
+                                    <!-- Change Display -->
+                                    <div id="payment-change-info" style="margin-top: 0.5rem; padding: 0.5rem; background: #f0f9ff; border-radius: 6px; display: none;">
+                                        <small id="payment-change-text" style="color: #0369a1; font-weight: 500;"></small>
+                                    </div>
+                                    
+                                    <!-- Excess Action Selection -->
+                                    <div id="excess-action-section" style="margin-top: 0.75rem; display: none;">
+                                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-light);">
+                                            Ortiqcha summa bilan nima qilish?
+                                        </label>
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <button type="button" class="excess-action-btn" data-action="return" onclick="selectExcessAction('return')" style="flex: 1; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: 6px; background: white; cursor: pointer;">
+                                                <i class="fas fa-hand-holding-usd"></i> Qaytarish
+                                            </button>
+                                            <button type="button" class="excess-action-btn" data-action="debt" onclick="selectExcessAction('debt')" style="flex: 1; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: 6px; background: white; cursor: pointer;">
+                                                <i class="fas fa-file-invoice-dollar"></i> Qarzdan ayirish
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="excess-action" value="">
+                                    </div>
+                                </div>
+
+                                <div class="payment-methods" style="margin-top: 1rem;">
+                                    <h4>To'lov usuli</h4>
+                                    <div class="payment-buttons">
+                                        <button type="button" class="payment-btn active" data-method="cash" onclick="(window.selectPaymentMethod || selectPaymentMethod)('cash')">
+                                            <i class="fas fa-money-bill-wave"></i>
+                                            <span>Naqd</span>
+                                        </button>
+                                        <button type="button" class="payment-btn" data-method="card" onclick="(window.selectPaymentMethod || selectPaymentMethod)('card')">
+                                            <i class="fas fa-credit-card"></i>
+                                            <span>Karta</span>
+                                        </button>
+                                        <button type="button" class="payment-btn" data-method="bank_transfer" onclick="(window.selectPaymentMethod || selectPaymentMethod)('bank_transfer')">
+                                            <i class="fas fa-university"></i>
+                                            <span>Hisob</span>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="sale-payment-method" value="cash">
+                                </div>
+
+                                <!-- Admin Approval Checkbox -->
+                                <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-radius: 8px; border: 1px solid #fbbf24;">
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                        <input type="checkbox" id="requires-admin-approval" style="width: 18px; height: 18px; cursor: pointer;" onchange="(window.updateCompleteButtonState || (() => {}))()">
+                                        <span style="font-weight: 600; color: #92400e;">
+                                            <i class="fas fa-shield-alt"></i> Admin ruxsati kerak
+                                        </span>
+                                    </label>
+                                    <small style="display: block; margin-top: 0.25rem; color: #78350f; font-size: 0.85rem;">
+                                        Belgilansa, sotuv admin tasdiqlaguncha kutiladi
+                                    </small>
+                                </div>
+
+                                <button type="button" class="btn btn-primary btn-large btn-complete" onclick="completeSale()" disabled>
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Sotuvni yakunlash</span>
+                                    <span class="btn-total" id="btn-total">0 so'm</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customers Page -->
+            <div id="customers-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-users"></i> Mijozlar</h2>
+                    <div class="page-actions">
+                        <input type="text" id="customers-search" placeholder="Qidirish..." class="search-input" onkeyup="searchCustomers()">
+                        <button class="btn btn-primary" onclick="showAddCustomerModal()">
+                            <i class="fas fa-plus"></i> Yangi Mijoz
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="customers-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nomi</th>
+                                <th>Telefon</th>
+                                <th>Turi</th>
+                                <th>Qarz balansi</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-tbody">
+                            <tr>
+                                <td colspan="6" class="text-center">Yuklanmoqda...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Orders Page -->
+            <div id="orders-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-clipboard-list"></i> Buyurtmalar</h2>
+                </div>
+                <div class="table-container">
+                    <table id="orders-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulotlar</th>
+                                <th>Summa</th>
+                                <th>Holati</th>
+                                <th>Sana</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center">Yuklanmoqda...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Page -->
+            <div id="admin-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-shield-alt"></i> Admin Boshqaruvi</h2>
+                </div>
+                
+                <!-- Admin Navigation Tabs -->
+                <div class="admin-tabs">
+                    <button class="admin-tab-btn active" onclick="showAdminTab('admin-dashboard', this)">
+                        <i class="fas fa-chart-line"></i> Statistika
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-products', this)">
+                        <i class="fas fa-box"></i> Mahsulotlar
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-customers', this)">
+                        <i class="fas fa-users"></i> Mijozlar
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-sales', this)">
+                        <i class="fas fa-receipt"></i> Sotuvlar
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-orders', this)">
+                        <i class="fas fa-shopping-cart"></i> Buyurtmalar
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-sellers', this)">
+                        <i class="fas fa-user-tie"></i> Sotuvchilar
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-gps', this)">
+                        <i class="fas fa-map-marker-alt"></i> GPS Xarita
+                    </button>
+                    <button class="admin-tab-btn" onclick="showAdminTab('admin-settings', this)">
+                        <i class="fas fa-cog"></i> Sozlamalar
+                    </button>
+                </div>
+                
+                <!-- Admin Dashboard Tab -->
+                <div id="admin-dashboard" class="admin-tab-content active">
+                    <h3>Umumiy Statistika</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-box"></i></div>
+                            <div class="stat-info">
+                                <h3 id="admin-total-products">0</h3>
+                                <p>Jami Mahsulotlar</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+                            <div class="stat-info">
+                                <h3 id="admin-total-orders">0</h3>
+                                <p>Jami Buyurtmalar</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                            <div class="stat-info">
+                                <h3 id="admin-total-sales">0</h3>
+                                <p>Jami Sotuvlar</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-users"></i></div>
+                            <div class="stat-info">
+                                <h3 id="admin-total-customers">0</h3>
+                                <p>Jami Mijozlar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Admin Products Tab -->
+                <div id="admin-products" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>Mahsulotlar Boshqaruvi</h3>
+                        <button class="btn btn-primary" onclick="showAddAdminProductModal()">
+                            <i class="fas fa-plus"></i> Yangi Mahsulot
+                        </button>
+                    </div>
+                    <div class="filters" style="margin-bottom: 1rem;">
+                        <input type="text" id="admin-product-search" placeholder="Qidirish (nomi yoki barcode)" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; flex: 1;" onkeyup="loadAdminProducts()">
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Rasm</th>
+                                    <th>Nomi</th>
+                                    <th>Barcode</th>
+                                    <th>Ombordagi qop</th>
+                                    <th>Ombordagi dona</th>
+                                    <th>Narx</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-products-tbody">
+                                <tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin Customers Tab -->
+                <div id="admin-customers" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>Mijozlar Boshqaruvi</h3>
+                        <button class="btn btn-primary" onclick="showAddAdminCustomerModal()">
+                            <i class="fas fa-plus"></i> Yangi Mijoz
+                        </button>
+                    </div>
+                    <div class="filters" style="margin-bottom: 1rem;">
+                        <input type="text" id="admin-customer-search" placeholder="Qidirish (ism yoki telefon)" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; flex: 1;" onkeyup="loadAdminCustomers()">
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Ism</th>
+                                    <th>Telefon</th>
+                                    <th>Manzil</th>
+                                    <th>Turi</th>
+                                    <th>Qarz</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-customers-tbody">
+                                <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin Sales Tab -->
+                <div id="admin-sales" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>Sotuvlar Boshqaruvi</h3>
+                    </div>
+                    <div class="filters" style="margin-bottom: 1rem;">
+                        <input type="date" id="admin-sale-start-date" placeholder="Boshlanish sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminSales()">
+                        <input type="date" id="admin-sale-end-date" placeholder="Tugash sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminSales()">
+                        <select id="admin-sale-status-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminSales()">
+                            <option value="">Barcha holatlar</option>
+                            <option value="pending">Kutilmoqda</option>
+                            <option value="approved">Tasdiqlangan</option>
+                            <option value="rejected">Rad etilgan</option>
+                        </select>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Sana</th>
+                                    <th>Mijoz</th>
+                                    <th>Sotuvchi</th>
+                                    <th>Summa</th>
+                                    <th>To'lov</th>
+                                    <th>Holat</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-sales-tbody">
+                                <tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin Orders Tab -->
+                <div id="admin-orders" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>Buyurtmalar Boshqaruvi</h3>
+                    </div>
+                    <div class="filters" style="margin-bottom: 1rem;">
+                        <input type="date" id="admin-order-start-date" placeholder="Boshlanish sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminOrders()">
+                        <input type="date" id="admin-order-end-date" placeholder="Tugash sanasi" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminOrders()">
+                        <select id="admin-order-status-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadAdminOrders()">
+                            <option value="">Barcha holatlar</option>
+                            <option value="pending">Kutilmoqda</option>
+                            <option value="processing">Jarayonda</option>
+                            <option value="completed">Tugallangan</option>
+                            <option value="cancelled">Bekor qilingan</option>
+                        </select>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Sana</th>
+                                    <th>Mijoz</th>
+                                    <th>Sotuvchi</th>
+                                    <th>Summa</th>
+                                    <th>Status</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-orders-tbody">
+                                <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin Sellers Tab -->
+                <div id="admin-sellers" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>Sotuvchilar Boshqaruvi</h3>
+                        <button class="btn btn-primary" onclick="showAddAdminSellerModal()">
+                            <i class="fas fa-plus"></i> Yangi Sotuvchi
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Ism</th>
+                                    <th>Username</th>
+                                    <th>Telefon</th>
+                                    <th>Email</th>
+                                    <th>Rol</th>
+                                    <th>Status</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-sellers-tbody">
+                                <tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin GPS Tab -->
+                <div id="admin-gps" class="admin-tab-content">
+                    <div class="page-header">
+                        <h3>GPS Xarita</h3>
+                        <button class="btn btn-primary" onclick="loadAdminGPSMap(); loadAdminSellersMarkers();">
+                            <i class="fas fa-sync-alt"></i> Yangilash
+                        </button>
+                    </div>
+                    <div id="admin-map" style="height: 600px; width: 100%; border-radius: 8px; position: relative;"></div>
+                </div>
+                
+                <!-- Admin Settings Tab -->
+                <div id="admin-settings" class="admin-tab-content">
+                    <h3>Sozlamalar</h3>
+                    <div class="form-section">
+                        <h4>Do'kon Ma'lumotlari</h4>
+                        <form id="admin-settings-form" onsubmit="saveAdminSettings(event)">
+                            <div class="form-group">
+                                <label>Do'kon nomi</label>
+                                <input type="text" id="admin-store-name">
+                            </div>
+                            <div class="form-group">
+                                <label>Chek footer matni</label>
+                                <textarea id="admin-receipt-footer" rows="3"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Ish boshlanish vaqti</label>
+                                <input type="time" id="admin-work-start-time">
+                            </div>
+                            <div class="form-group">
+                                <label>Ish tugash vaqti</label>
+                                <input type="time" id="admin-work-end-time">
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Saqlash</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('customer-modal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa;">&times;</span>
+            <h2 id="customer-modal-title">Yangi Mijoz</h2>
+            <form id="customer-form" onsubmit="saveCustomer(event)">
+                <div class="form-group">
+                    <label>Ism *</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="customer-phone" placeholder="+998901234567">
+                </div>
+                <div class="form-group">
+                    <label>Manzil</label>
+                    <textarea id="customer-address" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Mijoz turi *</label>
+                    <select id="customer-type" required>
+                        <option value="regular">Oddiy</option>
+                        <option value="retail">Dona</option>
+                        <option value="wholesale">Ulgurji</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Qarz limiti</label>
+                    <input type="number" id="customer-debt-limit" step="0.01" min="0" placeholder="Cheksiz uchun bo'sh qoldiring">
+                </div>
+                <div class="form-group">
+                    <label>Qo'shimcha ma'lumot</label>
+                    <textarea id="customer-notes" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('customer-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('profile-modal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa;">&times;</span>
+            <h2>Profilni Tahrirlash</h2>
+            <form id="profile-form" onsubmit="saveProfile(event)">
+                <input type="hidden" id="profile-seller-id">
+                <div class="form-group text-center">
+                    <img id="profile-image-preview" src="" alt="Profil rasmi" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 1rem; border: 1px solid #e2e8f0; display: none;">
+                    <br>
+                    <label for="profile-image-upload" class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                        <i class="fas fa-upload"></i> Rasm yuklash
+                    </label>
+                    <input type="file" id="profile-image-upload" accept="image/*" style="display: none;" onchange="handleProfileImageChange(event)">
+                </div>
+                <div class="form-group">
+                    <label>Ism Familiya *</label>
+                    <input type="text" id="profile-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="profile-username">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="profile-email">
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="profile-phone">
+                </div>
+                <div class="form-group">
+                    <label>Yangi parol (o'zgartirish uchun)</label>
+                    <input type="password" id="profile-password">
+                </div>
+                <div class="form-group">
+                    <label>Parolni tasdiqlang</label>
+                    <input type="password" id="profile-confirm-password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('profile-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Product Modal -->
+    <div id="admin-product-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('admin-product-modal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa;">&times;</span>
+            <h2 id="admin-product-modal-title">Yangi Mahsulot</h2>
+            <form id="admin-product-form" onsubmit="saveAdminProduct(event)">
+                <input type="hidden" id="admin-product-id">
+                <div class="form-group">
+                    <label>Nomi *</label>
+                    <input type="text" id="admin-product-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Barcode</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="admin-product-barcode" style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="generateAdminBarcode()" style="white-space: nowrap;">
+                            <i class="fas fa-barcode"></i> Generate
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Brend</label>
+                    <input type="text" id="admin-product-brand" placeholder="Masalan: Samsung, Apple">
+                </div>
+                <div class="form-group">
+                    <label>Yetkazib beruvchi</label>
+                    <input type="text" id="admin-product-supplier" placeholder="Kimdan kelgan">
+                </div>
+                <div class="form-group">
+                    <label>Ombordagi joylashuv</label>
+                    <input type="text" id="admin-product-location" placeholder="Masalan: Ombor 1, Rack A-5">
+                </div>
+                <div class="form-group">
+                    <label>Rasm URL</label>
+                    <input type="text" id="admin-product-image-url" placeholder="http:// yoki /uploads/...">
+                    <div id="admin-product-image-preview" style="margin-top: 0.5rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label>1 qopdagi dona soni *</label>
+                    <input type="number" id="admin-product-pieces-per-package" required min="1">
+                </div>
+                <div class="form-group">
+                    <label>Kelgan narx (1 dona uchun) *</label>
+                    <input type="number" id="admin-product-cost-price" required min="0" step="0.01">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ulgurji mijoz narxi (dona uchun) *</label>
+                        <input type="number" id="admin-product-wholesale-price" required min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Dona mijoz narxi (dona uchun) *</label>
+                        <input type="number" id="admin-product-retail-price" required min="0" step="0.01">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Oddiy mijoz narxi (dona uchun) *</label>
+                    <input type="number" id="admin-product-regular-price" required min="0" step="0.01">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ombordagi qop soni</label>
+                        <input type="number" id="admin-product-packages-in-stock" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Ombordagi dona soni</label>
+                        <input type="number" id="admin-product-pieces-in-stock" min="0" value="0">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('admin-product-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Customer Modal -->
+    <div id="admin-customer-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('admin-customer-modal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa;">&times;</span>
+            <h2 id="admin-customer-modal-title">Yangi Mijoz</h2>
+            <form id="admin-customer-form" onsubmit="saveAdminCustomer(event)">
+                <input type="hidden" id="admin-customer-id">
+                <div class="form-group">
+                    <label>Ism *</label>
+                    <input type="text" id="admin-customer-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="admin-customer-phone">
+                </div>
+                <div class="form-group">
+                    <label>Manzil</label>
+                    <input type="text" id="admin-customer-address">
+                </div>
+                <div class="form-group">
+                    <label>Mijoz turi *</label>
+                    <select id="admin-customer-type" required>
+                        <option value="wholesale">Ulgurji</option>
+                        <option value="retail">Dona</option>
+                        <option value="regular">Oddiy</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Izoh</label>
+                    <textarea id="admin-customer-notes"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Qarz limiti (so'm)</label>
+                    <input type="number" id="admin-customer-debt-limit" step="0.01" min="0" placeholder="Cheksiz uchun bo'sh qoldiring">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('admin-customer-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Seller Modal -->
+    <div id="admin-seller-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('admin-seller-modal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa;">&times;</span>
+            <h2 id="admin-seller-modal-title">Yangi Sotuvchi</h2>
+            <form id="admin-seller-form" onsubmit="saveAdminSeller(event)">
+                <input type="hidden" id="admin-seller-id">
+                <div class="form-group">
+                    <label>Ism Familiya *</label>
+                    <input type="text" id="admin-seller-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="admin-seller-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="admin-seller-email">
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="admin-seller-phone">
+                </div>
+                <div class="form-group">
+                    <label>Parol <span id="admin-seller-password-required" style="color: red;">*</span></label>
+                    <input type="password" id="admin-seller-password">
+                    <small style="color: var(--text-light);">Yangi sotuvchi qo'shishda parol majburiy</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('admin-seller-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Mapbox for Admin GPS - conditional loading -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" onerror="console.warn('Mapbox CSS yuklanmadi')" />
+    <script>
+        // Mapbox yuklash - agar yuklanmasa, xatolik ko'rsatmaslik
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+            script.onerror = function() {
+                console.warn('Mapbox GL JS yuklanmadi. GPS xarita funksiyasi ishlamaydi.');
+                window.mapboxgl = null;
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
+    
+    <script src="/seller/static/app.js"></script>
+    <script src="/seller/static/sale-functions.js"></script>
+</body>
+</html>
+

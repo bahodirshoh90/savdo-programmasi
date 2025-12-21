@@ -1,0 +1,84 @@
+# cPanel .htaccess - Root directory
+# Passenger uchun optimallashtirilgan
+
+RewriteEngine On
+
+# Static files - Admin panel (TO'G'RIDAN-TO'G'RI SERVE QILISH)
+RewriteCond %{REQUEST_URI} ^/static/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/admin_panel/static/$1 -f
+RewriteRule ^static/(.*)$ admin_panel/static/$1 [L]
+
+# Static files - Seller panel (TO'G'RIDAN-TO'G'RI SERVE QILISH)
+RewriteCond %{REQUEST_URI} ^/seller/static/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/seller_panel/static/$1 -f
+RewriteRule ^seller/static/(.*)$ seller_panel/static/$1 [L]
+
+# Uploads (TO'G'RIDAN-TO'G'RI SERVE QILISH)
+RewriteCond %{REQUEST_URI} ^/uploads/(.*)$
+RewriteCond %{DOCUMENT_ROOT}/uploads/$1 -f
+RewriteRule ^uploads/(.*)$ uploads/$1 [L]
+
+# Admin panel HTML
+RewriteCond %{REQUEST_URI} ^/admin/?$
+RewriteCond %{DOCUMENT_ROOT}/admin_panel/index.html -f
+RewriteRule ^admin/?$ admin_panel/index.html [L]
+
+# Seller panel HTML
+RewriteCond %{REQUEST_URI} ^/seller/?$
+RewriteCond %{DOCUMENT_ROOT}/seller_panel/index.html -f
+RewriteRule ^seller/?$ seller_panel/index.html [L]
+
+# Root - Admin panel
+RewriteCond %{REQUEST_URI} ^/$
+RewriteCond %{DOCUMENT_ROOT}/admin_panel/index.html -f
+RewriteRule ^$ admin_panel/index.html [L]
+
+# API so'rovlarini Python app ga yo'naltirish - MUHIM!
+# Passenger uchun - barcha API so'rovlari Python app ga ketishi kerak
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ backend/passenger_wsgi.py/api/$1 [L,QSA]
+
+# WebSocket so'rovlarini Python app ga yo'naltirish
+RewriteCond %{REQUEST_URI} ^/ws/?$
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ws/?$ backend/passenger_wsgi.py/ws [L,QSA]
+
+# Boshqa so'rovlar Python app ga (oxirgi)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ backend/passenger_wsgi.py/$1 [L,QSA]
+
+# MIME Types
+<IfModule mod_mime.c>
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType application/json .json
+</IfModule>
+
+# Cache control for static files
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+</IfModule>
+
+# Gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+

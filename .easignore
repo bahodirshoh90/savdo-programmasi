@@ -1,0 +1,15 @@
+﻿node_modules/
+.expo/
+dist/
+*.tar.gz
+backend/
+admin_panel/
+seller_panel/
+uploads/
+# Ignore everything except mobile_app
+/*
+!/mobile_app
+mobile_app/node_modules/
+mobile_app/.expo/
+mobile_app/dist/
+mobile_app/build/

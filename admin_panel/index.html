@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ombor va Sotuv Boshqaruvi - Admin Panel</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Mapbox CSS - conditional loading -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" onerror="console.warn('Mapbox CSS yuklanmadi, xarita ishlamasligi mumkin')" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/barcode-scanner.js"></script>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login-page" class="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <i class="fas fa-shield-alt"></i>
+                    <h1>Admin Panel</h1>
+                    <p>Tizimga kirish uchun login va parolni kiriting</p>
+                </div>
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="login-username">
+                            <i class="fas fa-user"></i> Login
+                        </label>
+                        <input type="text" id="login-username" placeholder="Username yoki Email" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">
+                            <i class="fas fa-lock"></i> Parol
+                        </label>
+                        <input type="password" id="login-password" placeholder="Parol" required autocomplete="current-password">
+                    </div>
+                    <div id="login-error" class="error-message" style="display: none;"></div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Kirish
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="container" style="display: none;">
+        <!-- Sidebar Toggle Button -->
+        <button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()" title="Sidebarni yashirish/ko'rsatish">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-warehouse"></i> Admin Panel</h2>
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem; margin-bottom: 0.5rem;" id="admin-user-name">Admin</div>
+                    <button onclick="logout()" class="btn btn-secondary" style="width: 100%; padding: 0.5rem; font-size: 0.85rem;">
+                        <i class="fas fa-sign-out-alt"></i> Chiqish
+                    </button>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i> Statistika
+                </a>
+                <a href="#" class="nav-item" data-page="products">
+                    <i class="fas fa-box"></i> Mahsulotlar
+                </a>
+                <a href="#" class="nav-item" data-page="customers">
+                    <i class="fas fa-users"></i> Mijozlar
+                </a>
+                <a href="#" class="nav-item" data-page="orders">
+                    <i class="fas fa-shopping-cart"></i> Buyurtmalar
+                </a>
+                <a href="#" class="nav-item" data-page="sellers">
+                    <i class="fas fa-user-tie"></i> Sotuvchilar
+                </a>
+                <a href="#" class="nav-item" data-page="gps">
+                    <i class="fas fa-map-marker-alt"></i> GPS Xarita
+                </a>
+                <a href="#" class="nav-item" data-page="sales">
+                    <i class="fas fa-receipt"></i> Sotuvlar
+                </a>
+                <a href="#" class="nav-item" data-page="roles">
+                    <i class="fas fa-shield-alt"></i> Rollar va Ruxsatlar
+                </a>
+                <a href="#" class="nav-item" data-page="audit-logs">
+                    <i class="fas fa-history"></i> Audit Log
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <i class="fas fa-cog"></i> Sozlamalar
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard" class="page active">
+                <h1><i class="fas fa-chart-line"></i> Statistika</h1>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-box"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-products">0</h3>
+                            <p>Jami Mahsulotlar (turlari)</p>
+                        </div>
+                    </div>
+                    <!-- <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-packages">0</h3>
+                            <p>Jami Qoplar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-cubes"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-pieces">0</h3>
+                            <p>Jami Donalar</p>
+                        </div>
+                    </div> -->
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-orders">0</h3>
+                            <p>Jami Buyurtmalar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-sales">0</h3>
+                            <p>Jami Sotuvlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-customers">0</h3>
+                            <p>Jami Mijozlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
+                        <div class="stat-info">
+                            <h3 id="inventory-value-by-cost">0</h3>
+                            <p>Ombor Qiymati (Kelgan Narx)</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
+                        <div class="stat-info">
+                            <h3 id="inventory-value-by-wholesale">0</h3>
+                            <p>Ombor Qiymati (Ulgurji Narx)</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-debt">0</h3>
+                            <p>Umumiy Qarzdorlik</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Period selector and profit stats -->
+                <div style="margin-top: 2rem; margin-bottom: 1rem;">
+                    <select id="dashboard-period" onchange="loadDashboard()" style="padding: 0.5rem; border-radius: 0.375rem; border: 1px solid var(--border-color);">
+                        <option value="">Oxirgi 30 kun</option>
+                        <option value="daily">Kunlik</option>
+                        <option value="monthly">Oylik</option>
+                        <option value="yearly">Yillik</option>
+                    </select>
+                </div>
+                
+                <!-- Profit and Payment Method Stats -->
+                <div class="stats-grid" style="margin-top: 1rem;">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-info">
+                            <h3 id="total-profit">0</h3>
+                            <p>Jami Foyda</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-money-bill"></i></div>
+                        <div class="stat-info">
+                            <h3 id="cash-amount">0</h3>
+                            <p>Naqd To'lov</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-credit-card"></i></div>
+                        <div class="stat-info">
+                            <h3 id="card-amount">0</h3>
+                            <p>Plastik Karta</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-university"></i></div>
+                        <div class="stat-info">
+                            <h3 id="bank-transfer-amount">0</h3>
+                            <p>Hisob Raqam</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="salesChart"></canvas>
+                </div>
+                <div class="stats-grid" style="margin-top: 2rem;">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-chart-bar"></i></div>
+                        <div class="stat-info">
+                            <h3 id="top-products-count">-</h3>
+                            <p>Eng ko'p sotilgan mahsulotlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-star"></i></div>
+                        <div class="stat-info">
+                            <h3 id="top-customers-count">-</h3>
+                            <p>Eng faol mijozlar</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container" style="margin-top: 2rem;">
+                    <h2>Eng ko'p sotilgan mahsulotlar</h2>
+                    <table id="top-products-table">
+                        <thead>
+                            <tr>
+                                <th>Mahsulot</th>
+                                <th>Sotilgan miqdor</th>
+                                <th>Jami summa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="top-products-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-container" style="margin-top: 2rem;">
+                    <h2>Eng faol mijozlar</h2>
+                    <table id="top-customers-table">
+                        <thead>
+                            <tr>
+                                <th>Mijoz</th>
+                                <th>Buyurtmalar soni</th>
+                                <th>Jami summa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="top-customers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Products Page -->
+            <div id="products" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-box"></i> Mahsulotlar</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="showAddProductModal()">
+                            <i class="fas fa-plus"></i> Yangi Mahsulot
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportProducts()">
+                            <i class="fas fa-download"></i> Excel Export
+                        </button>
+                        <button class="btn btn-secondary" onclick="importProducts()">
+                            <i class="fas fa-upload"></i> Excel Import
+                        </button>
+                        <button class="btn btn-danger" id="bulk-delete-btn" onclick="bulkDeleteProducts()" style="display:none;">
+                            <i class="fas fa-trash"></i> O'chirish (<span id="selected-count">0</span>)
+                        </button>
+                    </div>
+                </div>
+                <div class="filters">
+                    <input type="text" id="product-search" placeholder="Qidirish (nomi yoki barcode)" onkeyup="handleProductSearch()" class="search-input">
+                    <select id="stock-filter" onchange="loadProducts()">
+                        <option value="all">Barcha mahsulotlar</option>
+                        <option value="low">Kam qolganlar (≤10 dona)</option>
+                        <option value="very-low">Juda kam (≤5 dona)</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="printProductsTable()">
+                        <i class="fas fa-print"></i> Chop etish
+                    </button>
+                </div>
+                <div id="products-pagination" class="pagination"></div>
+                <div class="table-container">
+                    <table id="products-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="select-all-products" onchange="toggleSelectAllProducts()"></th>
+                                <th>ID</th>
+                                <th>Rasm</th>
+                                <th>Nomi</th>
+                                <th>Barcode</th>
+                                <th>1 qop = dona</th>
+                                <th>Ulgurji narx</th>
+                                <th>Dona narx</th>
+                                <th>Oddiy narx</th>
+                                <th>Ombordagi qop</th>
+                                <th>Ombordagi dona</th>
+                                <th>Jami dona</th>
+                                <th>Joylashuv</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customers Page -->
+            <div id="customers" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-users"></i> Mijozlar</h1>
+                    <button class="btn btn-primary" onclick="showAddCustomerModal()">
+                        <i class="fas fa-plus"></i> Yangi Mijoz
+                    </button>
+                </div>
+                <div class="filters">
+                    <input type="text" id="customer-search" placeholder="Qidirish (ism yoki telefon)" onkeyup="handleCustomerSearch()" class="search-input">
+                    <select id="customer-type-filter" onchange="loadCustomers()">
+                        <option value="">Barcha</option>
+                        <option value="wholesale">Ulgurji</option>
+                        <option value="retail">Dona</option>
+                        <option value="regular">Oddiy</option>
+                    </select>
+                </div>
+                <div id="customers-pagination" class="pagination"></div>
+                <div class="table-container">
+                    <table id="customers-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Ism</th>
+                                <th>Telefon</th>
+                                <th>Manzil</th>
+                                <th>Turi</th>
+                                <th>Qarz</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Orders Page -->
+            <div id="orders" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-shopping-cart"></i> Buyurtmalar</h1>
+                </div>
+                <!-- Filters -->
+                <div class="filters">
+                    <input type="date" id="order-start-date" placeholder="Boshlanish sanasi" class="filter-input" onchange="loadOrders()">
+                    <input type="date" id="order-end-date" placeholder="Tugash sanasi" class="filter-input" onchange="loadOrders()">
+                    <input type="text" id="order-customer-search" placeholder="Mijoz qidirish..." class="search-input" onkeyup="handleOrderCustomerSearch()">
+                    <select id="order-status-filter" class="filter-select" onchange="loadOrders()">
+                        <option value="">Barcha holatlar</option>
+                        <option value="pending">Kutilmoqda</option>
+                        <option value="processing">Jarayonda</option>
+                        <option value="completed">Tugallangan</option>
+                        <option value="cancelled">Bekor qilingan</option>
+                        <option value="returned">Qaytarilgan</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearOrderFilters()">
+                        <i class="fas fa-times"></i> Filterni tozalash
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="orders-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Sana</th>
+                                <th>Mijoz</th>
+                                <th>Sotuvchi</th>
+                                <th>Summa</th>
+                                <th>Status</th>
+                                <th>Offline</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sellers Page -->
+            <div id="sellers" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-user-tie"></i> Sotuvchilar</h1>
+                    <button class="btn btn-primary" onclick="showAddSellerModal()">
+                        <i class="fas fa-plus"></i> Yangi Sotuvchi
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="sellers-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Ism</th>
+                                <th>Username</th>
+                                <th>Telefon</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Role</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sellers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GPS Map Page -->
+            <div id="gps" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-map-marker-alt"></i> GPS Xarita</h1>
+                    <button class="btn btn-primary" onclick="if (typeof loadSellersMarkers === 'function') { loadSellersMarkers(); } else { loadGPSMap(); }" title="Yangilash">
+                        <i class="fas fa-sync-alt"></i> Yangilash
+                    </button>
+                </div>
+                <div id="map" style="height: 600px; width: 100%; border-radius: 8px; position: relative;"></div>
+                <div style="margin-top: 1rem; padding: 1rem; background: #f1f5f9; border-radius: 8px;">
+                    <p style="margin: 0; color: #64748b; font-size: 0.875rem;">
+                        <i class="fas fa-info-circle"></i> Xaritada faqat GPS orqali joylashuv yuborgan faol sotuvchilar ko'rsatiladi.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Sales Page -->
+            <div id="sales" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-receipt"></i> Sotuvlar</h1>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button class="btn btn-warning" onclick="loadPendingSales()" id="pending-sales-btn">
+                            <i class="fas fa-clock"></i> Ruxsat kutayotganlar (<span id="pending-sales-count">0</span>)
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSales()">
+                            <i class="fas fa-download"></i> Excel Export
+                        </button>
+                        <button class="btn btn-secondary" onclick="printSalesTable()">
+                            <i class="fas fa-print"></i> Chop etish
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Filters -->
+                <div class="filters" style="margin-top: 1rem;">
+                    <input type="date" id="sale-start-date" placeholder="Boshlanish sanasi" class="filter-input" onchange="loadSales()">
+                    <input type="date" id="sale-end-date" placeholder="Tugash sanasi" class="filter-input" onchange="loadSales()">
+                    <input type="text" id="sale-customer-search" placeholder="Mijoz qidirish..." class="search-input" onkeyup="handleSaleCustomerSearch()" onchange="currentSalePage = 1;">
+                    <select id="sale-seller-filter" class="filter-select" onchange="loadSales()">
+                        <option value="">Barcha sotuvchilar</option>
+                    </select>
+                    <select id="sale-status-filter" class="filter-select" onchange="loadSales()">
+                        <option value="">Barcha holatlar</option>
+                        <option value="approved">Tasdiqlangan</option>
+                        <option value="pending">Kutilmoqda</option>
+                        <option value="rejected">Rad etilgan</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="clearSaleFilters()">
+                        <i class="fas fa-times"></i> Filterni tozalash
+                    </button>
+                </div>
+                
+                <div id="sales-pagination" class="pagination"></div>
+                
+                <!-- Pending Sales Section -->
+                <div id="pending-sales-section" style="display: none; margin-bottom: 2rem;">
+                    <div class="table-container" style="background: #fef3c7; border: 2px solid #fbbf24;">
+                        <h2 style="padding: 1rem; margin: 0; color: #92400e;">
+                            <i class="fas fa-exclamation-triangle"></i> Ruxsat kutayotgan sotuvlar
+                        </h2>
+                        <table id="pending-sales-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Sana</th>
+                                    <th>Mijoz</th>
+                                    <th>Sotuvchi</th>
+                                    <th>Jami summa</th>
+                                    <th>To'langan</th>
+                                    <th>Qaytim/Qarz</th>
+                                    <th>To'lov usuli</th>
+                                    <th>Holat</th>
+                                    <th>Amallar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pending-sales-tbody">
+                                <tr>
+                                    <td colspan="9" class="text-center">Yuklanmoqda...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div id="sales-pagination" class="pagination"></div>
+                <div class="table-container">
+                    <table id="sales-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Sana</th>
+                                <th>Mijoz</th>
+                                <th>Sotuvchi</th>
+                                <th>Summa</th>
+                                <th>Foyda</th>
+                                <th>To'lov usuli</th>
+                                <th>Holat</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Roles & Permissions Page -->
+            <div id="roles" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-shield-alt"></i> Rollar va Ruxsatlar</h1>
+                    <button class="btn btn-primary" onclick="showAddRoleModal()">
+                        <i class="fas fa-plus"></i> Yangi Role
+                    </button>
+                </div>
+                
+                <!-- Roles List -->
+                <div class="table-container" style="margin-bottom: 2rem;">
+                    <h2>Rollar</h2>
+                    <table id="roles-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nomi</th>
+                                <th>Tavsif</th>
+                                <th>Turi</th>
+                                <th>Ruxsatlar soni</th>
+                                <th>Sotuvchilar</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roles-tbody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Permissions List -->
+                <div class="table-container">
+                    <h2>Barcha Ruxsatlar</h2>
+                    <table id="permissions-table">
+                        <thead>
+                            <tr>
+                                <th>Kod</th>
+                                <th>Nomi</th>
+                                <th>Kategoriya</th>
+                                <th>Tavsif</th>
+                            </tr>
+                        </thead>
+                        <tbody id="permissions-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Audit Logs Page -->
+            <div id="audit-logs" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-history"></i> Audit Log</h1>
+                </div>
+                <div class="filters">
+                    <input type="text" id="audit-product-search" placeholder="Mahsulot bo'yicha qidirish" class="search-input">
+                    <select id="audit-action-filter">
+                        <option value="">Barcha amallar</option>
+                        <option value="sale_created">Sotuv yaratilgan</option>
+                        <option value="order_created">Buyurtma yaratilgan</option>
+                        <option value="order_cancelled">Buyurtma bekor qilingan</option>
+                        <option value="order_returned">Buyurtma qaytarilgan</option>
+                        <option value="inventory_adjusted">Ombor tuzatilgan</option>
+                        <option value="inventory_added">Ombor qo'shilgan</option>
+                        <option value="inventory_deducted">Ombor kamaytirilgan</option>
+                    </select>
+                    <input type="date" id="audit-start-date" placeholder="Boshlanish sanasi">
+                    <input type="date" id="audit-end-date" placeholder="Tugash sanasi">
+                    <button class="btn btn-secondary" onclick="loadAuditLogs()">
+                        <i class="fas fa-search"></i> Qidirish
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearAuditFilters()">
+                        <i class="fas fa-times"></i> Tozalash
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="audit-logs-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Vaqt</th>
+                                <th>Kim</th>
+                                <th>Amal</th>
+                                <th>Mahsulot</th>
+                                <th>Oldingi miqdor</th>
+                                <th>Yangi miqdor</th>
+                                <th>O'zgarish</th>
+                                <th>Sabab</th>
+                                <th>Manba</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-logs-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="audit-logs-pagination" class="pagination"></div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings" class="page">
+                <h1><i class="fas fa-cog"></i> Sozlamalar</h1>
+                
+                <div class="settings-container">
+                    <div class="settings-section">
+                        <h2><i class="fas fa-store"></i> Do'kon Ma'lumotlari</h2>
+                        <form id="settings-form" class="settings-form">
+                            <div class="form-group">
+                                <label for="store-name">Do'kon nomi:</label>
+                                <input type="text" id="store-name" class="form-control" placeholder="Do'kon nomi">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="store-address">Manzil:</label>
+                                <textarea id="store-address" class="form-control" rows="3" placeholder="Do'kon manzili"></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="store-phone">Telefon:</label>
+                                <input type="text" id="store-phone" class="form-control" placeholder="+998 90 123 45 67">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="store-email">Email:</label>
+                                <input type="email" id="store-email" class="form-control" placeholder="info@do'kon.uz">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="store-inn">INN/STIR:</label>
+                                <input type="text" id="store-inn" class="form-control" placeholder="123456789">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="store-tin">Tax ID:</label>
+                                <input type="text" id="store-tin" class="form-control" placeholder="Tax ID">
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h2><i class="fas fa-image"></i> Logo</h2>
+                        <div class="logo-upload-section">
+                            <div class="logo-preview-container">
+                                <img id="logo-preview" src="" alt="Logo" style="max-width: 200px; max-height: 200px; display: none; margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0.5rem;">
+                                <div id="no-logo" style="padding: 2rem; text-align: center; border: 2px dashed #ccc; color: #999; margin-bottom: 1rem; border-radius: 4px;">
+                                    <i class="fas fa-image" style="font-size: 3rem;"></i>
+                                    <p>Logo yuklanmagan</p>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="logo-file">Logo yuklash:</label>
+                                <input type="file" id="logo-file" accept="image/*" class="form-control">
+                                <small class="form-text" style="display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">Qo'llab-quvvatlanadigan formatlar: JPG, PNG, GIF, WEBP, SVG</small>
+                            </div>
+                            <button type="button" id="upload-logo-btn" class="btn btn-primary" style="margin-top: 0.5rem;">
+                                <i class="fas fa-upload"></i> Logo Yuklash va Saqlash
+                            </button>
+                            <small class="form-text" style="display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">Logo yuklangandan keyin avtomatik saqlanadi</small>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h2><i class="fas fa-receipt"></i> Chek Sozlamalari</h2>
+                        <form class="settings-form">
+                            <div class="form-group">
+                                <label for="receipt-footer-text">Chek tagidagi matn:</label>
+                                <textarea id="receipt-footer-text" class="form-control" rows="2" placeholder="Xaridingiz uchun rahmat!"></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="receipt-show-logo" checked style="margin-right: 0.5rem;">
+                                    <span>Chekda logo ko'rsatish</span>
+                                </label>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h2><i class="fas fa-clock"></i> Ish Vaqti (GPS Kuzatuv uchun)</h2>
+                        <form class="settings-form">
+                            <div class="form-group">
+                                <label for="work-start-time">Ish boshlanish vaqti:</label>
+                                <input type="time" id="work-start-time" class="form-control" value="09:00">
+                                <small class="form-text" style="display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">GPS kuzatuv faqat ish vaqtida ishlaydi</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="work-end-time">Ish tugash vaqti:</label>
+                                <input type="time" id="work-end-time" class="form-control" value="18:00">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Ish kunlari:</label>
+                                <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="1" checked style="margin-right: 0.5rem;">
+                                        <span>Dushanba</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="2" checked style="margin-right: 0.5rem;">
+                                        <span>Seshanba</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="3" checked style="margin-right: 0.5rem;">
+                                        <span>Chorshanba</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="4" checked style="margin-right: 0.5rem;">
+                                        <span>Payshanba</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="5" checked style="margin-right: 0.5rem;">
+                                        <span>Juma</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="6" checked style="margin-right: 0.5rem;">
+                                        <span>Shanba</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <input type="checkbox" class="work-day-checkbox" value="7" checked style="margin-right: 0.5rem;">
+                                        <span>Yakshanba</span>
+                                    </label>
+                                </div>
+                                <small class="form-text" style="display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">GPS kuzatuv faqat belgilangan kunlarda ishlaydi</small>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="settings-actions">
+                        <button type="button" id="save-settings-btn" class="btn btn-primary btn-large">
+                            <i class="fas fa-save"></i> Sozlamalarni Saqlash
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('product-modal')">&times;</span>
+            <h2 id="product-modal-title">Yangi Mahsulot</h2>
+            <form id="product-form" onsubmit="saveProduct(event)">
+                <input type="hidden" id="product-id">
+                <div class="form-group">
+                    <label>Nomi *</label>
+                    <input type="text" id="product-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Barcode</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="product-barcode" style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="generateBarcode()" style="white-space: nowrap;">
+                            <i class="fas fa-barcode"></i> Generate
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Brend</label>
+                    <input type="text" id="product-brand" placeholder="Masalan: Samsung, Apple">
+                </div>
+                <div class="form-group">
+                    <label>Yetkazib beruvchi</label>
+                    <input type="text" id="product-supplier" placeholder="Kimdan kelgan">
+                </div>
+                <div class="form-group">
+                    <label>Qabul qilingan sana</label>
+                    <input type="date" id="product-received-date">
+                </div>
+                <div class="form-group">
+                    <label>Ombordagi joylashuv</label>
+                    <input type="text" id="product-location" placeholder="Masalan: Ombor 1, Rack A-5, Bin 3">
+                </div>
+                <div class="form-group">
+                    <label>Rasm (ixtiyoriy)</label>
+                    <input type="file" id="product-image-file" accept="image/*" onchange="handleProductImageUpload(event)">
+                    <small style="color: var(--text-light);">Yuklash uchun fayl tanlang yoki URL kiriting</small>
+                    <input type="text" id="product-image-url" placeholder="yoki URL kiriting (http:// yoki /uploads/...)" style="margin-top: 0.5rem;">
+                    <div id="product-image-preview" style="margin-top: 0.5rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label>1 qopdagi dona soni *</label>
+                    <input type="number" id="product-pieces-per-package" required min="1" onchange="updateStockFromTotal()">
+                </div>
+                <div class="form-group">
+                    <label>Kelgan narx (1 dona uchun) *</label>
+                    <input type="number" id="product-cost-price" required min="0" step="0.01" placeholder="Mahsulot kelgan narxi">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ulgurji mijoz narxi (dona uchun) *</label>
+                        <input type="number" id="product-wholesale-price" required min="0" step="0.01" placeholder="Ulgurji mijoz uchun dona narxi">
+                    </div>
+                    <div class="form-group">
+                        <label>Dona mijoz narxi (dona uchun) *</label>
+                        <input type="number" id="product-retail-price" required min="0" step="0.01" placeholder="Dona mijoz uchun dona narxi">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Oddiy mijoz narxi (dona uchun) *</label>
+                    <input type="number" id="product-regular-price" required min="0" step="0.01" placeholder="Oddiy mijoz uchun dona narxi">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ombordagi qop soni</label>
+                        <input type="number" id="product-packages-in-stock" min="0" value="0" onchange="recalculateStock()">
+                    </div>
+                    <div class="form-group">
+                        <label>Ombordagi dona soni</label>
+                        <input type="number" id="product-pieces-in-stock" min="0" value="0" onchange="recalculateStock()">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Yoki jami dona sonini kiriting (avtomatik qop/dona bo'linadi)</label>
+                    <input type="number" id="product-total-pieces-input" min="0" value="0" placeholder="Masalan: 25 dona" onchange="calculatePackagesFromTotal()">
+                    <small style="color: var(--text-light);">Bu maydonni to'ldirsangiz, qop va dona sonlari avtomatik hisoblanadi</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('product-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="customer-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('customer-modal')">&times;</span>
+            <h2 id="customer-modal-title">Yangi Mijoz</h2>
+            <form id="customer-form" onsubmit="saveCustomer(event)">
+                <input type="hidden" id="customer-id">
+                <div class="form-group">
+                    <label>Ism *</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="customer-phone">
+                </div>
+                <div class="form-group">
+                    <label>Manzil</label>
+                    <input type="text" id="customer-address">
+                </div>
+                <div class="form-group">
+                    <label>Mijoz turi *</label>
+                    <select id="customer-type" required>
+                        <option value="wholesale">Ulgurji</option>
+                        <option value="retail">Dona</option>
+                        <option value="regular">Oddiy</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Izoh</label>
+                    <textarea id="customer-notes"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Qarz limiti (so'm)</label>
+                    <input type="number" id="customer-debt-limit" step="0.01" min="0" placeholder="Cheksiz uchun bo'sh qoldiring">
+                </div>
+                <div class="form-group">
+                    <label>Qarz muddati</label>
+                    <input type="date" id="customer-debt-due-date">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('customer-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Order Payment Modal -->
+    <div id="order-payment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('order-payment-modal')">&times;</span>
+            <h2>Buyurtma To'lovi</h2>
+            <form id="order-payment-form" onsubmit="processOrderPayment(event)">
+                <input type="hidden" id="payment-order-id">
+                <div class="form-group">
+                    <label>Buyurtma summasi</label>
+                    <input type="text" id="payment-order-amount" readonly style="font-weight: bold; font-size: 1.2em;">
+                </div>
+                <div class="form-group">
+                    <label>To'lov summasi *</label>
+                    <input type="number" id="payment-amount" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="payment-allow-debt">
+                        Qarzga qo'shishga ruxsat berish (to'lov yetarli bo'lmasa)
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('order-payment-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">To'lov qilish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="seller-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('seller-modal')">&times;</span>
+            <h2 id="seller-modal-title">Yangi Sotuvchi</h2>
+            <form id="seller-form" onsubmit="saveSeller(event)">
+                <input type="hidden" id="seller-id">
+                <div class="form-group">
+                    <label>Ism *</label>
+                    <input type="text" id="seller-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefon</label>
+                    <input type="text" id="seller-phone">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="seller-email">
+                </div>
+                <div class="form-group">
+                    <label>Username (Login uchun) *</label>
+                    <input type="text" id="seller-username" placeholder="Login nomi" required>
+                    <small style="color: var(--text-light);">Sotuv paneliga kirish uchun username</small>
+                </div>
+                <div class="form-group">
+                    <label>Parol <span id="password-required-label" style="color: var(--danger-color);">*</span></label>
+                    <input type="password" id="seller-password" placeholder="Parol (min. 6 belgi)" minlength="6">
+                    <small style="color: var(--text-light);" id="password-hint">Yangi sotuvchi yaratishda parol majburiy</small>
+                </div>
+                <div class="form-group">
+                    <label>Parolni takrorlang</label>
+                    <input type="password" id="seller-password-confirm" placeholder="Parolni takrorlang">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="seller-role-id">
+                        <option value="">Role tanlash</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('seller-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="role-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeModal('role-modal')">&times;</span>
+            <h2 id="role-modal-title">Yangi Role</h2>
+            <form id="role-form" onsubmit="saveRole(event)">
+                <input type="hidden" id="role-id">
+                <div class="form-group">
+                    <label>Role nomi *</label>
+                    <input type="text" id="role-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Tavsif</label>
+                    <textarea id="role-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Ruxsatlar *</label>
+                    <div id="permissions-checkboxes" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); padding: 1rem; border-radius: 0.375rem;">
+                        <!-- Permissions will be loaded here -->
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('role-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="role-permissions-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeModal('role-permissions-modal')">&times;</span>
+            <h2 id="role-permissions-title">Role Ruxsatlari</h2>
+            <div id="role-permissions-list" style="max-height: 500px; overflow-y: auto;">
+                <!-- Permissions list will be shown here -->
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('role-permissions-modal')">Yopish</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Sale Modal -->
+    <div id="edit-sale-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="closeModal('edit-sale-modal')">&times;</span>
+            <h2>Sotuvni Tahrirlash</h2>
+            <form id="edit-sale-form" onsubmit="saveEditedSale(event)">
+                <input type="hidden" id="edit-sale-id">
+                <input type="hidden" id="edit-sale-customer-id">
+                
+                <div class="form-group">
+                    <label>Mijoz *</label>
+                    <select id="edit-sale-customer-select" required>
+                        <option value="">Mijozni tanlang</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>To'lov usuli *</label>
+                    <select id="edit-sale-payment-method" required>
+                        <option value="cash">Naqd</option>
+                        <option value="card">Karta</option>
+                        <option value="bank_transfer">Hisob raqam</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Mahsulotlar *</label>
+                    <div id="edit-sale-items" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <!-- Sale items will be loaded here -->
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addEditSaleItem()" style="margin-top: 0.5rem;">
+                        <i class="fas fa-plus"></i> Mahsulot qo'shish
+                    </button>
+                </div>
+                
+                <div class="form-group" style="text-align: right; padding: 1rem; background: #f5f5f5; border-radius: 0.375rem;">
+                    <strong>Jami: <span id="edit-sale-total">0 so'm</span></strong>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('edit-sale-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+        </div>
+    </div>
+
+    <!-- Mapbox JS - conditional loading with error handling -->
+    <script>
+        // Mapbox yuklash - agar yuklanmasa, xatolik ko'rsatmaslik
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+            script.onerror = function() {
+                console.warn('Mapbox GL JS yuklanmadi. GPS xarita funksiyasi ishlamaydi.');
+                window.mapboxgl = null; // mapboxgl undefined bo'lishi uchun
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

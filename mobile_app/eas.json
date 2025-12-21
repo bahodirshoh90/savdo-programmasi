@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "requireCommit": false,
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "18.18.0",
+      "env": {
+        "EAS_BUILD_WORKINGDIR": "mobile_app"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "resourceClass": "medium"
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "resourceClass": "medium"
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "resourceClass": "medium"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

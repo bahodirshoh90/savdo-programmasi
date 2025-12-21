@@ -1,0 +1,11 @@
+# EAS Build uses similar ignore patterns
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+*.md
+scripts/
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,236 @@
+"""
+Excel Service for import/export
+"""
+from sqlalchemy.orm import Session
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from typing import Optional
+import os
+from datetime import datetime
+from models import Product, Sale
+from services.sale_service import SaleService
+
+
+class ExcelService:
+    """Service for Excel import/export operations"""
+    
+    @staticmethod
+    def _get_exports_dir():
+        """Get exports directory path"""
+        exports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        return exports_dir
+    
+    @staticmethod
+    def export_products(db: Session) -> str:
+        """Export all products to Excel file"""
+        products = db.query(Product).all()
+        
+        exports_dir = ExcelService._get_exports_dir()
+        filename = f"products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = os.path.join(exports_dir, filename)
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Mahsulotlar"
+        
+        # Headers
+        headers = [
+            'ID', 'Nomi', 'Barcode', 'Brend', 'Yetkazib beruvchi', 'Joylashuv', '1 qop = dona',
+            'Kelgan narx (dona)', 'Ulgurji qop narxi', 'Ulgurji dona narxi',
+            'Dona qop narxi', 'Dona dona narxi',
+            'Ombordagi qop', 'Ombordagi dona', 'Jami dona', 'Rasm URL'
+        ]
+        ws.append(headers)
+        
+        # Style headers
+        header_fill = PatternFill(start_color="4f46e5", end_color="4f46e5", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Data
+        for product in products:
+            ws.append([
+                product.id,
+                product.name,
+                product.barcode or '',
+                product.brand or '',
+                product.supplier or '',
+                product.location or '',
+                product.pieces_per_package,
+                product.cost_price if product.cost_price is not None else 0.0,
+                product.wholesale_package_price,
+                product.wholesale_piece_price,
+                product.retail_package_price,
+                product.retail_piece_price,
+                product.packages_in_stock if product.packages_in_stock is not None else 0,
+                product.pieces_in_stock if product.pieces_in_stock is not None else 0,
+                product.total_pieces if product.total_pieces is not None else 0,
+                product.image_url or ''
+            ])
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(filepath)
+        return filepath
+    
+    @staticmethod
+    def import_products(db: Session, file_path: str) -> dict:
+        """Import products from Excel file"""
+        wb = load_workbook(file_path, data_only=True)
+        ws = wb.active
+        
+        imported_count = 0
+        errors = []
+        
+        # Skip header row
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or not row[1]:  # Skip empty rows (check name)
+                continue
+            
+            try:
+                # Parse row data (flexible column order)
+                name = str(row[1]).strip() if row[1] else None
+                if not name:
+                    continue
+                
+                barcode = str(row[2]).strip() if len(row) > 2 and row[2] else None
+                brand = str(row[3]).strip() if len(row) > 3 and row[3] else None
+                supplier = str(row[4]).strip() if len(row) > 4 and row[4] else None
+                location = str(row[5]).strip() if len(row) > 5 and row[5] else None
+                pieces_per_package = int(row[6]) if len(row) > 6 and row[6] else 1
+                cost_price = float(row[7]) if len(row) > 7 and row[7] else 0.0
+                wholesale_package_price = float(row[8]) if len(row) > 8 and row[8] else 0.0
+                wholesale_piece_price = float(row[9]) if len(row) > 9 and row[9] else 0.0
+                retail_package_price = float(row[10]) if len(row) > 10 and row[10] else 0.0
+                retail_piece_price = float(row[11]) if len(row) > 11 and row[11] else 0.0
+                packages_in_stock = int(row[12]) if len(row) > 12 and row[12] else 0
+                pieces_in_stock = int(row[13]) if len(row) > 13 and row[13] else 0
+                image_url = str(row[14]).strip() if len(row) > 14 and row[14] else None
+                
+                # Check if product with same name or barcode exists
+                existing = db.query(Product).filter(
+                    (Product.name == name) | 
+                    ((Product.barcode == barcode) if barcode else False)
+                ).first()
+                
+                if existing:
+                    errors.append(f"Qator {row_num}: '{name}' allaqachon mavjud (ID: {existing.id})")
+                    continue
+                
+                product = Product(
+                    name=name,
+                    barcode=barcode if barcode and barcode.lower() != 'none' else None,
+                    brand=brand if brand and brand.lower() != 'none' else None,
+                    supplier=supplier if supplier and supplier.lower() != 'none' else None,
+                    location=location if location and location.lower() != 'none' else None,
+                    pieces_per_package=pieces_per_package,
+                    cost_price=cost_price,
+                    wholesale_package_price=wholesale_package_price,
+                    wholesale_piece_price=wholesale_piece_price,
+                    retail_package_price=retail_package_price,
+                    retail_piece_price=retail_piece_price,
+                    packages_in_stock=packages_in_stock,
+                    pieces_in_stock=pieces_in_stock,
+                    image_url=image_url if image_url and image_url.lower() != 'none' else None
+                )
+                db.add(product)
+                imported_count += 1
+            except Exception as e:
+                errors.append(f"Qator {row_num}: {str(e)}")
+                continue
+        
+        db.commit()
+        return {
+            "imported": imported_count,
+            "errors": errors
+        }
+    
+    @staticmethod
+    def export_sales(
+        db: Session,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> str:
+        """Export sales to Excel file"""
+        sales = SaleService.get_sales(db)
+        
+        # Filter by date if provided
+        if start_date or end_date:
+            from datetime import datetime as dt
+            filtered_sales = []
+            for sale in sales:
+                sale_date = sale.created_at.date()
+                if start_date:
+                    start = dt.fromisoformat(start_date).date()
+                    if sale_date < start:
+                        continue
+                if end_date:
+                    end = dt.fromisoformat(end_date).date()
+                    if sale_date > end:
+                        continue
+                filtered_sales.append(sale)
+            sales = filtered_sales
+        
+        exports_dir = ExcelService._get_exports_dir()
+        filename = f"sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = os.path.join(exports_dir, filename)
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sotuvlar"
+        
+        # Headers
+        headers = [
+            'ID', 'Sana', 'Sotuvchi', 'Mijoz', 'Summa'
+        ]
+        ws.append(headers)
+        
+        # Style headers
+        header_fill = PatternFill(start_color="10b981", end_color="10b981", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Data
+        for sale in sales:
+            ws.append([
+                sale.id,
+                sale.created_at.strftime('%Y-%m-%d %H:%M'),
+                sale.seller.name,
+                sale.customer.name,
+                sale.total_amount
+            ])
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(filepath)
+        return filepath
+
