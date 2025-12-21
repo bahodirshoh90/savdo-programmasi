@@ -421,7 +421,7 @@ class DebtHistory(Base):
     __tablename__ = "debt_history"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False)
     
     # Transaction details
     transaction_type = Column(String(50), nullable=False)  # payment, debt_added, debt_paid, order_payment

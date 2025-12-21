@@ -86,10 +86,17 @@ class CustomerService:
     
     @staticmethod
     def delete_customer(db: Session, customer_id: int) -> bool:
-        """Delete a customer"""
+        """Delete a customer - prevents deletion if debt_history exists"""
+        from models import DebtHistory
+        
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not db_customer:
             return False
+        
+        # Check if customer has debt history
+        debt_count = db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).count()
+        if debt_count > 0:
+            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {debt_count} ta qarz tarixi bor. Avval qarz tarixini tozalang.")
         
         db.delete(db_customer)
         db.commit()
