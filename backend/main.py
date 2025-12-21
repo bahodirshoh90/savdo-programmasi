@@ -587,6 +587,27 @@ def get_sales(
     return [SaleService.sale_to_response(sale) for sale in sales]
 
 
+@app.get("/api/sales/count")
+def get_sales_count(
+    seller_id: Optional[int] = None,
+    customer_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get total count of sales matching filters"""
+    count = SaleService.get_sales_count(
+        db,
+        seller_id=seller_id,
+        customer_id=customer_id,
+        start_date=start_date,
+        end_date=end_date,
+        status=status
+    )
+    return {"count": count}
+
+
 @app.get("/api/sales/{sale_id}", response_model=SaleResponse)
 def get_sale(sale_id: int, db: Session = Depends(get_db)):
     """Get a specific sale"""
@@ -1228,6 +1249,17 @@ def get_orders(
     return [OrderService.order_to_response(order) for order in orders]
 
 
+@app.get("/api/orders/count")
+def get_orders_count(
+    status: Optional[str] = None,
+    seller_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get total count of orders matching filters"""
+    count = OrderService.get_orders_count(db, status=status, seller_id=seller_id)
+    return {"count": count}
+
+
 @app.put("/api/orders/{order_id}/status")
 async def update_order_status(order_id: int, status_data: dict, db: Session = Depends(get_db)):
     """Update order status (pending -> processing -> completed, or cancel/return)"""
@@ -1459,6 +1491,40 @@ def get_audit_logs_count(
         start_date=start_date, end_date=end_date
     )
     return {"count": count}
+
+
+@app.delete("/api/audit-logs")
+def delete_audit_logs(
+    product_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    older_than_days: Optional[int] = None,
+    delete_all: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Delete audit logs with filters. If delete_all=True, deletes all logs (use with caution)."""
+    try:
+        # Delete with filters or all
+        deleted_count = AuditService.delete_audit_logs(
+            db,
+            product_id=product_id,
+            user_id=user_id,
+            action=action,
+            start_date=start_date,
+            end_date=end_date,
+            older_than_days=older_than_days,
+            delete_all=delete_all
+        )
+        
+        return {
+            "success": True,
+            "message": f"{deleted_count} ta audit log o'chirildi",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit loglarni o'chirishda xatolik: {str(e)}")
 
 
 # ==================== EXCEL IMPORT/EXPORT ====================

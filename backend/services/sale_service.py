@@ -19,170 +19,183 @@ class SaleService:
         """
         Create a new sale with automatic package/piece calculation
         """
-        # Verify seller and customer exist
-        seller = db.query(Seller).filter(Seller.id == sale.seller_id).first()
-        if not seller:
-            raise ValueError("Seller not found")
-        
-        customer = db.query(Customer).filter(Customer.id == sale.customer_id).first()
-        if not customer:
-            raise ValueError("Customer not found")
-        
-        # Create sale (will calculate total_amount while processing items)
-        payment_method = PaymentMethod(sale.payment_method) if sale.payment_method else PaymentMethod.CASH
-        
-        # Handle payment and admin approval
-        requires_approval = sale.requires_admin_approval or False
-        
-        # Initialize total_amount
-        total_amount = 0.0
-        
-        # Create sale record (will update total_amount later)
-        db_sale = Sale(
-            seller_id=sale.seller_id,
-            customer_id=sale.customer_id,
-            total_amount=0,  # Will be calculated below
-            payment_method=payment_method,
-            payment_amount=sale.payment_amount,
-            excess_action=sale.excess_action,
-            requires_admin_approval=requires_approval,
-            admin_approved=None if requires_approval else True  # Auto-approved if no approval needed
-        )
-        db.add(db_sale)
-        db.flush()  # Get sale.id
-        
-        # Process each item
-        for item in sale.items:
-            # Calculate breakdown
-            calculation = CalculationService.calculate_sale(
-                db, item.product_id, item.requested_quantity, sale.customer_id
-            )
-            
-            if "error" in calculation:
+        try:
+            # Verify seller and customer exist
+            seller = db.query(Seller).filter(Seller.id == sale.seller_id).first()
+            if not seller:
                 db.rollback()
-                raise ValueError(f"Product {item.product_id}: {calculation['error']}")
+                raise ValueError("Seller not found")
             
-            # Only deduct inventory if admin approved (or no approval needed)
-            if not requires_approval or db_sale.admin_approved:
-                # Deduct inventory with audit logging
-                product_before = db.query(Product).filter(Product.id == item.product_id).first()
-                quantity_before = product_before.total_pieces if product_before else 0
-                
-                success = CalculationService.deduct_inventory(
-                    db,
-                    item.product_id,
-                    calculation["packages_to_sell"],
-                    calculation["pieces_to_sell"],
-                    user_id=sale.seller_id,
-                    user_name=seller.name,
-                    user_type="seller",
-                    action="sale_created",
-                    reason=f"Sotuv #{db_sale.id}",
-                    reference_id=db_sale.id,
-                    reference_type="sale"
-                )
-                
-                if not success:
-                    db.rollback()
-                    raise ValueError(f"Not enough stock for product {item.product_id}")
-                
-                # Record inventory transaction
-                InventoryService.record_transaction(
-                    db,
-                    item.product_id,
-                    "sale",
-                    -calculation["packages_to_sell"],
-                    -calculation["pieces_to_sell"],
-                    db_sale.id,
-                    "sale"
-                )
+            customer = db.query(Customer).filter(Customer.id == sale.customer_id).first()
+            if not customer:
+                db.rollback()
+                raise ValueError("Customer not found")
             
-            # Create sale item
-            sale_item = SaleItem(
-                sale_id=db_sale.id,
-                product_id=item.product_id,
-                requested_quantity=item.requested_quantity,
-                packages_sold=calculation["packages_to_sell"],
-                pieces_sold=calculation["pieces_to_sell"],
-                package_price=calculation["package_price"],
-                piece_price=calculation["piece_price"],
-                subtotal=calculation["subtotal"]
+            # Create sale (will calculate total_amount while processing items)
+            payment_method = PaymentMethod(sale.payment_method) if sale.payment_method else PaymentMethod.CASH
+            
+            # Handle payment and admin approval
+            requires_approval = sale.requires_admin_approval or False
+            
+            # Initialize total_amount
+            total_amount = 0.0
+            
+            # Create sale record (will update total_amount later)
+            db_sale = Sale(
+                seller_id=sale.seller_id,
+                customer_id=sale.customer_id,
+                total_amount=0,  # Will be calculated below
+                payment_method=payment_method,
+                payment_amount=sale.payment_amount,
+                excess_action=sale.excess_action,
+                requires_admin_approval=requires_approval,
+                admin_approved=None if requires_approval else True  # Auto-approved if no approval needed
             )
-            db.add(sale_item)
-            total_amount += calculation["subtotal"]
-        
-        # Update sale total
-        db_sale.total_amount = total_amount
-        db.flush()
-        
-        # If admin approval required, don't process payment/debt yet
-        if requires_approval:
-            db.commit()
-            db.refresh(db_sale)
-            return db_sale  # Return without processing payment/debt
-        
-        # Process payment and debt
-        from services.debt_service import DebtService
-        from datetime import datetime
-        
-        payment_amount = sale.payment_amount or total_amount
-        db_sale.payment_amount = payment_amount
-        excess = payment_amount - total_amount  # Positive if paid more, negative if paid less
-        
-        if excess > 0:  # Customer paid more
-            if sale.excess_action == 'debt':
-                # Apply excess to customer's debt
-                if customer.debt_balance > 0:
-                    # Pay down debt
-                    debt_to_pay = min(excess, customer.debt_balance)
-                    DebtService.pay_debt(
-                        db=db,
-                        customer_id=sale.customer_id,
-                        amount=debt_to_pay,
-                        reason=f"Sotuv #{db_sale.id} - ortiqcha to'lov",
-                        created_by=sale.seller_id,
-                        created_by_name=seller.name,
+            db.add(db_sale)
+            db.flush()  # Get sale.id
+            
+            # Process each item
+            for item in sale.items:
+                # Calculate breakdown
+                calculation = CalculationService.calculate_sale(
+                    db, item.product_id, item.requested_quantity, sale.customer_id
+                )
+                
+                if not calculation:
+                    db.rollback()
+                    raise ValueError(f"Product {item.product_id}: Calculation failed")
+                
+                if "error" in calculation:
+                    db.rollback()
+                    raise ValueError(f"Product {item.product_id}: {calculation['error']}")
+                
+                # Only deduct inventory if admin approved (or no approval needed)
+                if not requires_approval or db_sale.admin_approved:
+                    # Deduct inventory with audit logging
+                    product_before = db.query(Product).filter(Product.id == item.product_id).first()
+                    quantity_before = product_before.total_pieces if product_before else 0
+                    
+                    success = CalculationService.deduct_inventory(
+                        db,
+                        item.product_id,
+                        calculation["packages_to_sell"],
+                        calculation["pieces_to_sell"],
+                        user_id=sale.seller_id,
+                        user_name=seller.name,
+                        user_type="seller",
+                        action="sale_created",
+                        reason=f"Sotuv #{db_sale.id}",
                         reference_id=db_sale.id,
                         reference_type="sale"
                     )
-                    # If still excess after paying debt, add to debt balance (negative)
-                    remaining_excess = excess - debt_to_pay
-                    if remaining_excess > 0:
-                        DebtService.add_debt(
+                    
+                    if not success:
+                        db.rollback()
+                        raise ValueError(f"Not enough stock for product {item.product_id}")
+                    
+                    # Record inventory transaction
+                    InventoryService.record_transaction(
+                        db,
+                        item.product_id,
+                        "sale",
+                        -calculation["packages_to_sell"],
+                        -calculation["pieces_to_sell"],
+                        db_sale.id,
+                        "sale"
+                    )
+                
+                # Create sale item
+                sale_item = SaleItem(
+                    sale_id=db_sale.id,
+                    product_id=item.product_id,
+                    requested_quantity=item.requested_quantity,
+                    packages_sold=calculation["packages_to_sell"],
+                    pieces_sold=calculation["pieces_to_sell"],
+                    package_price=calculation["package_price"],
+                    piece_price=calculation["piece_price"],
+                    subtotal=calculation["subtotal"]
+                )
+                db.add(sale_item)
+                total_amount += calculation["subtotal"]
+            
+            # Update sale total
+            db_sale.total_amount = total_amount
+            db.flush()
+            
+            # If admin approval required, don't process payment/debt yet
+            if requires_approval:
+                db.commit()
+                db.refresh(db_sale)
+                return db_sale  # Return without processing payment/debt
+            
+            # Process payment and debt
+            from services.debt_service import DebtService
+            from datetime import datetime
+            
+            payment_amount = sale.payment_amount or total_amount
+            db_sale.payment_amount = payment_amount
+            excess = payment_amount - total_amount  # Positive if paid more, negative if paid less
+            
+            if excess > 0:  # Customer paid more
+                if sale.excess_action == 'debt':
+                    # Apply excess to customer's debt
+                    if customer.debt_balance > 0:
+                        # Pay down debt
+                        debt_to_pay = min(excess, customer.debt_balance)
+                        DebtService.pay_debt(
                             db=db,
                             customer_id=sale.customer_id,
-                            amount=-remaining_excess,  # Negative means reduce debt
-                            reason=f"Sotuv #{db_sale.id} - ortiqcha to'lov qoldig'i",
+                            amount=debt_to_pay,
+                            reason=f"Sotuv #{db_sale.id} - ortiqcha to'lov",
                             created_by=sale.seller_id,
                             created_by_name=seller.name,
                             reference_id=db_sale.id,
                             reference_type="sale"
                         )
-                else:
-                    # No debt - excess should be returned, not added to credit
-                    # Change excess_action to 'return' to indicate refund
-                    db_sale.excess_action = 'return'
-                    # Don't add to debt - excess should be returned to customer
-                    # The excess amount will be shown as "return" in the receipt
-            # else: excess_action == 'return' - nothing to do, just keep the excess as is
-        elif excess < 0:  # Customer paid less (debt)
-            # Add to customer's debt
-            debt_amount = abs(excess)
-            DebtService.add_debt(
-                db=db,
-                customer_id=sale.customer_id,
-                amount=debt_amount,
-                reason=f"Sotuv #{db_sale.id} - to'lov yetmadi",
-                created_by=sale.seller_id,
-                created_by_name=seller.name,
-                reference_id=db_sale.id,
-                reference_type="sale"
-            )
-        
-        db.commit()
-        db.refresh(db_sale)
-        
-        return db_sale
+                        # If still excess after paying debt, add to debt balance (negative)
+                        remaining_excess = excess - debt_to_pay
+                        if remaining_excess > 0:
+                            DebtService.add_debt(
+                                db=db,
+                                customer_id=sale.customer_id,
+                                amount=-remaining_excess,  # Negative means reduce debt
+                                reason=f"Sotuv #{db_sale.id} - ortiqcha to'lov qoldig'i",
+                                created_by=sale.seller_id,
+                                created_by_name=seller.name,
+                                reference_id=db_sale.id,
+                                reference_type="sale"
+                            )
+                    else:
+                        # No debt - excess should be returned, not added to credit
+                        # Change excess_action to 'return' to indicate refund
+                        db_sale.excess_action = 'return'
+                        # Don't add to debt - excess should be returned to customer
+                        # The excess amount will be shown as "return" in the receipt
+                # else: excess_action == 'return' - nothing to do, just keep the excess as is
+            elif excess < 0:  # Customer paid less (debt)
+                # Add to customer's debt
+                debt_amount = abs(excess)
+                DebtService.add_debt(
+                    db=db,
+                    customer_id=sale.customer_id,
+                    amount=debt_amount,
+                    reason=f"Sotuv #{db_sale.id} - to'lov yetmadi",
+                    created_by=sale.seller_id,
+                    created_by_name=seller.name,
+                    reference_id=db_sale.id,
+                    reference_type="sale"
+                )
+            
+            db.commit()
+            db.refresh(db_sale)
+            
+            return db_sale
+        except ValueError as e:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise ValueError(f"Error creating sale: {str(e)}")
     
     @staticmethod
     def get_sales(
@@ -263,6 +276,78 @@ class SaleService:
                 pass  # Ignore invalid date format
         
         return query.order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
+    
+    @staticmethod
+    def get_sales_count(
+        db: Session,
+        seller_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> int:
+        """Get total count of sales matching filters"""
+        from datetime import datetime
+        
+        query = db.query(Sale)
+        
+        if seller_id:
+            query = query.filter(Sale.seller_id == seller_id)
+        if customer_id:
+            query = query.filter(Sale.customer_id == customer_id)
+        
+        # Filter by status
+        if status:
+            from sqlalchemy import or_, and_
+            if status == 'approved':
+                query = query.filter(
+                    or_(
+                        Sale.requires_admin_approval == False,
+                        and_(
+                            Sale.requires_admin_approval == True,
+                            Sale.admin_approved.is_(True)
+                        )
+                    )
+                )
+            elif status == 'pending':
+                query = query.filter(
+                    and_(
+                        Sale.requires_admin_approval == True,
+                        Sale.admin_approved.is_(None)
+                    )
+                )
+            elif status == 'rejected':
+                query = query.filter(
+                    and_(
+                        Sale.requires_admin_approval == True,
+                        Sale.admin_approved.is_(False)
+                    )
+                )
+        
+        # Filter by date range
+        if start_date:
+            try:
+                if 'T' in start_date:
+                    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                else:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                query = query.filter(Sale.created_at >= start_dt)
+            except (ValueError, AttributeError):
+                pass
+        
+        if end_date:
+            try:
+                if 'T' in end_date:
+                    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                else:
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                    from datetime import timedelta
+                    end_dt = end_dt + timedelta(days=1)
+                query = query.filter(Sale.created_at < end_dt)
+            except (ValueError, AttributeError):
+                pass
+        
+        return query.count()
     
     @staticmethod
     def get_sale(db: Session, sale_id: int) -> Optional[Sale]:

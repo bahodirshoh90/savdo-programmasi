@@ -18,25 +18,21 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Bu dastur sizning joylashuvingizni ish vaqtida kuzatib turish uchun ishlatiladi.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Bu dastur sizning joylashuvingizni ish vaqtida doimiy kuzatib turish uchun ishlatiladi.",
-        "UIBackgroundModes": [
-          "location",
-          "fetch"
-        ]
+        "UIBackgroundModes": ["location","fetch"]
       }
     },
     "android": {
+      "package": "com.savdo.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#4f46e5"
       },
-      "package": "com.savdo.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "ACCESS_NETWORK_STATE"
       ],
       "softwareKeyboardLayoutMode": "pan"
     },
@@ -44,22 +40,13 @@
       "bundler": "metro"
     },
     "plugins": [
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Bu dastur sizning joylashuvingizni ish vaqtida kuzatib turish uchun ishlatiladi."
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "color": "#4f46e5"
-        }
-      ],
+      ["expo-location", { "locationAlwaysAndWhenInUsePermission": "Bu dastur sizning joylashuvingizni ish vaqtida kuzatib turish uchun ishlatiladi."}],
+      ["expo-notifications", { "color": "#4f46e5"}],
       "expo-secure-store",
       "expo-sqlite"
     ],
     "extra": {
+      "apiUrl": "https://savdo.uztoysshop.uz/api",
       "eas": {
         "projectId": "11d11e39-2c26-4e30-b39d-adb3090ce39c"
       }

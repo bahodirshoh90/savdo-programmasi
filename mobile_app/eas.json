@@ -6,11 +6,8 @@
   },
   "build": {
     "base": {
-      "node": "18.18.0",
-      "env": {
-        "EAS_BUILD_WORKINGDIR": "mobile_app"
-      }
-    },
+      "node": "18.18.0"
+        },
     "development": {
       "extends": "base",
       "developmentClient": true,

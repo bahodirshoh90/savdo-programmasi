@@ -123,6 +123,59 @@ class AuditService:
         return query.count()
     
     @staticmethod
+    def delete_audit_logs(
+        db: Session,
+        product_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        action: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        older_than_days: Optional[int] = None,
+        delete_all: bool = False
+    ) -> int:
+        """Delete audit logs with filters. Returns number of deleted logs."""
+        from datetime import timedelta
+        
+        if delete_all:
+            # Delete all logs
+            count = db.query(AuditLog).count()
+            db.query(AuditLog).delete(synchronize_session=False)
+            db.commit()
+            return count
+        
+        query = db.query(AuditLog)
+        
+        if product_id:
+            query = query.filter(AuditLog.product_id == product_id)
+        
+        if user_id:
+            query = query.filter(AuditLog.user_id == user_id)
+        
+        if action:
+            query = query.filter(AuditLog.action == action)
+        
+        if start_date:
+            start = datetime.fromisoformat(start_date)
+            query = query.filter(AuditLog.created_at >= start)
+        
+        if end_date:
+            end = datetime.fromisoformat(end_date)
+            query = query.filter(AuditLog.created_at <= end)
+        
+        if older_than_days:
+            cutoff_date = datetime.now() - timedelta(days=older_than_days)
+            query = query.filter(AuditLog.created_at < cutoff_date)
+        
+        # Get count before deletion
+        count = query.count()
+        
+        # Delete all matching logs
+        query.delete(synchronize_session=False)
+        db.commit()
+        
+        return count
+    
+    @staticmethod
     def audit_log_to_dict(log: AuditLog) -> Dict[str, Any]:
         """Convert AuditLog to dict"""
         extra_data = None

@@ -46,19 +46,7 @@ class PDFService:
         has_logo = settings and settings.logo_url and settings.receipt_show_logo
         header_height = 50*mm if has_logo else 35*mm
         
-        # Draw modern header background with gradient effect (simulated with lighter shade)
-        header_color = colors.HexColor('#4f46e5')
-        canvas_obj.setFillColor(header_color)
-        canvas_obj.rect(0, doc.height + doc.topMargin - header_height, 
-                       doc.width + doc.leftMargin + doc.rightMargin, header_height, fill=1)
-        
-        # Add subtle border at bottom
-        canvas_obj.setStrokeColor(colors.HexColor('#4338ca'))
-        canvas_obj.setLineWidth(1)
-        canvas_obj.line(0, doc.height + doc.topMargin - header_height,
-                       doc.width + doc.leftMargin + doc.rightMargin, 
-                       doc.height + doc.topMargin - header_height)
-        
+        # No colored background - clean white header
         canvas_obj.setFillColor(colors.white)
         
         # Calculate center position
@@ -101,9 +89,10 @@ class PDFService:
                 import traceback
                 traceback.print_exc()
         
-        # Draw store name centered below logo (or centered if no logo)
+        # Draw store name centered below logo (or centered if no logo) - dark text on white
         store_name = settings.store_name.upper() if settings and settings.store_name else "SOTUV CHEKI"
         canvas_obj.setFont('Helvetica-Bold', 16)
+        canvas_obj.setFillColor(colors.HexColor('#1e293b'))  # Dark text color
         
         # Position store name below logo or centered if no logo
         if has_logo:
@@ -116,6 +105,7 @@ class PDFService:
         # Add store info below name (if available) in smaller font
         if settings and (settings.store_address or settings.store_phone):
             canvas_obj.setFont('Helvetica', 7)
+            canvas_obj.setFillColor(colors.HexColor('#64748b'))  # Gray text color
             info_text = ""
             if settings.store_address:
                 info_text = settings.store_address
@@ -152,16 +142,16 @@ class PDFService:
         
         # Adjust top margin for modern header design
         has_logo = settings and settings.logo_url and settings.receipt_show_logo
-        top_margin = 60*mm if has_logo else 45*mm
+        top_margin = 60*mm if has_logo else 15*mm
         
         # Create PDF
         doc = SimpleDocTemplate(
             filepath, 
             pagesize=A4,
-            rightMargin=15*mm,
-            leftMargin=15*mm,
+            rightMargin=10*mm,
+            leftMargin=10*mm,
             topMargin=top_margin,
-            bottomMargin=25*mm
+            bottomMargin=15*mm
         )
         elements = []
         
@@ -175,12 +165,12 @@ class PDFService:
         receipt_num_style = ParagraphStyle(
             'ReceiptNum',
             parent=styles['Normal'],
-            fontSize=18,
-            textColor=colors.HexColor('#4f46e5'),
+            fontSize=16,
+            textColor=colors.HexColor("#0b0909"),
             spaceAfter=6*mm,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold',
-            leading=22
+            leading=20
         )
         
         info_label_style = ParagraphStyle(
@@ -262,12 +252,12 @@ class PDFService:
         elements.append(info_table)
         elements.append(Spacer(1, 10*mm))
         
-        # Items table header style
+        # Items table header style - dark text instead of white
         header_num_style = ParagraphStyle(
             'HeaderNum',
             parent=styles['Normal'],
             fontSize=10,
-            textColor=colors.white,
+            textColor=colors.HexColor('#1e293b'),
             fontName='Helvetica-Bold',
             alignment=TA_CENTER
         )
@@ -276,7 +266,7 @@ class PDFService:
             'HeaderLeft',
             parent=styles['Normal'],
             fontSize=10,
-            textColor=colors.white,
+            textColor=colors.HexColor('#1e293b'),
             fontName='Helvetica-Bold',
             alignment=TA_LEFT
         )
@@ -285,7 +275,7 @@ class PDFService:
             'HeaderRight',
             parent=styles['Normal'],
             fontSize=10,
-            textColor=colors.white,
+            textColor=colors.HexColor('#1e293b'),
             fontName='Helvetica-Bold',
             alignment=TA_RIGHT
         )
@@ -383,8 +373,9 @@ class PDFService:
         
         items_table = Table(table_data, colWidths=[12*mm, 85*mm, 28*mm, 32*mm, 33*mm])
         items_table.setStyle(TableStyle([
-            # Header row (0) - Modern design with rounded corners effect
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4f46e5')),
+            # Header row (0) - Simple design without colored background
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1e293b')),  # Dark text instead of white
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('TOPPADDING', (0, 0), (-1, 0), 12),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),
@@ -393,7 +384,7 @@ class PDFService:
             ('ALIGN', (3, 0), (3, 0), 'CENTER'),
             ('ALIGN', (4, 0), (4, 0), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-            ('BOX', (0, 0), (-1, 0), 0, colors.HexColor('#4338ca')),  # Header border
+            ('BOX', (0, 0), (-1, 0), 0, colors.HexColor('#cbd5e1')),  # Light border
             
             # Data rows (1 to separator_row-1) - Paragraph objects handle their own styling
             ('ALIGN', (0, 1), (0, separator_row-1), 'CENTER'),
@@ -435,7 +426,7 @@ class PDFService:
             'ThankYou',
             parent=styles['Normal'],
             fontSize=13,
-            textColor=colors.HexColor('#4f46e5'),
+            textColor=colors.HexColor("#050506"),
             alignment=TA_CENTER,
             fontName='Helvetica-Bold',
             leading=18,

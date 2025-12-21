@@ -650,10 +650,15 @@ function handleProductSearch(e) {
     const products = (typeof window !== 'undefined' && window.saleProducts) ? window.saleProducts : saleProducts;
     
     console.log('Available products:', products ? products.length : 0);
+    console.log('Products array check:', Array.isArray(products), typeof products);
     
     // Ensure products are loaded
-    if (!products || products.length === 0) {
-        console.warn('No products loaded, trying to reload...');
+    if (!products || !Array.isArray(products) || products.length === 0) {
+        console.warn('No products loaded, trying to reload...', {
+            products: products,
+            isArray: Array.isArray(products),
+            length: products ? products.length : 0
+        });
         resultsDiv.innerHTML = '<div class="search-result-item">Mahsulotlar yuklanmoqda...</div>';
         resultsDiv.style.display = 'block';
         // Try to reload
@@ -668,47 +673,54 @@ function handleProductSearch(e) {
                 console.error('Error reloading products:', err);
                 resultsDiv.innerHTML = '<div class="search-result-item" style="color: red;">Xatolik: Mahsulotlar yuklanmadi</div>';
             });
+        } else {
+            resultsDiv.innerHTML = '<div class="search-result-item" style="color: red;">Xatolik: Mahsulotlar yuklanmadi. Sahifani yangilang.</div>';
         }
         return;
     }
     
     const matches = products.filter(p => {
+        if (!p) return false;
         const nameMatch = p.name && p.name.toLowerCase().includes(query);
-        const barcodeMatch = p.barcode && p.barcode.includes(query);
+        const barcodeMatch = p.barcode && p.barcode.toString().toLowerCase().includes(query);
         return nameMatch || barcodeMatch;
-    }).slice(0, 10); // Show more results
+    }).slice(0, 20); // Show more results
     
-    console.log('Product matches found:', matches.length);
+    console.log('Product matches found:', matches.length, 'out of', products.length, 'total products');
+    console.log('Search query:', query);
+    if (matches.length > 0) {
+        console.log('First match:', matches[0]);
+    }
     
     if (matches.length === 0) {
         resultsDiv.innerHTML = '<div class="search-result-item">Mahsulot topilmadi</div>';
     } else {
         const customer = (typeof window !== 'undefined' && window.selectedCustomer) ? window.selectedCustomer : selectedCustomer;
         const addFn = typeof addProductToSale === 'function' ? 'addProductToSale' : 'window.addProductToSale';
-        resultsDiv.innerHTML = matches.map(p => {
+        resultsDiv.innerHTML = matches.map((p, index) => {
             const stockText = (p.total_pieces || 0) > 0 
                 ? `<span class="stock-badge">Omborda: ${p.total_pieces || 0} dona</span>`
                 : `<span class="stock-badge out-of-stock">Omborda yo'q</span>`;
             
-        const imageUrl = p.image_url 
-            ? (p.image_url.startsWith('http') ? p.image_url : `${window.location.origin}${p.image_url}`)
-            : null;
-        
-        // Get price based on customer type using getProductPrice function
-        const price = getProductPrice(p);
-        
-        // Debug log for first product
-        if (availableProducts.indexOf(p) === 0) {
-            console.log('Product price debug:', {
-                productId: p.id,
-                productName: p.name,
-                wholesale_price: p.wholesale_price,
-                retail_price: p.retail_price,
-                regular_price: p.regular_price,
-                customerType: customer ? customer.customer_type : 'none',
-                calculatedPrice: price
-            });
-        }
+            const imageUrl = p.image_url 
+                ? (p.image_url.startsWith('http') ? p.image_url : `${window.location.origin}${p.image_url}`)
+                : null;
+            
+            // Get price based on customer type using getProductPrice function
+            const price = getProductPrice(p);
+            
+            // Debug log for first product
+            if (index === 0) {
+                console.log('Product price debug:', {
+                    productId: p.id,
+                    productName: p.name,
+                    wholesale_price: p.wholesale_price,
+                    retail_price: p.retail_price,
+                    regular_price: p.regular_price,
+                    customerType: customer ? customer.customer_type : 'none',
+                    calculatedPrice: price
+                });
+            }
         
             return `
                 <div class="product-search-result" onclick="(window.addProductToSale || addProductToSale)(${p.id})" ${(p.total_pieces || 0) === 0 ? 'style="opacity: 0.6; cursor: not-allowed;"' : 'style="cursor: pointer;"'}>
@@ -1435,19 +1447,20 @@ async function completeSale() {
     }
     
     // CRITICAL: If no payment amount is entered and admin approval is NOT requested, prevent sale
-    if (paymentAmount === null && !requiresApproval) {
-        const confirmed = confirm(
+    if (paymentAmount === null || paymentAmount === '' || (paymentAmount === 0 && !requiresApproval)) {
+        alert(
             '⚠️ To\'lov summasi kiritilmagan!\n\n' +
-            'To\'lov summasi kiritilmagan va admin ruxsati so\'ralmagan.\n\n' +
-            'Admin ruxsatini so\'rash uchun "Admin ruxsati kerak" checkbox\'ini belgilang.\n\n' +
-            'Yoki to\'lov summasi kiriting va qayta urinib ko\'ring.'
+            'To\'lov summasi majburiy. Iltimos, to\'lov summasi kiriting.\n\n' +
+            'Agar qarzga yozmoqchi bo\'lsangiz, "Admin ruxsati kerak" checkbox\'ini belgilang.'
         );
-        if (confirmed) {
-            // Focus on payment amount input
-            const paymentInput = document.getElementById('payment-amount-input');
-            if (paymentInput) {
-                paymentInput.focus();
-            }
+        // Focus on payment amount input
+        const paymentInput = document.getElementById('payment-amount-input');
+        if (paymentInput) {
+            paymentInput.focus();
+            paymentInput.style.border = '2px solid #ef4444';
+            setTimeout(() => {
+                paymentInput.style.border = '';
+            }, 3000);
         }
         return;
     }

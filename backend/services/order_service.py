@@ -134,6 +134,20 @@ class OrderService:
         return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
+    def get_orders_count(
+        db: Session,
+        status: Optional[str] = None,
+        seller_id: Optional[int] = None
+    ) -> int:
+        """Get total count of orders matching filters"""
+        query = db.query(Order)
+        if status:
+            query = query.filter(Order.status == OrderStatus(status))
+        if seller_id:
+            query = query.filter(Order.seller_id == seller_id)
+        return query.count()
+    
+    @staticmethod
     def update_status(db: Session, order_id: int, status: str) -> Optional[Order]:
         """Update order status. If cancelled or returned, restore inventory."""
         db_order = db.query(Order).filter(Order.id == order_id).first()

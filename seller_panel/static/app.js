@@ -26,38 +26,114 @@ function checkAuth() {
     }
 }
 
-async function loadCurrentUser(userId) {
+// Load current user data without showing panel (used after login)
+async function loadCurrentUserData(userId) {
     try {
+        const token = localStorage.getItem('seller_token');
+        if (!token) {
+            console.warn('No token found');
+            return;
+        }
+        
         const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
-                'X-Seller-ID': userId
+                'X-Seller-ID': userId,
+                'Authorization': token ? `Bearer ${token}` : ''
             }
         });
         
         if (response.ok) {
             const data = await response.json();
             currentUser = data;
+            currentToken = token;
             userPermissions = data.permissions || [];
             
-            // Make currentUser available globally
+            // Store in global for other scripts
             if (typeof window !== 'undefined') {
-                window.currentUser = currentUser;
+                window.currentUser = data;
             }
             
-            // Update seller name in header
+            // Update UI if needed
+            const sellerNameEl = document.getElementById('seller-name');
+            if (sellerNameEl && data.name && !sellerNameEl.textContent) {
+                sellerNameEl.textContent = data.name;
+            }
+            
+            const sellerRoleEl = document.getElementById('seller-role');
+            if (sellerRoleEl && data.role_name && !sellerRoleEl.textContent) {
+                sellerRoleEl.textContent = data.role_name;
+            }
+            
+            // Update navigation based on permissions
+            updateNavigation();
+            
+            // Check if user is admin and show admin nav item
+            const isAdmin = data.role_name?.toLowerCase().includes('admin') || 
+                          (data.permissions && (
+                              data.permissions.includes('admin.settings') ||
+                              data.permissions.includes('admin.sellers') ||
+                              data.permissions.includes('admin.roles')
+                          ));
+            
+            const adminNavItem = document.getElementById('admin-nav-item');
+            if (adminNavItem) {
+                if (isAdmin) {
+                    adminNavItem.style.display = 'flex';
+                } else {
+                    adminNavItem.style.display = 'none';
+                }
+            }
+        } else {
+            console.error('Auth failed:', response.status);
+        }
+    } catch (error) {
+        console.error('Error loading current user data:', error);
+    }
+}
+
+// Load current user and show panel (used on page load)
+async function loadCurrentUser(userId) {
+    try {
+        const token = localStorage.getItem('seller_token');
+        if (!token) {
+            console.warn('No token found, showing login');
+            showLogin();
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            headers: {
+                'X-Seller-ID': userId,
+                'Authorization': token ? `Bearer ${token}` : ''
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentUser = data;
+            currentToken = token;
+            userPermissions = data.permissions || [];
+            
+            // Store in global for other scripts
+            if (typeof window !== 'undefined') {
+                window.currentUser = data;
+            }
+            
+            // Update UI
             const sellerNameEl = document.getElementById('seller-name');
             if (sellerNameEl && data.name) {
                 sellerNameEl.textContent = data.name;
             }
             
-            // Update seller role if available
             const sellerRoleEl = document.getElementById('seller-role');
             if (sellerRoleEl) {
-                // Try role_name first (from /api/auth/me), then role (from login response)
                 const roleName = data.role_name || data.role || 'Sotuvchi';
                 sellerRoleEl.textContent = roleName;
                 console.log('Seller role updated:', roleName);
             }
+            
+            // Show panel
+            showPanel();
             
             // Update navigation based on permissions
             updateNavigation();
@@ -192,7 +268,8 @@ async function handleLogin(e) {
         const data = await response.json();
         console.log('Login response:', data); // Debug log
         
-        if (data.success) {
+        // Check if login was successful (either data.success === true or token exists)
+        if (data.success || data.token) {
             currentToken = data.token;
             currentUser = { 
                 id: data.seller_id, 
@@ -211,32 +288,39 @@ async function handleLogin(e) {
             localStorage.setItem('seller_token', data.token);
             localStorage.setItem('seller_id', data.seller_id.toString());
             
-            // Update seller role immediately from login response
+            console.log('Login successful, showing panel...'); // Debug log
+            
+            // Update seller name and role immediately from login response
+            const sellerNameEl = document.getElementById('seller-name');
+            if (sellerNameEl && data.seller_name) {
+                sellerNameEl.textContent = data.seller_name;
+            }
+            
             const sellerRoleEl = document.getElementById('seller-role');
             if (sellerRoleEl && (data.role_name || data.role)) {
                 sellerRoleEl.textContent = data.role_name || data.role;
                 console.log('Seller role updated from login:', data.role_name || data.role);
             }
             
-            // Update seller name immediately
-            const sellerNameEl = document.getElementById('seller-name');
-            if (sellerNameEl && data.seller_name) {
-                sellerNameEl.textContent = data.seller_name;
+            // Clear error message
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
             }
             
-            console.log('Login successful, showing panel...'); // Debug log
-            
-            // Show panel first
+            // Show panel
             showPanel();
             
-            // Then load current user data
+            // Load additional user data (permissions, etc.) without calling showPanel again
             setTimeout(() => {
-                loadCurrentUser(data.seller_id);
+                loadCurrentUserData(data.seller_id);
             }, 100);
         } else {
             const errorMessage = data.message || data.detail || 'Noto\'g\'ri login yoki parol';
-            errorDiv.textContent = errorMessage;
-            errorDiv.style.display = 'block';
+            if (errorDiv) {
+                errorDiv.textContent = errorMessage;
+                errorDiv.style.display = 'block';
+            }
             console.log('Login failed:', errorMessage); // Debug log
         }
     } catch (error) {
@@ -248,24 +332,63 @@ async function handleLogin(e) {
 }
 
 function logout() {
-    // Clear localStorage
-    localStorage.removeItem('seller_token');
-    localStorage.removeItem('seller_id');
-    
-    // Clear current user data
-    currentToken = null;
-    currentUser = null;
-    userPermissions = [];
-    
-    // Clear global variables
-    if (typeof window !== 'undefined') {
-        window.currentUser = null;
+    try {
+        // Clear localStorage
+        localStorage.removeItem('seller_token');
+        localStorage.removeItem('seller_id');
+        
+        // Clear sessionStorage as well
+        sessionStorage.removeItem('seller_token');
+        sessionStorage.removeItem('seller_id');
+        
+        // Clear current user data
+        currentToken = null;
+        currentUser = null;
+        userPermissions = [];
+        
+        // Clear global variables
+        if (typeof window !== 'undefined') {
+            window.currentUser = null;
+            window.saleProducts = null;
+            window.saleCustomers = null;
+            window.saleItems = null;
+            window.selectedCustomer = null;
+        }
+        
+        // Force show login page
+        const loginPage = document.getElementById('login-page');
+        const sellerPanel = document.getElementById('seller-panel');
+        
+        if (loginPage) {
+            loginPage.classList.add('active');
+            loginPage.style.display = 'flex';
+            loginPage.style.visibility = 'visible';
+            loginPage.style.opacity = '1';
+            loginPage.style.position = 'relative';
+            loginPage.style.zIndex = '10';
+        }
+        
+        if (sellerPanel) {
+            sellerPanel.classList.remove('active');
+            sellerPanel.style.display = 'none';
+            sellerPanel.style.visibility = 'hidden';
+            sellerPanel.style.opacity = '0';
+            sellerPanel.style.position = 'absolute';
+            sellerPanel.style.zIndex = '-1';
+        }
+        
+        // Clear any forms
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.reset();
+        }
+        
+        console.log('Logout successful');
+    } catch (error) {
+        console.error('Error during logout:', error);
+        // Force page reload as fallback
+        window.location.href = window.location.pathname;
     }
-    
-    // Show login page
-    showLogin();
-    
-    console.log('Logout successful');
 }
 
 // Make logout globally accessible
@@ -2474,14 +2597,48 @@ async function loadAdminDashboard() {
         const sales = salesRes.ok ? await salesRes.json() : [];
         const customersCount = customersRes.ok ? (await customersRes.json()).count : 0;
         
+        // Get actual counts instead of "Ko'p"
+        let ordersCount = 0;
+        let salesCount = 0;
+        
+        try {
+            const ordersCountRes = await fetch(`${API_BASE}/orders/count`, { headers });
+            if (ordersCountRes.ok) {
+                const ordersCountData = await ordersCountRes.json();
+                ordersCount = ordersCountData.count || 0;
+            }
+        } catch (e) {
+            console.error('Error getting orders count:', e);
+        }
+        
+        try {
+            const salesCountRes = await fetch(`${API_BASE}/sales/count`, { headers });
+            if (salesCountRes.ok) {
+                const salesCountData = await salesCountRes.json();
+                salesCount = salesCountData.count || 0;
+            }
+        } catch (e) {
+            console.error('Error getting sales count:', e);
+            // Fallback: try statistics endpoint
+            try {
+                const statsRes = await fetch(`${API_BASE}/statistics`, { headers });
+                if (statsRes.ok) {
+                    const stats = await statsRes.json();
+                    salesCount = stats.total_sales || 0;
+                }
+            } catch (e2) {
+                console.error('Error getting stats:', e2);
+            }
+        }
+        
         const productsEl = document.getElementById('admin-total-products');
         const ordersEl = document.getElementById('admin-total-orders');
         const salesEl = document.getElementById('admin-total-sales');
         const customersEl = document.getElementById('admin-total-customers');
         
         if (productsEl) productsEl.textContent = productsCount;
-        if (ordersEl) ordersEl.textContent = orders.length > 0 ? 'Ko\'p' : '0';
-        if (salesEl) salesEl.textContent = sales.length > 0 ? 'Ko\'p' : '0';
+        if (ordersEl) ordersEl.textContent = ordersCount;
+        if (salesEl) salesEl.textContent = salesCount;
         if (customersEl) customersEl.textContent = customersCount;
     } catch (error) {
         console.error('Error loading admin dashboard:', error);

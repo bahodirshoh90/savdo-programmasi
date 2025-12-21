@@ -36,8 +36,27 @@ class CalculationService:
         if not customer:
             return None
         
+        # Validate inputs
+        if quantity <= 0:
+            return {
+                "error": "Quantity must be greater than 0",
+                "requested": quantity
+            }
+        
+        # Validate product fields (null safety)
+        if product.pieces_per_package is None or product.pieces_per_package <= 0:
+            return {
+                "error": "Product pieces_per_package is invalid or not set",
+                "product_id": product_id,
+                "product_name": product.name
+            }
+        
+        # Ensure stock fields are not None
+        packages_in_stock = product.packages_in_stock if product.packages_in_stock is not None else 0
+        pieces_in_stock = product.pieces_in_stock if product.pieces_in_stock is not None else 0
+        
         # Check if enough stock
-        total_available = (product.packages_in_stock * product.pieces_per_package) + product.pieces_in_stock
+        total_available = (packages_in_stock * product.pieces_per_package) + pieces_in_stock
         if quantity > total_available:
             return {
                 "error": "Not enough stock",
@@ -50,17 +69,17 @@ class CalculationService:
         pieces_to_sell = quantity % product.pieces_per_package
         
         # Adjust if we don't have enough packages
-        if packages_to_sell > product.packages_in_stock:
+        if packages_to_sell > packages_in_stock:
             # Use all available packages
-            packages_to_sell = product.packages_in_stock
+            packages_to_sell = packages_in_stock
             # Calculate remaining pieces needed
             remaining_pieces = quantity - (packages_to_sell * product.pieces_per_package)
             pieces_to_sell = remaining_pieces
         
         # Check if we have enough loose pieces
-        if pieces_to_sell > product.pieces_in_stock:
+        if pieces_to_sell > pieces_in_stock:
             # Need to break a package to get more pieces
-            if packages_to_sell < product.packages_in_stock:
+            if packages_to_sell < packages_in_stock:
                 # Break one more package
                 packages_to_sell += 1
                 pieces_to_sell = pieces_to_sell - product.pieces_per_package
@@ -81,11 +100,19 @@ class CalculationService:
         
         # Select price based on customer type (all prices are per piece now)
         if customer.customer_type == CustomerType.WHOLESALE:
-            price_per_piece = product.wholesale_price
+            price_per_piece = product.wholesale_price or 0
         elif customer.customer_type == CustomerType.RETAIL:
-            price_per_piece = product.retail_price
+            price_per_piece = product.retail_price or 0
         else:  # REGULAR
-            price_per_piece = product.regular_price
+            price_per_piece = product.regular_price or 0
+        
+        # Validate price
+        if price_per_piece is None or price_per_piece <= 0:
+            return {
+                "error": f"Product {product.name} has no valid price for customer type {customer.customer_type.value}",
+                "product_id": product_id,
+                "customer_type": customer.customer_type.value
+            }
         
         # Calculate subtotal - all pieces use the same price per piece
         # Packages and pieces are for inventory tracking only
@@ -131,8 +158,22 @@ class CalculationService:
         if not product:
             return False
         
+        # Validate inputs
+        if packages < 0 or pieces < 0:
+            return False
+        
         # Refresh to get latest data
         db.refresh(product)
+        
+        # Validate product fields
+        if product.pieces_per_package is None or product.pieces_per_package <= 0:
+            return False
+        
+        # Ensure stock fields are not None
+        if product.packages_in_stock is None:
+            product.packages_in_stock = 0
+        if product.pieces_in_stock is None:
+            product.pieces_in_stock = 0
         
         # Store before state for audit
         quantity_before = product.total_pieces
@@ -209,8 +250,18 @@ class CalculationService:
         if not product:
             return False
         
+        # Validate inputs
+        if packages < 0 or pieces < 0:
+            return False
+        
         db.refresh(product)
         quantity_before = product.total_pieces
+        
+        # Ensure stock fields are not None
+        if product.packages_in_stock is None:
+            product.packages_in_stock = 0
+        if product.pieces_in_stock is None:
+            product.pieces_in_stock = 0
         
         # Add inventory
         product.packages_in_stock += packages

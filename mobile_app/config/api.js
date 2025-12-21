@@ -19,29 +19,66 @@
  * Batafsil: mobile_app/API_SETUP.md faylini o'qing
  */
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Detect if running on web
 const isWeb = Platform.OS === 'web';
 
-// ⚠️ O'ZINGIZNING IP MANZILINGIZNI KIRITING
+// Get API URL from app.json extra config or use default
+const getApiUrlFromConfig = () => {
+  try {
+    // Try to get from expo constants (app.json extra.apiUrl)
+    const apiUrl = Constants.expoConfig?.extra?.apiUrl;
+    if (apiUrl) {
+      // Ensure it ends with /api
+      return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
+    }
+  } catch (e) {
+    console.warn('Could not read API URL from config:', e);
+  }
+  return null;
+};
+
+// ⚠️ O'ZINGIZNING IP MANZILINGIZNI KIRITING (Development uchun)
 // Windows: cmd > ipconfig | findstr "IPv4"
 // Mac/Linux: ifconfig | grep "inet "
-const YOUR_LOCAL_IP = '192.168.0.102'; // ← BU YERNI O'ZGARTIRING!
+const YOUR_LOCAL_IP = '161.97.184.217'; // ← Development uchun IP manzil
 
-// Determine BASE_URL based on platform
-const BASE_URL = __DEV__ 
-  ? (isWeb 
-      ? 'http://localhost:8000/api' // Web versiyasi uchun backend port 8000
-      : `http://${YOUR_LOCAL_IP}:8000/api`) // Native (telefon) uchun IP manzil - BU YERNI O'ZGARTIRING!
-  : 'https://savdo.uztoysshop.uz/api'; // Production URL
+// ⚠️ PRODUCTION URL (APK build uchun)
+// Contabo VPS ning domain yoki IP manzilini kiriting
+// Masalan: https://savdo.uztoysshop.uz yoki http://161.97.184.217:8000
+const PRODUCTION_URL = 'https://savdo.uztoysshop.uz/api'; // ← Production URL (HTTPS yoki HTTP)
 
-// Debug log
+// Determine BASE_URL based on platform and environment
+let BASE_URL;
+
+// First try to get from app.json config (works for both dev and production)
+const configUrl = getApiUrlFromConfig();
+if (configUrl) {
+  BASE_URL = configUrl;
+} else if (__DEV__) {
+  // Development mode - only if no config URL found
+  if (isWeb) {
+    BASE_URL = 'http://161.97.184.217:8000/api'; // Web versiyasi uchun
+  } else {
+    BASE_URL = `http://${YOUR_LOCAL_IP}:8000/api`; // Native (telefon) uchun IP manzil
+  }
+} else {
+  // Production mode (APK build) - fallback to hardcoded production URL
+  BASE_URL = PRODUCTION_URL;
+}
+
+// Debug log - always show for troubleshooting
 console.log('📱 API Config:', {
   platform: Platform.OS,
   isWeb,
   YOUR_LOCAL_IP,
   BASE_URL,
-  __DEV__
+  __DEV__,
+  configUrl: getApiUrlFromConfig(),
+  productionUrl: PRODUCTION_URL,
+  'isProduction': !__DEV__,
+  'Constants.expoConfig?.extra?.apiUrl': Constants.expoConfig?.extra?.apiUrl
 });
 
 const API_CONFIG = {

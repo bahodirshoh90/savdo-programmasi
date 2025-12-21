@@ -261,6 +261,12 @@ function showPage(pageName) {
         case 'audit-logs':
             loadAuditLogs();
             break;
+        case 'gps':
+            // Wait a bit for page to be visible, then load map
+            setTimeout(() => {
+                loadGPSMap();
+            }, 100);
+            break;
         case 'settings':
             loadSettings();
             break;
@@ -2026,19 +2032,54 @@ function toggleSidebar() {
     const mainContent = document.querySelector('.main-content');
     const toggleBtn = document.getElementById('sidebar-toggle');
     
+    // Check if mobile (screen width <= 768px)
+    const isMobile = window.innerWidth <= 768;
+    
     if (sidebar.classList.contains('collapsed')) {
         sidebar.classList.remove('collapsed');
-        if (mainContent) {
+        if (mainContent && !isMobile) {
             mainContent.style.marginLeft = '260px';
+        } else if (mainContent && isMobile) {
+            mainContent.style.marginLeft = '0';
         }
-        toggleBtn.querySelector('i').className = 'fas fa-bars';
+        if (toggleBtn) {
+            const icon = toggleBtn.querySelector('i');
+            if (icon) {
+                icon.className = isMobile ? 'fas fa-times' : 'fas fa-bars';
+            }
+        }
     } else {
         sidebar.classList.add('collapsed');
         if (mainContent) {
             mainContent.style.marginLeft = '0';
         }
-        toggleBtn.querySelector('i').className = 'fas fa-bars';
+        if (toggleBtn) {
+            const icon = toggleBtn.querySelector('i');
+            if (icon) {
+                icon.className = 'fas fa-bars';
+            }
+        }
     }
+}
+
+// Close sidebar when clicking outside on mobile
+if (typeof window !== 'undefined') {
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+            const sidebar = document.getElementById('sidebar');
+            const toggleBtn = document.getElementById('sidebar-toggle');
+            if (sidebar && !sidebar.classList.contains('collapsed')) {
+                // If click is outside sidebar and toggle button
+                if (!sidebar.contains(e.target) && !toggleBtn?.contains(e.target)) {
+                    sidebar.classList.add('collapsed');
+                    const icon = toggleBtn?.querySelector('i');
+                    if (icon) {
+                        icon.className = 'fas fa-bars';
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Toggle seller login info visibility
@@ -2211,20 +2252,17 @@ let mapMarkers = []; // Store markers to remove them later
 async function loadGPSMap() {
     console.log('loadGPSMap called');
     
-    // Check if mapboxgl is loaded
-    if (typeof mapboxgl === 'undefined') {
-        console.error('Mapbox GL JS is not loaded. Please check if the script is included.');
-        const mapContainer = document.getElementById('map');
-        if (mapContainer) {
-            mapContainer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Mapbox xarita kutubxonasi yuklanmadi. Qayta yuklashni urinib ko\'ring.</p></div>';
-        }
-        return;
-    }
-    
-    // Check if map container exists
+    // Check if map container exists and is visible
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
         console.error('Map container not found');
+        return;
+    }
+    
+    // Check if mapboxgl is loaded
+    if (typeof mapboxgl === 'undefined') {
+        console.error('Mapbox GL JS is not loaded. Please check if the script is included.');
+        mapContainer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Mapbox xarita kutubxonasi yuklanmadi. Qayta yuklashni urinib ko\'ring.</p></div>';
         return;
     }
     
@@ -2243,17 +2281,31 @@ async function loadGPSMap() {
             // Wait for map to load
             map.on('load', () => {
                 console.log('Map loaded successfully');
-                loadSellersMarkers();
+                // Load markers after map is ready
+                setTimeout(() => {
+                    loadSellersMarkers();
+                }, 500);
+            });
+            
+            // Also try to load markers if map is already loaded
+            map.on('idle', () => {
+                if (mapMarkers.length === 0) {
+                    console.log('Map is idle, loading markers...');
+                    loadSellersMarkers();
+                }
             });
         } else {
             // Map already exists, just load markers
+            console.log('Map already exists, loading markers...');
+            // Ensure map is visible and resized
+            if (map.getContainer()) {
+                map.resize();
+            }
             loadSellersMarkers();
         }
     } catch (error) {
         console.error('Error initializing map:', error);
-        if (mapContainer) {
-            mapContainer.innerHTML = `<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Xarita yuklashda xatolik: ${error.message}</p></div>`;
-        }
+        mapContainer.innerHTML = `<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Xarita yuklashda xatolik: ${error.message}</p></div>`;
     }
 }
 
@@ -2393,26 +2445,42 @@ async function loadSellersMarkers() {
             console.log('Fitting map bounds to show all markers...');
             const bounds = new mapboxgl.LngLatBounds();
             
-            locations.forEach(location => {
-                const lat = parseFloat(location.latitude);
-                const lng = parseFloat(location.longitude);
-                if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                    bounds.extend([lng, lat]);
+            // Use mapMarkers instead of locations to ensure we only fit to valid markers
+            mapMarkers.forEach(marker => {
+                const lngLat = marker.getLngLat();
+                if (lngLat) {
+                    bounds.extend([lngLat.lng, lngLat.lat]);
                 }
             });
             
             if (!bounds.isEmpty()) {
                 console.log('Map bounds:', bounds.toArray());
-                map.fitBounds(bounds, {
-                    padding: 50,
-                    maxZoom: 15
-                });
-                console.log('Map fitted to bounds');
+                // Wait a bit for map to be fully rendered
+                setTimeout(() => {
+                    map.fitBounds(bounds, {
+                        padding: { top: 50, bottom: 50, left: 50, right: 50 },
+                        maxZoom: 15,
+                        duration: 1000
+                    });
+                    console.log('Map fitted to bounds');
+                }, 300);
             } else {
                 console.warn('Bounds is empty, using default center');
+                // If no valid bounds, center on first marker
+                if (mapMarkers.length > 0) {
+                    const firstMarker = mapMarkers[0];
+                    const lngLat = firstMarker.getLngLat();
+                    if (lngLat) {
+                        map.setCenter([lngLat.lng, lngLat.lat]);
+                        map.setZoom(12);
+                    }
+                }
             }
         } else if (mapMarkers.length === 0 && locations.length > 0) {
             console.warn('⚠️ No valid markers were created despite having locations data');
+            console.warn('Locations data:', locations);
+        } else if (mapMarkers.length === 0 && locations.length === 0) {
+            console.log('No locations available to display');
         }
     } catch (error) {
         console.error('Error loading GPS locations:', error);
@@ -2530,6 +2598,36 @@ async function loadSales() {
         
         tbody.innerHTML = '';
 
+        // Optimize: Load all products at once instead of per sale
+        const productIds = new Set();
+        paginatedSales.forEach(sale => {
+            (sale.items || []).forEach(item => {
+                if (item.product_id) productIds.add(item.product_id);
+            });
+        });
+        
+        // Fetch all products in parallel
+        const productsMap = new Map();
+        if (productIds.size > 0) {
+            const productPromises = Array.from(productIds).map(async (productId) => {
+                try {
+                    const productRes = await fetch(`${API_BASE}/products/${productId}`).catch(() => null);
+                    if (productRes && productRes.ok) {
+                        const product = await productRes.json();
+                        return [productId, product];
+                    }
+                } catch (e) {
+                    console.error(`Error loading product ${productId}:`, e);
+                }
+                return [productId, null];
+            });
+            
+            const productResults = await Promise.all(productPromises);
+            productResults.forEach(([id, product]) => {
+                if (product) productsMap.set(id, product);
+            });
+        }
+        
         for (const sale of paginatedSales) {
             const paymentMethodText = {
                 'cash': 'Naqd',
@@ -2537,13 +2635,12 @@ async function loadSales() {
                 'bank_transfer': 'Hisob raqam'
             }[sale.payment_method || 'cash'] || sale.payment_method || 'Naqd';
             
-            // Calculate profit for this sale
+            // Calculate profit for this sale using cached products
             let saleProfit = 0;
             try {
                 for (const item of sale.items || []) {
-                    const productRes = await fetch(`${API_BASE}/products/${item.product_id}`).catch(() => null);
-                    if (productRes && productRes.ok) {
-                        const product = await productRes.json();
+                    const product = productsMap.get(item.product_id);
+                    if (product) {
                         // Use cost_price (actual purchase price), if not available, skip cost calculation
                         const costPrice = product.cost_price;
                         const itemSubtotal = item.subtotal || 0;
@@ -4143,6 +4240,60 @@ function clearAuditFilters() {
     document.getElementById('audit-end-date').value = '';
     currentAuditPage = 1;
     loadAuditLogs();
+}
+
+async function deleteAuditLogs() {
+    const productSearch = document.getElementById('audit-product-search')?.value || '';
+    const actionFilter = document.getElementById('audit-action-filter')?.value || '';
+    const startDate = document.getElementById('audit-start-date')?.value || '';
+    const endDate = document.getElementById('audit-end-date')?.value || '';
+    
+    // Determine what will be deleted
+    let deleteMessage = '';
+    if (productSearch || actionFilter || startDate || endDate) {
+        deleteMessage = 'Filtrlar bo\'yicha tanlangan audit loglarni o\'chirishni tasdiqlaysizmi?';
+    } else {
+        deleteMessage = '⚠️ EHTIYOT! Barcha audit loglarni o\'chirishni tasdiqlaysizmi?\n\nBu amalni qaytarib bo\'lmaydi!';
+    }
+    
+    if (!confirm(deleteMessage)) {
+        return;
+    }
+    
+    try {
+        // Build query parameters
+        const params = new URLSearchParams();
+        if (actionFilter) params.append('action', actionFilter);
+        if (startDate) params.append('start_date', startDate + 'T00:00:00');
+        if (endDate) params.append('end_date', endDate + 'T23:59:59');
+        
+        // If no filters, delete all
+        if (!actionFilter && !startDate && !endDate) {
+            params.append('delete_all', 'true');
+        }
+        
+        const response = await fetch(`${API_BASE}/audit-logs?${params.toString()}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Xatolik yuz berdi');
+        }
+        
+        const result = await response.json();
+        alert(`✅ ${result.message || `${result.deleted_count} ta audit log o'chirildi`}`);
+        
+        // Reload audit logs
+        currentAuditPage = 1;
+        loadAuditLogs();
+    } catch (error) {
+        console.error('Error deleting audit logs:', error);
+        alert('Xatolik: ' + error.message);
+    }
 }
 
 // Close modal when clicking outside
