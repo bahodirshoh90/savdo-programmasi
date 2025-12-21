@@ -46,7 +46,7 @@
       "expo-sqlite"
     ],
     "extra": {
-      "apiUrl": "https://savdo.uztoysshop.uz/api",
+      "apiUrl": "http://161.97.184.217/api",
       "eas": {
         "projectId": "11d11e39-2c26-4e30-b39d-adb3090ce39c"
       }
