@@ -2031,27 +2031,39 @@ function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.querySelector('.main-content');
     const toggleBtn = document.getElementById('sidebar-toggle');
+    const body = document.body;
+    
+    if (!sidebar) {
+        console.error('Sidebar element not found');
+        return;
+    }
     
     // Check if mobile (screen width <= 768px)
     const isMobile = window.innerWidth <= 768;
     
     if (sidebar.classList.contains('collapsed')) {
+        // Show sidebar
         sidebar.classList.remove('collapsed');
         if (mainContent && !isMobile) {
             mainContent.style.marginLeft = '260px';
         } else if (mainContent && isMobile) {
             mainContent.style.marginLeft = '0';
+            body.classList.add('sidebar-open');
         }
         if (toggleBtn) {
             const icon = toggleBtn.querySelector('i');
             if (icon) {
-                icon.className = isMobile ? 'fas fa-times' : 'fas fa-bars';
+                icon.className = isMobile ? 'fas fa-times' : 'fas fa-chevron-left';
             }
         }
     } else {
+        // Hide sidebar
         sidebar.classList.add('collapsed');
         if (mainContent) {
             mainContent.style.marginLeft = '0';
+        }
+        if (isMobile) {
+            body.classList.remove('sidebar-open');
         }
         if (toggleBtn) {
             const icon = toggleBtn.querySelector('i');
@@ -2061,6 +2073,9 @@ function toggleSidebar() {
         }
     }
 }
+
+// Make toggleSidebar globally accessible
+window.toggleSidebar = toggleSidebar;
 
 // Close sidebar when clicking outside on mobile
 if (typeof window !== 'undefined') {

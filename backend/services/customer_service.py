@@ -86,17 +86,29 @@ class CustomerService:
     
     @staticmethod
     def delete_customer(db: Session, customer_id: int) -> bool:
-        """Delete a customer - prevents deletion if debt_history exists"""
-        from models import DebtHistory
+        """Delete a customer - prevents deletion if customer has active debt (debt_balance > 0) or has sales/orders"""
+        from models import DebtHistory, Sale, Order
         
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not db_customer:
             return False
         
-        # Check if customer has debt history
-        debt_count = db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).count()
-        if debt_count > 0:
-            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {debt_count} ta qarz tarixi bor. Avval qarz tarixini tozalang.")
+        # Check if customer has active debt (debt_balance > 0)
+        if db_customer.debt_balance and db_customer.debt_balance > 0:
+            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {db_customer.debt_balance} so'm qarzi bor. Avval qarzni to'lang.")
+        
+        # Check if customer has sales
+        sales_count = db.query(Sale).filter(Sale.customer_id == customer_id).count()
+        if sales_count > 0:
+            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {sales_count} ta sotuv bor. Avval sotuvlarni o'chiring.")
+        
+        # Check if customer has orders
+        orders_count = db.query(Order).filter(Order.customer_id == customer_id).count()
+        if orders_count > 0:
+            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {orders_count} ta buyurtma bor. Avval buyurtmalarni o'chiring.")
+        
+        # Delete debt history records (if any) before deleting customer
+        db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).delete()
         
         db.delete(db_customer)
         db.commit()

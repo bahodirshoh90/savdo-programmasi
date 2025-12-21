@@ -534,10 +534,15 @@ def update_customer(customer_id: int, customer: CustomerUpdate, db: Session = De
 @app.delete("/api/customers/{customer_id}")
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     """Delete a customer"""
-    success = CustomerService.delete_customer(db, customer_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    return {"message": "Customer deleted successfully"}
+    try:
+        success = CustomerService.delete_customer(db, customer_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        return {"message": "Customer deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting customer: {str(e)}")
 
 
 # ==================== SALES ====================
