@@ -47,7 +47,7 @@ const YOUR_LOCAL_IP = '161.97.184.217'; // ← Development uchun IP manzil
 // ⚠️ PRODUCTION URL (APK build uchun)
 // Contabo VPS ning domain yoki IP manzilini kiriting
 // Masalan: https://savdo.uztoysshop.uz yoki http://161.97.184.217:8000
-const PRODUCTION_URL = 'https://savdo.uztoysshop.uz/api'; // ← Production URL (HTTPS yoki HTTP)
+const PRODUCTION_URL = 'http://161.97.184.217/api'; // ← Production URL (HTTPS yoki HTTP)
 
 // Determine BASE_URL based on platform and environment
 let BASE_URL;
@@ -61,7 +61,7 @@ if (configUrl) {
   if (isWeb) {
     BASE_URL = 'http://161.97.184.217:8000/api'; // Web versiyasi uchun
   } else {
-    BASE_URL = `http://${YOUR_LOCAL_IP}:8000/api`; // Native (telefon) uchun IP manzil
+    BASE_URL = `http://${YOUR_LOCAL_IP}/api`; // Native (telefon) uchun IP manzil
   }
 } else {
   // Production mode (APK build) - fallback to hardcoded production URL
