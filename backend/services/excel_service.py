@@ -37,8 +37,8 @@ class ExcelService:
         # Headers
         headers = [
             'ID', 'Nomi', 'Barcode', 'Brend', 'Yetkazib beruvchi', 'Joylashuv', '1 qop = dona',
-            'Kelgan narx (dona)', 'Ulgurji qop narxi', 'Ulgurji dona narxi',
-            'Dona qop narxi', 'Dona dona narxi',
+            'Kelgan narx (dona)', 'Ulgurji narx (dona)', 'Dona narx (dona)', 'Oddiy narx (dona)',
+            'Ulgurji qop narxi', 'Dona qop narxi', 'Oddiy qop narxi',
             'Ombordagi qop', 'Ombordagi dona', 'Jami dona', 'Rasm URL'
         ]
         ws.append(headers)
@@ -53,6 +53,11 @@ class ExcelService:
         
         # Data
         for product in products:
+            # Calculate package prices (dona narxi * pieces_per_package)
+            wholesale_package_price = (product.wholesale_price or 0.0) * (product.pieces_per_package or 1)
+            retail_package_price = (product.retail_price or 0.0) * (product.pieces_per_package or 1)
+            regular_package_price = (product.regular_price or 0.0) * (product.pieces_per_package or 1)
+            
             ws.append([
                 product.id,
                 product.name,
@@ -60,12 +65,14 @@ class ExcelService:
                 product.brand or '',
                 product.supplier or '',
                 product.location or '',
-                product.pieces_per_package,
+                product.pieces_per_package or 1,
                 product.cost_price if product.cost_price is not None else 0.0,
-                product.wholesale_package_price,
-                product.wholesale_piece_price,
-                product.retail_package_price,
-                product.retail_piece_price,
+                product.wholesale_price if product.wholesale_price is not None else 0.0,
+                product.retail_price if product.retail_price is not None else 0.0,
+                product.regular_price if product.regular_price is not None else 0.0,
+                wholesale_package_price,
+                retail_package_price,
+                regular_package_price,
                 product.packages_in_stock if product.packages_in_stock is not None else 0,
                 product.pieces_in_stock if product.pieces_in_stock is not None else 0,
                 product.total_pieces if product.total_pieces is not None else 0,
@@ -114,13 +121,33 @@ class ExcelService:
                 location = str(row[5]).strip() if len(row) > 5 and row[5] else None
                 pieces_per_package = int(row[6]) if len(row) > 6 and row[6] else 1
                 cost_price = float(row[7]) if len(row) > 7 and row[7] else 0.0
-                wholesale_package_price = float(row[8]) if len(row) > 8 and row[8] else 0.0
-                wholesale_piece_price = float(row[9]) if len(row) > 9 and row[9] else 0.0
-                retail_package_price = float(row[10]) if len(row) > 10 and row[10] else 0.0
-                retail_piece_price = float(row[11]) if len(row) > 11 and row[11] else 0.0
-                packages_in_stock = int(row[12]) if len(row) > 12 and row[12] else 0
-                pieces_in_stock = int(row[13]) if len(row) > 13 and row[13] else 0
-                image_url = str(row[14]).strip() if len(row) > 14 and row[14] else None
+                
+                # New format: wholesale_price, retail_price, regular_price (all per piece)
+                # Old format support: if package prices are provided, calculate piece prices
+                wholesale_price = float(row[8]) if len(row) > 8 and row[8] else 0.0
+                retail_price = float(row[9]) if len(row) > 9 and row[9] else 0.0
+                regular_price = float(row[10]) if len(row) > 10 and row[10] else 0.0
+                
+                # If package prices are provided instead (old format), convert to piece prices
+                if len(row) > 11 and row[11] and float(row[11]) > 0:
+                    # Old format detected - package prices provided
+                    wholesale_package_price = float(row[11]) if len(row) > 11 and row[11] else 0.0
+                    retail_package_price = float(row[12]) if len(row) > 12 and row[12] else 0.0
+                    regular_package_price = float(row[13]) if len(row) > 13 and row[13] else 0.0
+                    packages_in_stock = int(row[14]) if len(row) > 14 and row[14] else 0
+                    pieces_in_stock = int(row[15]) if len(row) > 15 and row[15] else 0
+                    image_url = str(row[16]).strip() if len(row) > 16 and row[16] else None
+                    
+                    # Convert package prices to piece prices
+                    if pieces_per_package > 0:
+                        wholesale_price = wholesale_package_price / pieces_per_package
+                        retail_price = retail_package_price / pieces_per_package
+                        regular_price = regular_package_price / pieces_per_package
+                else:
+                    # New format - piece prices already provided
+                    packages_in_stock = int(row[11]) if len(row) > 11 and row[11] else 0
+                    pieces_in_stock = int(row[12]) if len(row) > 12 and row[12] else 0
+                    image_url = str(row[13]).strip() if len(row) > 13 and row[13] else None
                 
                 # Check if product with same name or barcode exists
                 existing = db.query(Product).filter(
@@ -140,10 +167,9 @@ class ExcelService:
                     location=location if location and location.lower() != 'none' else None,
                     pieces_per_package=pieces_per_package,
                     cost_price=cost_price,
-                    wholesale_package_price=wholesale_package_price,
-                    wholesale_piece_price=wholesale_piece_price,
-                    retail_package_price=retail_package_price,
-                    retail_piece_price=retail_piece_price,
+                    wholesale_price=wholesale_price,
+                    retail_price=retail_price,
+                    regular_price=regular_price,
                     packages_in_stock=packages_in_stock,
                     pieces_in_stock=pieces_in_stock,
                     image_url=image_url if image_url and image_url.lower() != 'none' else None
