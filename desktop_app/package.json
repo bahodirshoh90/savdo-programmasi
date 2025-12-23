@@ -1,0 +1,66 @@
+{
+  "name": "savdo-programma-desktop",
+  "version": "1.0.0",
+  "description": "Savdo Programma Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:win:portable": "electron-builder --win portable",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": [
+    "savdo",
+    "inventory",
+    "sales"
+  ],
+  "author": "Savdo Programma",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.savdo.programma",
+    "productName": "Savdo Programma",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "admin_panel/**/*",
+      "seller_panel/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "Savdo-Programma-Portable.exe"
+    }
+  }
+}
+
