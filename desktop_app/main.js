@@ -307,6 +307,7 @@ function createSettingsWindow() {
         <input type="text" id="api-url" placeholder="http://161.97.184.217/api" value="${API_SERVER_URL}">
     </div>
     <button onclick="saveSettings()">Saqlash</button>
+    <div id="status-message" style="margin-top: 10px; color: green; display: none; font-size: 13px;"></div>
     <div class="info">
         <strong>Eslatma:</strong> Backend server manzilini kiriting. 
         Masalan: http://161.97.184.217/api yoki https://savdo.uztoysshop.uz/api
