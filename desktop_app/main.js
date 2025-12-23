@@ -237,7 +237,8 @@ function createSettingsWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: false
     },
     resizable: false,
     modal: true,
@@ -311,13 +312,57 @@ function createSettingsWindow() {
         Masalan: http://161.97.184.217/api yoki https://savdo.uztoysshop.uz/api
     </div>
     <script>
-        const { ipcRenderer } = require('electron');
-        function saveSettings() {
+        // Load current API URL when window opens
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (window.electronAPI) {
+                try {
+                    const currentUrl = await window.electronAPI.getApiUrl();
+                    document.getElementById('api-url').value = currentUrl;
+                } catch (err) {
+                    console.error('Error loading API URL:', err);
+                }
+            }
+        });
+
+        async function saveSettings() {
             const url = document.getElementById('api-url').value.trim();
-            if (url) {
-                ipcRenderer.send('save-api-url', url);
-                alert('Sozlamalar saqlandi! Dastur qayta ishga tushiriladi.');
-                ipcRenderer.send('restart-app');
+            const statusDiv = document.getElementById('status-message');
+            
+            if (!url) {
+                statusDiv.textContent = 'Iltimos, API URL ni kiriting!';
+                statusDiv.style.color = 'red';
+                statusDiv.style.display = 'block';
+                return;
+            }
+
+            // Validate URL format
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                statusDiv.textContent = 'URL http:// yoki https:// bilan boshlanishi kerak!';
+                statusDiv.style.color = 'red';
+                statusDiv.style.display = 'block';
+                return;
+            }
+
+            if (window.electronAPI) {
+                try {
+                    window.electronAPI.saveApiUrl(url);
+                    statusDiv.textContent = 'Sozlamalar saqlandi! Dastur qayta ishga tushiriladi...';
+                    statusDiv.style.color = 'green';
+                    statusDiv.style.display = 'block';
+                    
+                    // Wait a bit before restarting
+                    setTimeout(() => {
+                        window.electronAPI.restartApp();
+                    }, 1000);
+                } catch (err) {
+                    statusDiv.textContent = 'Xatolik: ' + err.message;
+                    statusDiv.style.color = 'red';
+                    statusDiv.style.display = 'block';
+                }
+            } else {
+                statusDiv.textContent = 'Xatolik: Electron API mavjud emas';
+                statusDiv.style.color = 'red';
+                statusDiv.style.display = 'block';
             }
         }
     </script>
