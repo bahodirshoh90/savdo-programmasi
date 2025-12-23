@@ -6,8 +6,9 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:win:portable": "electron-builder --win portable",
+    "build:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win",
+    "build:win:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win portable",
+    "build:packager": "electron-packager . \"Savdo Programma\" --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icon.ico",
     "dist": "electron-builder --publish=never"
   },
   "keywords": [
@@ -19,7 +20,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "electron-packager": "^17.1.2"
   },
   "build": {
     "appId": "com.savdo.programma",
@@ -38,13 +40,7 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
+          "target": "dir",
           "arch": [
             "x64"
           ]
@@ -63,4 +59,3 @@
     }
   }
 }
-
