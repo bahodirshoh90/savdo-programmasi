@@ -291,9 +291,26 @@ function showPanel() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const username = document.getElementById('login-username').value;
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
+    
+    // Hide previous errors
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+    
+    // Validate input
+    if (!username || !password) {
+        const errorMsg = 'Iltimos, login va parolni kiriting!';
+        if (errorDiv) {
+            errorDiv.textContent = errorMsg;
+            errorDiv.style.display = 'block';
+        }
+        alert(errorMsg);
+        return;
+    }
     
     // Ensure API_BASE is set before login
     try {
@@ -335,21 +352,72 @@ async function handleLogin(e) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
+        }).catch(fetchError => {
+            console.error('Fetch error:', fetchError);
+            const errorMsg = 'Serverga ulanib bo\'lmadi: ' + (fetchError.message || 'Noma\'lum xatolik');
+            alert(errorMsg);
+            if (errorDiv) {
+                errorDiv.textContent = errorMsg;
+                errorDiv.style.display = 'block';
+            }
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            throw fetchError;
         });
+        
+        console.log('Login response status:', response.status);
+        console.log('Login response ok:', response.ok);
         
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Login error response:', errorText);
+            let errorMessage = 'Noto\'g\'ri login yoki parol';
             try {
                 const errorData = JSON.parse(errorText);
-                throw new Error(errorData.message || errorData.detail || `HTTP error! status: ${response.status}`);
+                errorMessage = errorData.detail || errorData.message || errorMessage;
             } catch (e) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 401) {
+                    errorMessage = 'Noto\'g\'ri login yoki parol';
+                } else if (response.status === 500) {
+                    errorMessage = 'Server xatosi. Iltimos, keyinroq urinib ko\'ring.';
+                } else {
+                    errorMessage = `Xatolik: ${response.status}`;
+                }
             }
+            if (errorDiv) {
+                errorDiv.textContent = errorMessage;
+                errorDiv.style.display = 'block';
+            }
+            alert(errorMessage); // Also show alert for .exe users
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            return;
         }
         
-        const data = await response.json();
-        console.log('Login response:', data); // Debug log
+        let data;
+        try {
+            const responseText = await response.text();
+            console.log('Login response text (first 200 chars):', responseText.substring(0, 200));
+            data = JSON.parse(responseText);
+            console.log('Login response data:', data);
+        } catch (parseError) {
+            console.error('Error parsing response:', parseError);
+            const errorMsg = 'Server javobini o\'qib bo\'lmadi. Server xatosi bo\'lishi mumkin.';
+            alert(errorMsg);
+            if (errorDiv) {
+                errorDiv.textContent = errorMsg;
+                errorDiv.style.display = 'block';
+            }
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            return;
+        }
         
         // Check if login was successful (either data.success === true or token exists)
         if (data.success || data.token) {
