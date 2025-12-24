@@ -197,17 +197,28 @@ async function handleLogin(e) {
     console.log('===================');
     
     // Show loading state
-    const submitButton = e.target.querySelector('button[type="submit"]');
+    let submitButton = null;
+    try {
+        submitButton = e.target.querySelector('button[type="submit"]');
+        if (!submitButton) {
+            // Try to find button in form
+            const form = e.target;
+            submitButton = form.querySelector('button.btn-primary') || form.querySelector('button');
+        }
+    } catch (err) {
+        console.error('Error finding submit button:', err);
+    }
+    
+    const originalButtonText = submitButton ? submitButton.innerHTML : '';
     if (submitButton) {
-        const originalText = submitButton.innerHTML;
         submitButton.disabled = true;
         submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kirilmoqda...';
         
         // Re-enable button after timeout (safety)
         setTimeout(() => {
-            if (submitButton.disabled) {
+            if (submitButton && submitButton.disabled) {
                 submitButton.disabled = false;
-                submitButton.innerHTML = originalText;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
             }
         }, 10000);
     }
@@ -245,7 +256,7 @@ async function handleLogin(e) {
             alert(errorMessage); // Also show alert for .exe users
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
             }
             return;
         }
@@ -289,7 +300,7 @@ async function handleLogin(e) {
             console.log('Login failed:', errorMessage);
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
             }
         }
     } catch (error) {
@@ -313,7 +324,7 @@ async function handleLogin(e) {
         alert(errorMessage); // Also show alert for .exe users
         if (submitButton) {
             submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
         }
     }
 }
