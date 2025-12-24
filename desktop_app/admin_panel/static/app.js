@@ -185,7 +185,13 @@ async function handleLogin(e) {
     }
     
     // Ensure API_BASE is set before login
-    await getApiBaseUrl();
+    try {
+        await getApiBaseUrl();
+    } catch (err) {
+        console.error('Error getting API URL:', err);
+        alert('Xatolik: API URL ni olishda muammo. Default URL ishlatilmoqda.');
+    }
+    
     const apiBase = API_BASE || 'http://161.97.184.217/api';
     const loginUrl = `${apiBase}/auth/login`;
     
@@ -195,6 +201,11 @@ async function handleLogin(e) {
     console.log('API_BASE:', apiBase);
     console.log('window.electronAPI:', !!window.electronAPI);
     console.log('===================');
+    
+    // Show alert for debugging in .exe
+    if (!window.electronAPI) {
+        alert('Ogohlantirish: window.electronAPI mavjud emas. Default API URL ishlatilmoqda: ' + apiBase);
+    }
     
     // Show loading state
     let submitButton = null;
@@ -224,13 +235,30 @@ async function handleLogin(e) {
     }
     
     try {
+        console.log('Sending login request to:', loginUrl);
+        console.log('Request body:', { username, password: '***' });
+        
         const response = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
+        }).catch(fetchError => {
+            console.error('Fetch error:', fetchError);
+            const errorMsg = 'Serverga ulanib bo\'lmadi: ' + (fetchError.message || 'Noma\'lum xatolik');
+            alert(errorMsg);
+            if (errorDiv) {
+                errorDiv.textContent = errorMsg;
+                errorDiv.style.display = 'block';
+            }
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            throw fetchError;
         });
         
         console.log('Login response status:', response.status);
+        console.log('Login response ok:', response.ok);
         
         // Check if response is ok
         if (!response.ok) {
@@ -261,8 +289,26 @@ async function handleLogin(e) {
             return;
         }
         
-        const data = await response.json();
-        console.log('Login response data:', data);
+        let data;
+        try {
+            const responseText = await response.text();
+            console.log('Login response text (first 200 chars):', responseText.substring(0, 200));
+            data = JSON.parse(responseText);
+            console.log('Login response data:', data);
+        } catch (parseError) {
+            console.error('Error parsing response:', parseError);
+            const errorMsg = 'Server javobini o\'qib bo\'lmadi. Server xatosi bo\'lishi mumkin.';
+            alert(errorMsg);
+            if (errorDiv) {
+                errorDiv.textContent = errorMsg;
+                errorDiv.style.display = 'block';
+            }
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            return;
+        }
         
         if (data.success && data.token) {
             // Check if user has admin access
