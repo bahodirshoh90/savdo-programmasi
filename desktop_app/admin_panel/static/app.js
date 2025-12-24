@@ -1,40 +1,58 @@
 // API Base URL - will be set from Electron or use default
 let API_BASE = 'http://161.97.184.217/api';
 
-// Get API URL from Electron if available
-(async function() {
+// Function to get API URL
+async function getApiBaseUrl() {
   if (window.electronAPI) {
     try {
       const url = await window.electronAPI.getApiUrl();
-      API_BASE = url;
-      console.log('API Base URL set to:', API_BASE);
+      if (url) {
+        API_BASE = url;
+        console.log('API Base URL set to:', API_BASE);
+        return API_BASE;
+      }
     } catch (err) {
-      console.error('Error getting API URL:', err);
-      API_BASE = 'http://161.97.184.217/api';
-    }
-  } else {
-    // Not in Electron - try to read from localStorage or use default
-    const savedUrl = localStorage.getItem('api_url');
-    if (savedUrl) {
-      API_BASE = savedUrl;
-    } else {
-      API_BASE = 'http://161.97.184.217/api';
+      console.error('Error getting API URL from Electron:', err);
     }
   }
   
-  // Override fetch to handle relative /api paths
-  const originalFetch = window.fetch;
-  window.fetch = function(url, options) {
-    if (typeof url === 'string' && url.startsWith('/api')) {
+  // Fallback: try localStorage
+  const savedUrl = localStorage.getItem('api_url');
+  if (savedUrl) {
+    API_BASE = savedUrl;
+    console.log('API Base URL from localStorage:', API_BASE);
+    return API_BASE;
+  }
+  
+  // Default
+  console.log('Using default API Base URL:', API_BASE);
+  return API_BASE;
+}
+
+// Initialize API_BASE immediately
+getApiBaseUrl().then(() => {
+  console.log('API_BASE initialized:', API_BASE);
+});
+
+// Override fetch to handle relative /api paths
+const originalFetch = window.fetch;
+window.fetch = function(url, options) {
+  // Ensure API_BASE is set
+  if (typeof url === 'string') {
+    if (url.startsWith('/api')) {
       // Replace /api with full API_BASE
-      url = API_BASE + url.substring(4);
-    } else if (typeof url === 'string' && url.startsWith('api/')) {
+      const apiBase = API_BASE || 'http://161.97.184.217/api';
+      url = apiBase + url.substring(4);
+      console.log('Fetch URL converted:', url);
+    } else if (url.startsWith('api/')) {
       // Handle api/ prefix
-      url = API_BASE + '/' + url.substring(4);
+      const apiBase = API_BASE || 'http://161.97.184.217/api';
+      url = apiBase + '/' + url.substring(4);
+      console.log('Fetch URL converted:', url);
     }
-    return originalFetch.call(this, url, options);
-  };
-})();
+  }
+  return originalFetch.call(this, url, options);
+};
 let map = null;
 let salesChart = null;
 
