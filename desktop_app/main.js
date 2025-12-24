@@ -401,6 +401,9 @@ ipcMain.handle('get-api-url', () => {
   return getApiUrl();
 });
 
+// Disable cache errors (optional, for cleaner console)
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+
 // App event handlers
 app.whenReady().then(() => {
   createMainWindow();

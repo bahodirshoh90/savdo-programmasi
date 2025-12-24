@@ -32,6 +32,10 @@ async function getApiBaseUrl() {
 // Initialize API_BASE immediately
 getApiBaseUrl().then(() => {
   console.log('API_BASE initialized:', API_BASE);
+  console.log('window.electronAPI available:', !!window.electronAPI);
+}).catch(err => {
+  console.error('Error initializing API_BASE:', err);
+  console.log('Using default API_BASE:', API_BASE);
 });
 
 // Override fetch to handle relative /api paths
