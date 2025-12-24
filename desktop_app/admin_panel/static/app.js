@@ -189,7 +189,12 @@ async function handleLogin(e) {
     const apiBase = API_BASE || 'http://161.97.184.217/api';
     const loginUrl = `${apiBase}/auth/login`;
     
-    console.log('Login attempt:', { username, loginUrl, apiBase });
+    console.log('=== LOGIN ATTEMPT ===');
+    console.log('Username:', username);
+    console.log('Login URL:', loginUrl);
+    console.log('API_BASE:', apiBase);
+    console.log('window.electronAPI:', !!window.electronAPI);
+    console.log('===================');
     
     try {
         const response = await fetch(loginUrl, {
