@@ -161,18 +161,67 @@ function showAdminPanel() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const username = document.getElementById('login-username').value;
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
     
+    // Hide previous errors
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+    
+    // Validate input
+    if (!username || !password) {
+        if (errorDiv) {
+            errorDiv.textContent = 'Iltimos, login va parolni kiriting!';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Ensure API_BASE is set before login
+    await getApiBaseUrl();
+    const apiBase = API_BASE || 'http://161.97.184.217/api';
+    const loginUrl = `${apiBase}/auth/login`;
+    
+    console.log('Login attempt:', { username, loginUrl, apiBase });
+    
     try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
+        const response = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
         
+        console.log('Login response status:', response.status);
+        
+        // Check if response is ok
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Login error response:', errorText);
+            let errorMessage = 'Noto\'g\'ri login yoki parol';
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.detail || errorData.message || errorMessage;
+            } catch (e) {
+                if (response.status === 401) {
+                    errorMessage = 'Noto\'g\'ri login yoki parol';
+                } else if (response.status === 500) {
+                    errorMessage = 'Server xatosi. Iltimos, keyinroq urinib ko\'ring.';
+                } else {
+                    errorMessage = `Xatolik: ${response.status}`;
+                }
+            }
+            if (errorDiv) {
+                errorDiv.textContent = errorMessage;
+                errorDiv.style.display = 'block';
+            }
+            return;
+        }
+        
         const data = await response.json();
+        console.log('Login response data:', data);
         
         if (data.success && data.token) {
             // Check if user has admin access
