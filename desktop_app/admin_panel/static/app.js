@@ -250,13 +250,31 @@ async function handleLogin(e) {
                 errorDiv.style.display = 'block';
             }
         } else {
-            errorDiv.textContent = data.message || 'Noto\'g\'ri login yoki parol';
-            errorDiv.style.display = 'block';
+            const errorMessage = data.message || data.detail || 'Noto\'g\'ri login yoki parol';
+            if (errorDiv) {
+                errorDiv.textContent = errorMessage;
+                errorDiv.style.display = 'block';
+            }
+            console.log('Login failed:', errorMessage);
         }
     } catch (error) {
-        errorDiv.textContent = 'Xatolik yuz berdi. Qayta urinib ko\'ring.';
-        errorDiv.style.display = 'block';
         console.error('Login error:', error);
+        let errorMessage = 'Xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.';
+        
+        if (error.message) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = 'Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring.';
+            } else if (error.message.includes('JSON')) {
+                errorMessage = 'Server javobida xatolik. Iltimos, keyinroq urinib ko\'ring.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        
+        if (errorDiv) {
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+        }
     }
 }
 
