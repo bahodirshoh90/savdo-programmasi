@@ -7,7 +7,7 @@
   'use strict';
 
   // Get API URL from Electron or use default
-  let API_BASE = '/api';
+  let API_BASE = 'http://161.97.184.217/api';
   
   if (window.electronAPI) {
     // Running in Electron - get API URL from main process

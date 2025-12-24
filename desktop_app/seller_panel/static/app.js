@@ -295,14 +295,16 @@ async function handleLogin(e) {
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
     
+    // Ensure API_BASE is set before login
+    await getApiBaseUrl();
+    const apiBase = API_BASE || window.API_BASE || 'http://161.97.184.217/api';
+    const loginUrl = `${apiBase}/auth/login`;
+    
+    console.log('Login URL:', loginUrl);
+    console.log('Username:', username);
+    console.log('API_BASE:', apiBase);
+    
     try {
-        // Ensure API_BASE is set correctly
-        const apiBase = API_BASE || '/api';
-        const loginUrl = `${apiBase}/auth/login`;
-        
-        console.log('Login URL:', loginUrl);
-        console.log('Username:', username);
-        
         const response = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
