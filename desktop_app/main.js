@@ -191,6 +191,10 @@ function createAdminWindow() {
 
   adminWindow.once('ready-to-show', () => {
     adminWindow.show();
+    // Open DevTools in development mode
+    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+      adminWindow.webContents.openDevTools();
+    }
   });
 
   adminWindow.on('closed', () => {
@@ -223,6 +227,10 @@ function createSellerWindow() {
 
   sellerWindow.once('ready-to-show', () => {
     sellerWindow.show();
+    // Open DevTools in development mode
+    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+      sellerWindow.webContents.openDevTools();
+    }
   });
 
   sellerWindow.on('closed', () => {
@@ -364,6 +372,46 @@ function createSettingsWindow() {
                 statusDiv.textContent = 'Xatolik: Electron API mavjud emas';
                 statusDiv.style.color = 'red';
                 statusDiv.style.display = 'block';
+            }
+        }
+
+        async function testConnection() {
+            const url = document.getElementById('api-url').value.trim();
+            const statusDiv = document.getElementById('status-message');
+            
+            if (!url) {
+                statusDiv.textContent = 'Iltimos, API URL ni kiriting!';
+                statusDiv.style.color = 'red';
+                statusDiv.style.display = 'block';
+                return;
+            }
+
+            statusDiv.textContent = 'Test qilinmoqda...';
+            statusDiv.style.color = 'blue';
+            statusDiv.style.display = 'block';
+
+            try {
+                // Test connection by fetching a simple endpoint
+                const testUrl = url.endsWith('/api') ? url + '/products?limit=1' : url + '/products?limit=1';
+                const response = await fetch(testUrl, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    statusDiv.textContent = '✅ Serverga muvaffaqiyatli ulandi!';
+                    statusDiv.style.color = 'green';
+                    alert('✅ Serverga muvaffaqiyatli ulandi!');
+                } else {
+                    statusDiv.textContent = `⚠️ Server javob berdi, lekin xatolik: ${response.status}`;
+                    statusDiv.style.color = 'orange';
+                    alert(`⚠️ Server javob berdi, lekin xatolik: ${response.status}`);
+                }
+            } catch (error) {
+                const errorMsg = `❌ Serverga ulanib bo\'lmadi: ${error.message}`;
+                statusDiv.textContent = errorMsg;
+                statusDiv.style.color = 'red';
+                alert(errorMsg);
             }
         }
     </script>

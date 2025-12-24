@@ -196,6 +196,22 @@ async function handleLogin(e) {
     console.log('window.electronAPI:', !!window.electronAPI);
     console.log('===================');
     
+    // Show loading state
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    if (submitButton) {
+        const originalText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kirilmoqda...';
+        
+        // Re-enable button after timeout (safety)
+        setTimeout(() => {
+            if (submitButton.disabled) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalText;
+            }
+        }, 10000);
+    }
+    
     try {
         const response = await fetch(loginUrl, {
             method: 'POST',
@@ -225,6 +241,11 @@ async function handleLogin(e) {
             if (errorDiv) {
                 errorDiv.textContent = errorMessage;
                 errorDiv.style.display = 'block';
+            }
+            alert(errorMessage); // Also show alert for .exe users
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
             }
             return;
         }
@@ -264,7 +285,12 @@ async function handleLogin(e) {
                 errorDiv.textContent = errorMessage;
                 errorDiv.style.display = 'block';
             }
+            alert(errorMessage); // Also show alert for .exe users
             console.log('Login failed:', errorMessage);
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -283,6 +309,11 @@ async function handleLogin(e) {
         if (errorDiv) {
             errorDiv.textContent = errorMessage;
             errorDiv.style.display = 'block';
+        }
+        alert(errorMessage); // Also show alert for .exe users
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
         }
     }
 }
