@@ -236,9 +236,26 @@ function showPanel() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const username = document.getElementById('login-username').value;
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    
+    // Hide previous errors
+    errorDiv.style.display = 'none';
+    
+    // Validate input
+    if (!username || !password) {
+        errorDiv.textContent = 'Iltimos, login va parolni kiriting!';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Disable submit button
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kirilmoqda...';
+    }
     
     try {
         // Ensure API_BASE is set correctly
@@ -257,12 +274,26 @@ async function handleLogin(e) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Login error response:', errorText);
+            let errorMessage = 'Noto\'g\'ri login yoki parol';
             try {
                 const errorData = JSON.parse(errorText);
-                throw new Error(errorData.message || errorData.detail || `HTTP error! status: ${response.status}`);
+                errorMessage = errorData.detail || errorData.message || errorMessage;
             } catch (e) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 401) {
+                    errorMessage = 'Noto\'g\'ri login yoki parol';
+                } else if (response.status === 500) {
+                    errorMessage = 'Server xatosi. Iltimos, keyinroq urinib ko\'ring.';
+                } else {
+                    errorMessage = `Xatolik: ${response.status}`;
+                }
             }
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            return;
         }
         
         const data = await response.json();
@@ -322,12 +353,34 @@ async function handleLogin(e) {
                 errorDiv.style.display = 'block';
             }
             console.log('Login failed:', errorMessage); // Debug log
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
         }
     } catch (error) {
         console.error('Login error:', error);
-        const errorMessage = error.message || 'Xatolik yuz berdi. Serverga ulanib bo\'lmadi.';
-        errorDiv.textContent = errorMessage;
-        errorDiv.style.display = 'block';
+        let errorMessage = 'Xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.';
+        
+        if (error.message) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = 'Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring.';
+            } else if (error.message.includes('JSON')) {
+                errorMessage = 'Server javobida xatolik. Iltimos, keyinroq urinib ko\'ring.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        
+        if (errorDiv) {
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+        }
+        
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+        }
     }
 }
 

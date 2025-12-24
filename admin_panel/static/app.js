@@ -103,18 +103,65 @@ function showAdminPanel() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const username = document.getElementById('login-username').value;
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    
+    // Hide previous errors
+    errorDiv.style.display = 'none';
+    
+    // Validate input
+    if (!username || !password) {
+        errorDiv.textContent = 'Iltimos, login va parolni kiriting!';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Disable submit button
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kirilmoqda...';
+    }
     
     try {
+        console.log('Login attempt:', { username, apiBase: API_BASE });
         const response = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
         
+        console.log('Login response status:', response.status);
+        
+        // Check if response is ok
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Login error response:', errorText);
+            let errorMessage = 'Noto\'g\'ri login yoki parol';
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.detail || errorData.message || errorMessage;
+            } catch (e) {
+                if (response.status === 401) {
+                    errorMessage = 'Noto\'g\'ri login yoki parol';
+                } else if (response.status === 500) {
+                    errorMessage = 'Server xatosi. Iltimos, keyinroq urinib ko\'ring.';
+                } else {
+                    errorMessage = `Xatolik: ${response.status}`;
+                }
+            }
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+            return;
+        }
+        
         const data = await response.json();
+        console.log('Login response data:', data);
         
         if (data.success && data.token) {
             // Check if user has admin access
@@ -141,15 +188,40 @@ async function handleLogin(e) {
             } else {
                 errorDiv.textContent = 'Sizda admin panelga kirish uchun ruxsat yo\'q. Faqat admin rolli foydalanuvchilar kirishi mumkin.';
                 errorDiv.style.display = 'block';
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+                }
             }
         } else {
-            errorDiv.textContent = data.message || 'Noto\'g\'ri login yoki parol';
+            errorDiv.textContent = data.message || data.detail || 'Noto\'g\'ri login yoki parol';
             errorDiv.style.display = 'block';
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
         }
     } catch (error) {
-        errorDiv.textContent = 'Xatolik yuz berdi. Qayta urinib ko\'ring.';
-        errorDiv.style.display = 'block';
         console.error('Login error:', error);
+        let errorMessage = 'Xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.';
+        
+        if (error.message) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = 'Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring.';
+            } else if (error.message.includes('JSON')) {
+                errorMessage = 'Server javobida xatolik. Iltimos, keyinroq urinib ko\'ring.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        
+        errorDiv.textContent = errorMessage;
+        errorDiv.style.display = 'block';
+        
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Kirish';
+        }
     }
 }
 
