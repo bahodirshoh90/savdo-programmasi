@@ -399,16 +399,16 @@ function createSettingsWindow() {
                 });
 
                 if (response.ok) {
-                    statusDiv.textContent = '✅ Serverga muvaffaqiyatli ulandi!';
+                    statusDiv.textContent = '[OK] Serverga muvaffaqiyatli ulandi!';
                     statusDiv.style.color = 'green';
-                    alert('✅ Serverga muvaffaqiyatli ulandi!');
+                    alert('[OK] Serverga muvaffaqiyatli ulandi!');
                 } else {
-                    statusDiv.textContent = `⚠️ Server javob berdi, lekin xatolik: ${response.status}`;
+                    statusDiv.textContent = '[XATO] Server javob berdi, lekin xatolik: ' + response.status;
                     statusDiv.style.color = 'orange';
-                    alert(`⚠️ Server javob berdi, lekin xatolik: ${response.status}`);
+                    alert('[XATO] Server javob berdi, lekin xatolik: ' + response.status);
                 }
             } catch (error) {
-                const errorMsg = `❌ Serverga ulanib bo\'lmadi: ${error.message}`;
+                const errorMsg = '[XATO] Serverga ulanib bo\'lmadi: ' + error.message;
                 statusDiv.textContent = errorMsg;
                 statusDiv.style.color = 'red';
                 alert(errorMsg);
