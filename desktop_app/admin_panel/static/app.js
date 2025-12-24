@@ -33,9 +33,16 @@ async function getApiBaseUrl() {
 getApiBaseUrl().then(() => {
   console.log('API_BASE initialized:', API_BASE);
   console.log('window.electronAPI available:', !!window.electronAPI);
+  
+  // Show alert if electronAPI is not available (for .exe debugging)
+  if (!window.electronAPI) {
+    console.warn('WARNING: window.electronAPI is not available. Using default API URL.');
+    // Don't show alert on every page load, only log it
+  }
 }).catch(err => {
   console.error('Error initializing API_BASE:', err);
   console.log('Using default API_BASE:', API_BASE);
+  alert('Xatolik: API URL ni olishda muammo. Default URL ishlatilmoqda: ' + API_BASE);
 });
 
 // Override fetch to handle relative /api paths
