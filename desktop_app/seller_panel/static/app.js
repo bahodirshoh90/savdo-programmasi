@@ -472,13 +472,37 @@ async function handleLogin(e) {
                 errorDiv.textContent = errorMessage;
                 errorDiv.style.display = 'block';
             }
-            console.log('Login failed:', errorMessage); // Debug log
+            alert(errorMessage); // Also show alert for .exe users
+            console.log('Login failed:', errorMessage);
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
         }
     } catch (error) {
         console.error('Login error:', error);
-        const errorMessage = error.message || 'Xatolik yuz berdi. Serverga ulanib bo\'lmadi.';
-        errorDiv.textContent = errorMessage;
-        errorDiv.style.display = 'block';
+        let errorMessage = 'Xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.';
+        
+        if (error.message) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = 'Serverga ulanib bo\'lmadi. Internet aloqasini tekshiring.';
+            } else if (error.message.includes('JSON')) {
+                errorMessage = 'Server javobida xatolik. Iltimos, keyinroq urinib ko\'ring.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        
+        alert(errorMessage); // Also show alert for .exe users
+        if (errorDiv) {
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+        }
+        
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+        }
     }
 }
 
