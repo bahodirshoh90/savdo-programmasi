@@ -114,8 +114,12 @@ function checkAuth() {
 }
 
 async function verifyAdminAuth() {
+    // Ensure API_BASE is set
+    await getApiBaseUrl();
+    const apiBase = API_BASE || 'http://161.97.184.217/api';
+    
     try {
-        const response = await fetch(`${API_BASE}/auth/me`, {
+        const response = await fetch(`${apiBase}/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${currentAdminToken}`,
                 'X-Seller-ID': localStorage.getItem('admin_seller_id') || ''
