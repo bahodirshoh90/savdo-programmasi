@@ -192,15 +192,29 @@ async function handleLogin(e) {
     }
     
     // Ensure API_BASE is set before login
+    let apiBase = 'http://161.97.184.217/api'; // Default
+    
     try {
         await getApiBaseUrl();
+        apiBase = API_BASE || 'http://161.97.184.217/api';
     } catch (err) {
         console.error('Error getting API URL:', err);
-        alert('Xatolik: API URL ni olishda muammo. Default URL ishlatilmoqda.');
+        apiBase = 'http://161.97.184.217/api'; // Use default on error
     }
     
-    const apiBase = API_BASE || 'http://161.97.184.217/api';
-    const loginUrl = `${apiBase}/auth/login`;
+    // Final check - ensure apiBase is valid
+    if (!apiBase || apiBase === '/api' || !apiBase.startsWith('http')) {
+        apiBase = 'http://161.97.184.217/api';
+        console.warn('API_BASE was invalid, using default:', apiBase);
+    }
+    
+    let loginUrl = `${apiBase}/auth/login`;
+    
+    // Ensure loginUrl is valid
+    if (!loginUrl.startsWith('http')) {
+        loginUrl = 'http://161.97.184.217/api/auth/login';
+        console.warn('Login URL was invalid, using default:', loginUrl);
+    }
     
     console.log('=== LOGIN ATTEMPT ===');
     console.log('Username:', username);
@@ -208,11 +222,6 @@ async function handleLogin(e) {
     console.log('API_BASE:', apiBase);
     console.log('window.electronAPI:', !!window.electronAPI);
     console.log('===================');
-    
-    // Show alert for debugging in .exe
-    if (!window.electronAPI) {
-        alert('Ogohlantirish: window.electronAPI mavjud emas. Default API URL ishlatilmoqda: ' + apiBase);
-    }
     
     // Show loading state
     let submitButton = null;
