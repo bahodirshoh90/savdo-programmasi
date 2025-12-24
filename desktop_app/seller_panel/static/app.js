@@ -296,15 +296,41 @@ async function handleLogin(e) {
     const errorDiv = document.getElementById('login-error');
     
     // Ensure API_BASE is set before login
-    await getApiBaseUrl();
+    try {
+        await getApiBaseUrl();
+    } catch (err) {
+        console.error('Error getting API URL:', err);
+        alert('Xatolik: API URL ni olishda muammo. Default URL ishlatilmoqda.');
+    }
+    
     const apiBase = API_BASE || window.API_BASE || 'http://161.97.184.217/api';
     const loginUrl = `${apiBase}/auth/login`;
     
+    console.log('=== LOGIN ATTEMPT ===');
     console.log('Login URL:', loginUrl);
     console.log('Username:', username);
     console.log('API_BASE:', apiBase);
+    console.log('window.electronAPI:', !!window.electronAPI);
+    console.log('===================');
+    
+    // Show loading state
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton ? submitButton.innerHTML : '';
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kirilmoqda...';
+        
+        // Re-enable button after timeout (safety)
+        setTimeout(() => {
+            if (submitButton && submitButton.disabled) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText || '<i class="fas fa-sign-in-alt"></i> Kirish';
+            }
+        }, 10000);
+    }
     
     try {
+        console.log('Sending login request to:', loginUrl);
         const response = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
