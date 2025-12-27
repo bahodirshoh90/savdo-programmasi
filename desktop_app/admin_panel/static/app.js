@@ -194,17 +194,33 @@ async function handleLogin(e) {
     // Ensure API_BASE is set before login
     let apiBase = 'http://161.97.184.217/api'; // Default
     
-    try {
-        await getApiBaseUrl();
-        apiBase = API_BASE || 'http://161.97.184.217/api';
-    } catch (err) {
-        console.error('Error getting API URL:', err);
-        apiBase = 'http://161.97.184.217/api'; // Use default on error
+    // Check if electronAPI is available
+    if (window.electronAPI) {
+        try {
+            const url = await window.electronAPI.getApiUrl();
+            if (url && url.startsWith('http')) {
+                apiBase = url;
+                API_BASE = url;
+                console.log('API URL from Electron:', apiBase);
+            }
+        } catch (err) {
+            console.error('Error getting API URL from Electron:', err);
+        }
+    } else {
+        console.warn('window.electronAPI is not available, using default API URL');
+        // Try localStorage as fallback
+        const savedUrl = localStorage.getItem('api_url');
+        if (savedUrl && savedUrl.startsWith('http')) {
+            apiBase = savedUrl;
+            API_BASE = savedUrl;
+            console.log('API URL from localStorage:', apiBase);
+        }
     }
     
     // Final check - ensure apiBase is valid
     if (!apiBase || apiBase === '/api' || !apiBase.startsWith('http')) {
         apiBase = 'http://161.97.184.217/api';
+        API_BASE = apiBase;
         console.warn('API_BASE was invalid, using default:', apiBase);
     }
     
@@ -222,6 +238,11 @@ async function handleLogin(e) {
     console.log('API_BASE:', apiBase);
     console.log('window.electronAPI:', !!window.electronAPI);
     console.log('===================');
+    
+    // Show alert if electronAPI is not available (for debugging)
+    if (!window.electronAPI) {
+        console.warn('WARNING: window.electronAPI is not available. Using default API URL.');
+    }
     
     // Show loading state
     let submitButton = null;

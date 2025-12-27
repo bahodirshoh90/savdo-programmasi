@@ -191,10 +191,26 @@ function createAdminWindow() {
 
   adminWindow.once('ready-to-show', () => {
     adminWindow.show();
-    // Open DevTools in development mode
-    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+    // Open DevTools in development mode or always for debugging
+    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
       adminWindow.webContents.openDevTools();
     }
+  });
+  
+  // Log when window is ready
+  adminWindow.webContents.on('did-finish-load', () => {
+    console.log('Admin window loaded');
+    // Inject a test to check if electronAPI is available
+    adminWindow.webContents.executeJavaScript(`
+      console.log('window.electronAPI available:', !!window.electronAPI);
+      if (window.electronAPI) {
+        window.electronAPI.getApiUrl().then(url => {
+          console.log('API URL from Electron:', url);
+        }).catch(err => {
+          console.error('Error getting API URL:', err);
+        });
+      }
+    `);
   });
 
   adminWindow.on('closed', () => {
@@ -227,10 +243,26 @@ function createSellerWindow() {
 
   sellerWindow.once('ready-to-show', () => {
     sellerWindow.show();
-    // Open DevTools in development mode
-    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+    // Open DevTools in development mode or always for debugging
+    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
       sellerWindow.webContents.openDevTools();
     }
+  });
+  
+  // Log when window is ready
+  sellerWindow.webContents.on('did-finish-load', () => {
+    console.log('Seller window loaded');
+    // Inject a test to check if electronAPI is available
+    sellerWindow.webContents.executeJavaScript(`
+      console.log('window.electronAPI available:', !!window.electronAPI);
+      if (window.electronAPI) {
+        window.electronAPI.getApiUrl().then(url => {
+          console.log('API URL from Electron:', url);
+        }).catch(err => {
+          console.error('Error getting API URL:', err);
+        });
+      }
+    `);
   });
 
   sellerWindow.on('closed', () => {

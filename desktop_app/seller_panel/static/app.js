@@ -313,15 +313,48 @@ async function handleLogin(e) {
     }
     
     // Ensure API_BASE is set before login
-    try {
-        await getApiBaseUrl();
-    } catch (err) {
-        console.error('Error getting API URL:', err);
-        alert('Xatolik: API URL ni olishda muammo. Default URL ishlatilmoqda.');
+    let apiBase = 'http://161.97.184.217/api'; // Default
+    
+    // Check if electronAPI is available
+    if (window.electronAPI) {
+        try {
+            const url = await window.electronAPI.getApiUrl();
+            if (url && url.startsWith('http')) {
+                apiBase = url;
+                API_BASE = url;
+                window.API_BASE = url;
+                console.log('API URL from Electron:', apiBase);
+            }
+        } catch (err) {
+            console.error('Error getting API URL from Electron:', err);
+        }
+    } else {
+        console.warn('window.electronAPI is not available, using default API URL');
+        // Try localStorage as fallback
+        const savedUrl = localStorage.getItem('api_url');
+        if (savedUrl && savedUrl.startsWith('http')) {
+            apiBase = savedUrl;
+            API_BASE = savedUrl;
+            window.API_BASE = savedUrl;
+            console.log('API URL from localStorage:', apiBase);
+        }
     }
     
-    const apiBase = API_BASE || window.API_BASE || 'http://161.97.184.217/api';
-    const loginUrl = `${apiBase}/auth/login`;
+    // Final check - ensure apiBase is valid
+    if (!apiBase || apiBase === '/api' || !apiBase.startsWith('http')) {
+        apiBase = 'http://161.97.184.217/api';
+        API_BASE = apiBase;
+        window.API_BASE = apiBase;
+        console.warn('API_BASE was invalid, using default:', apiBase);
+    }
+    
+    let loginUrl = `${apiBase}/auth/login`;
+    
+    // Ensure loginUrl is valid
+    if (!loginUrl.startsWith('http')) {
+        loginUrl = 'http://161.97.184.217/api/auth/login';
+        console.warn('Login URL was invalid, using default:', loginUrl);
+    }
     
     console.log('=== LOGIN ATTEMPT ===');
     console.log('Login URL:', loginUrl);
