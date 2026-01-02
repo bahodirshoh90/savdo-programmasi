@@ -18,6 +18,10 @@ function getApiUrl() {
 
 const API_SERVER_URL = getApiUrl();
 
+// Verbose logging toggle (can be changed from menu)
+let VERBOSE_LOGGING = false;
+const ALWAYS_OPEN_DEVTOOLS = false; // honor VERBOSE_LOGGING/menu toggle instead of forcing
+
 let mainWindow;
 let adminWindow;
 let sellerWindow;
@@ -179,7 +183,8 @@ function createAdminWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false // Allow loading external resources
+      webSecurity: true,
+      allowRunningInsecureContent: false
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false
@@ -191,9 +196,13 @@ function createAdminWindow() {
 
   adminWindow.once('ready-to-show', () => {
     adminWindow.show();
-    // Open DevTools in development mode or always for debugging
-    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
-      adminWindow.webContents.openDevTools();
+    // Open DevTools if verbose logging enabled
+    try {
+      if (VERBOSE_LOGGING || ALWAYS_OPEN_DEVTOOLS || process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
+        adminWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    } catch (e) {
+      console.error('Failed to open DevTools:', e);
     }
   });
   
@@ -211,6 +220,12 @@ function createAdminWindow() {
         });
       }
     `);
+    // Attach renderer logging to capture console messages/errors
+    try {
+      attachRendererLogging(adminWindow, 'admin');
+    } catch (e) {
+      console.error('Failed to attach renderer logging for admin window:', e);
+    }
   });
 
   adminWindow.on('closed', () => {
@@ -231,7 +246,8 @@ function createSellerWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false // Allow loading external resources
+      webSecurity: true,
+      allowRunningInsecureContent: false
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false
@@ -243,9 +259,13 @@ function createSellerWindow() {
 
   sellerWindow.once('ready-to-show', () => {
     sellerWindow.show();
-    // Open DevTools in development mode or always for debugging
-    if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
-      sellerWindow.webContents.openDevTools();
+    // Open DevTools if verbose logging enabled
+    try {
+      if (VERBOSE_LOGGING || ALWAYS_OPEN_DEVTOOLS || process.env.NODE_ENV === 'development' || process.argv.includes('--dev') || process.argv.includes('--debug')) {
+        sellerWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    } catch (e) {
+      console.error('Failed to open DevTools:', e);
     }
   });
   
@@ -263,6 +283,12 @@ function createSellerWindow() {
         });
       }
     `);
+    // Attach renderer logging to capture console messages/errors
+    try {
+      attachRendererLogging(sellerWindow, 'seller');
+    } catch (e) {
+      console.error('Failed to attach renderer logging for seller window:', e);
+    }
   });
 
   sellerWindow.on('closed', () => {
@@ -278,7 +304,8 @@ function createSettingsWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false
+      webSecurity: true,
+      allowRunningInsecureContent: false
     },
     resizable: false,
     modal: true,
@@ -518,6 +545,15 @@ app.whenReady().then(() => {
           label: 'Server Sozlamalari',
           click: () => createSettingsWindow()
         }
+        ,
+        {
+          label: 'Verbose Logging',
+          type: 'checkbox',
+          checked: VERBOSE_LOGGING,
+          click: (menuItem) => {
+            setVerboseLogging(menuItem.checked);
+          }
+        }
       ]
     },
     {
@@ -541,6 +577,70 @@ app.whenReady().then(() => {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
 });
+
+// --- Renderer logging helpers (temporary for debugging) ---
+function writeRendererLog(line) {
+  if (!VERBOSE_LOGGING) return;
+  try {
+    const logDir = app.getPath && app.getPath('userData') ? app.getPath('userData') : __dirname;
+    const logPath = path.join(logDir, 'renderer.log');
+    const time = new Date().toISOString();
+    fs.appendFileSync(logPath, `[${time}] ${line}\n`);
+  } catch (e) {
+    console.error('Failed to write renderer log:', e);
+  }
+}
+
+function attachRendererLogging(win, name) {
+  if (!win || !win.webContents) return;
+  const wc = win.webContents;
+
+  // Use new Event parameter signature to avoid deprecation warnings
+  wc.on('console-message', (event, params) => {
+    const level = params.level ?? params.levelInt ?? 0;
+    const message = params.message ?? params.text ?? '';
+    const line = params.line ?? params.lineNumber ?? 0;
+    const sourceId = params.sourceId ?? params.source ?? '';
+    const levels = ['LOG', 'WARNING', 'ERROR', 'DEBUG'];
+    const lvl = levels[level] || `L${level}`;
+    const msg = `[${name}] console.${lvl}: ${message} (${sourceId}:${line})`;
+    writeRendererLog(msg);
+  });
+
+  wc.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    writeRendererLog(`[${name}] did-fail-load ${errorCode} ${errorDescription} ${validatedURL}`);
+  });
+
+  wc.on('crashed', () => {
+    writeRendererLog(`[${name}] webContents crashed`);
+  });
+
+  wc.on('unresponsive', () => {
+    writeRendererLog(`[${name}] webContents unresponsive`);
+  });
+
+  wc.on('did-finish-load', () => {
+    try { writeRendererLog(`[${name}] did-finish-load: ${wc.getURL()}`); } catch (e) {}
+  });
+}
+
+// Toggle verbose logging: enable/disable writing logs and open/close DevTools
+function setVerboseLogging(enabled) {
+  VERBOSE_LOGGING = !!enabled;
+  try { writeRendererLog(`[system] verbose logging ${VERBOSE_LOGGING ? 'enabled' : 'disabled'}`); } catch (e) {}
+
+  const handleWin = (w) => {
+    if (!w || !w.webContents) return;
+    try {
+      if (VERBOSE_LOGGING) w.webContents.openDevTools({ mode: 'detach' });
+      else w.webContents.closeDevTools();
+    } catch (e) {}
+  };
+
+  handleWin(adminWindow);
+  handleWin(sellerWindow);
+}
+
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

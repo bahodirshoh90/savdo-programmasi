@@ -3498,7 +3498,11 @@ async function loadPendingSales() {
 
         const response = await fetch(`${API_BASE}/sales/pending`);
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Log response body to help diagnose 4xx/5xx errors
+            let body = '';
+            try { body = await response.text(); } catch (e) { body = '<unable to read body>'; }
+            console.error('Failed /sales/pending', response.status, response.statusText, body);
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${body}`);
         }
         const sales = await response.json();
 
@@ -3950,19 +3954,27 @@ async function exportSales() {
 
 // WebSocket
 function setupWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'new_order' || data.type === 'new_sale') {
-            // Refresh current page if on orders or sales
-            const activePage = document.querySelector('.page.active').id;
-            if (activePage === 'orders') loadOrders();
-            if (activePage === 'sales') loadSales();
-            if (activePage === 'dashboard') loadDashboard();
-        }
-    };
+    // Build WebSocket URL from API_BASE so it works in packaged app
+    try {
+        const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'http://161.97.184.217/api';
+        const protocol = apiBase.startsWith('https') ? 'wss:' : 'ws:';
+        // Remove scheme and trailing /api from apiBase to get host[:port]
+        const host = apiBase.replace(/^https?:\/\//, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
+        const ws = new WebSocket(`${protocol}//${host}/ws`);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new_order' || data.type === 'new_sale') {
+                // Refresh current page if on orders or sales
+                const activePage = document.querySelector('.page.active').id;
+                if (activePage === 'orders') loadOrders();
+                if (activePage === 'sales') loadSales();
+                if (activePage === 'dashboard') loadDashboard();
+            }
+        };
+    } catch (e) {
+        console.error('WebSocket setup error:', e);
+    }
 }
 
 // Utility

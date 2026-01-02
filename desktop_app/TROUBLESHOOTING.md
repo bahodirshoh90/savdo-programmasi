@@ -45,7 +45,7 @@ Bu xatoliklar Electron'ning cache papkasiga yozish huquqi bilan bog'liq. App ish
 
 **Yechim:**
 - Settings window'ni oching
-- API URL ni to'g'ri kiriting: `http://161.97.184.217/api`
+- API URL ni to'g'ri kiriting: ``
 - "Saqlash" tugmasini bosing
 - Dastur qayta ishga tushadi
 
@@ -64,7 +64,7 @@ Bu xatoliklar Electron'ning cache papkasiga yozish huquqi bilan bog'liq. App ish
 
 Development rejimida ishga tushirish:
 ```powershell
-cd desktop_app
+cd desktop_apphttp://161.97.184.217/api
 npm start
 ```
 

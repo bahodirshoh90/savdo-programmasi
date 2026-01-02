@@ -613,15 +613,6 @@ def get_sales_count(
     return {"count": count}
 
 
-@app.get("/api/sales/{sale_id}", response_model=SaleResponse)
-def get_sale(sale_id: int, db: Session = Depends(get_db)):
-    """Get a specific sale"""
-    sale = SaleService.get_sale(db, sale_id)
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale not found")
-    return SaleService.sale_to_response(sale)
-
-
 @app.get("/api/sales/pending", response_model=List[SaleResponse])
 def get_pending_sales(db: Session = Depends(get_db)):
     """Get all sales pending admin approval"""
@@ -637,6 +628,15 @@ def get_pending_sales(db: Session = Depends(get_db)):
         Sale.admin_approved == None
     ).order_by(Sale.created_at.desc()).all()
     return [SaleService.sale_to_response(sale, db) for sale in sales]
+
+
+@app.get("/api/sales/{sale_id}", response_model=SaleResponse)
+def get_sale(sale_id: int, db: Session = Depends(get_db)):
+    """Get a specific sale"""
+    sale = SaleService.get_sale(db, sale_id)
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    return SaleService.sale_to_response(sale)
 
 
 @app.post("/api/sales/{sale_id}/approve")
