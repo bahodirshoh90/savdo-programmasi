@@ -97,15 +97,9 @@ class CustomerService:
         if db_customer.debt_balance and db_customer.debt_balance > 0:
             raise ValueError(f"Mijozni o'chirib bo'lmaydi: {db_customer.debt_balance} so'm qarzi bor. Avval qarzni to'lang.")
         
-        # Check if customer has sales
-        sales_count = db.query(Sale).filter(Sale.customer_id == customer_id).count()
-        if sales_count > 0:
-            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {sales_count} ta sotuv bor. Avval sotuvlarni o'chiring.")
+        # Sotuvlar (sales) tekshirilmaydi, sotuvlar saqlanib qoladi
         
-        # Check if customer has orders
-        orders_count = db.query(Order).filter(Order.customer_id == customer_id).count()
-        if orders_count > 0:
-            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {orders_count} ta buyurtma bor. Avval buyurtmalarni o'chiring.")
+        # Buyurtmalar (orders) tekshirilmaydi, buyurtmalar saqlanib qoladi
         
         # Delete debt history records (if any) before deleting customer
         db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).delete()
