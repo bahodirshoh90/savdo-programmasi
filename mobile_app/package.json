@@ -17,7 +17,7 @@
     "@tanstack/react-query": "^5.8.4",
     "axios": "^1.6.0",
     "date-fns": "^2.30.0",
-    "expo": "~54.0.29",
+    "expo": "~54.0.30",
     "expo-background-fetch": "*",
     "expo-dev-client": "~6.0.20",
     "expo-font": "~14.0.10",
