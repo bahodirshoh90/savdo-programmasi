@@ -1,3 +1,24 @@
+// Universal chekni chop etish handleri (Electron va web uchun)
+async function printSaleReceipt(id) {
+    try {
+        // Chek HTML'ini backenddan AJAX bilan olib kelamiz
+        const response = await fetch(`${API_BASE}/sales/${id}/receipt`);
+        const receiptHtml = await response.text();
+        if (window.electronAPI && window.electronAPI.printReceipt) {
+            // Electron: to'g'ridan-to'g'ri printerga yuborish
+            await window.electronAPI.printReceipt(receiptHtml);
+        } else {
+            // Web: yangi oynada ochib, window.print()
+            const printWin = window.open('', '_blank');
+            printWin.document.write(receiptHtml);
+            printWin.document.close();
+            printWin.focus();
+            printWin.print();
+        }
+    } catch (e) {
+        alert('Chekni chop etishda xatolik: ' + (e.message || e));
+    }
+}
 // API Base URL - will be set from Electron or use default
 let API_BASE = 'http://161.97.184.217/api';
 
@@ -1541,7 +1562,15 @@ async function exportProducts() {
         // Show loading
         const loadingAlert = alert('Export bajarilmoqda...');
         
-        const response = await fetch(`${API_BASE}/products/export`);
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {};
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const response = await fetch(`${API_BASE}/products/export`, {
+            headers: headers
+        });
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -1632,7 +1661,15 @@ async function exportSales() {
         if (endDate) params.append('end_date', endDate);
         if (params.toString()) url += '?' + params.toString();
         
-        const response = await fetch(url);
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {};
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const response = await fetch(url, {
+            headers: headers
+        });
         if (!response.ok) {
             throw new Error('Export xatolik');
         }
@@ -1648,6 +1685,53 @@ async function exportSales() {
         alert('Sotuvlar Excel fayliga export qilindi!');
     } catch (error) {
         alert('Export xatolik: ' + error.message);
+    }
+}
+
+async function exportStatistics(format = 'excel') {
+    try {
+        const period = document.getElementById('dashboard-period')?.value || '';
+        const startDate = prompt('Boshlanish sanasi (YYYY-MM-DD) yoki bo\'sh qoldiring:');
+        const endDate = prompt('Tugash sanasi (YYYY-MM-DD) yoki bo\'sh qoldiring:');
+        
+        let url = `${API_BASE}/statistics/export`;
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        params.append('format', format);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {};
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const response = await fetch(url, {
+            headers: headers
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Export xatolik (${response.status}): ${errorText}`);
+        }
+        
+        const blob = await response.blob();
+        const url_obj = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url_obj;
+        const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
+        a.download = `statistics_${new Date().toISOString().split('T')[0]}.${fileExtension}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url_obj);
+        
+        const formatName = format === 'pdf' ? 'PDF' : 'Excel';
+        alert(`Statistik hisobot ${formatName} fayliga export qilindi!`);
+    } catch (error) {
+        console.error('Statistics export error:', error);
+        alert('Statistics export xatolik: ' + error.message);
     }
 }
 
@@ -1813,7 +1897,7 @@ async function viewCustomerHistory(customerId, customerName) {
                         <td style="padding: 0.75rem; text-align: right; border: 1px solid #ddd;">${formatMoney(paymentAmount)}</td>
                         <td style="padding: 0.75rem; text-align: right; border: 1px solid #ddd; font-weight: 600; ${debtOrReturnClass}">${debtOrReturnText}</td>
                         <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">
-                            <button class="btn btn-sm btn-primary" onclick="window.open('${API_BASE}/sales/${sale.id}/receipt', '_blank')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
+                            <button class="btn btn-sm btn-primary" onclick="printSaleReceipt(${sale.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
                                 <i class="fas fa-receipt"></i> Chek
                             </button>
                         </td>
@@ -1983,12 +2067,22 @@ async function saveCustomer(e) {
 
 async function deleteCustomer(id) {
     if (!confirm('Bu mijozni o\'chirishni xohlaysizmi?')) return;
-    
     try {
-        await fetch(`${API_BASE}/customers/${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE}/customers/${id}`, { method: 'DELETE' });
+        if (!response.ok) {
+            let msg = 'Xatolik yuz berdi';
+            try {
+                const data = await response.json();
+                msg = data.detail || data.message || msg;
+            } catch (e) {
+                msg = response.statusText || msg;
+            }
+            alert('Xatolik: ' + msg);
+            return;
+        }
         loadCustomers();
     } catch (error) {
-        alert('Xatolik: ' + error.message);
+        alert('Xatolik: ' + (error.message || error));
     }
 }
 
@@ -3944,12 +4038,48 @@ function printSalesTable() {
     window.print();
 }
 
-async function viewSaleReceipt(id) {
-    window.open(`${API_BASE}/sales/${id}/receipt`, '_blank');
-}
+// Eski viewSaleReceipt o'rniga universal printSaleReceipt ishlatiladi
 
 async function exportSales() {
-    window.open(`${API_BASE}/sales/export`, '_blank');
+    try {
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {};
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const response = await fetch(`${API_BASE}/sales/export`, {
+            headers: headers
+        });
+        
+        if (!response.ok) {
+            throw new Error('Hisobotni yuklashda xatolik');
+        }
+        
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'sales_export.xlsx';
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename="?(.+)"?/);
+            if (match) filename = match[1];
+        }
+        
+        // Download file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast('Hisobot muvaffaqiyatli yuklandi', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showToast('Hisobotni yuklashda xatolik: ' + error.message, 'error');
+    }
 }
 
 // WebSocket
@@ -3971,10 +4101,55 @@ function setupWebSocket() {
                 if (activePage === 'sales') loadSales();
                 if (activePage === 'dashboard') loadDashboard();
             }
+            // Tasdiqlash yoki rad etish
+            if (data.type === 'sale_approved' || data.type === 'sale_rejected') {
+                const activePage = document.querySelector('.page.active').id;
+                if (activePage === 'sales') loadSales();
+                if (activePage === 'dashboard') loadDashboard();
+                
+                // Toast notification
+                const message = data.type === 'sale_approved' 
+                    ? `✅ Sotuv #${data.sale_id} tasdiqlandi` 
+                    : `❌ Sotuv #${data.sale_id} rad etildi`;
+                showToast(message);
+            }
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+            console.log('WebSocket closed, reconnecting...');
+            setTimeout(setupWebSocket, 3000);
         };
     } catch (e) {
         console.error('WebSocket setup error:', e);
     }
+}
+
+// Toast notification
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 // Utility
@@ -4619,6 +4794,12 @@ async function loadSettings() {
             });
         }
         
+        // Load notification settings
+        document.getElementById('notify-new-sale').checked = settings.notify_new_sale !== false;
+        document.getElementById('notify-low-stock').checked = settings.notify_low_stock !== false;
+        document.getElementById('notify-debt-limit').checked = settings.notify_debt_limit !== false;
+        document.getElementById('notify-daily-report').checked = settings.notify_daily_report !== false;
+        
         if (settings.logo_url) {
             const logoPreview = document.getElementById('logo-preview');
             const noLogo = document.getElementById('no-logo');
@@ -4741,6 +4922,10 @@ async function saveSettings(additionalData = {}) {
             work_start_time: document.getElementById('work-start-time').value || null,
             work_end_time: document.getElementById('work-end-time').value || null,
             work_days: workDays || null,
+            notify_new_sale: document.getElementById('notify-new-sale').checked,
+            notify_low_stock: document.getElementById('notify-low-stock').checked,
+            notify_debt_limit: document.getElementById('notify-debt-limit').checked,
+            notify_daily_report: document.getElementById('notify-daily-report').checked,
             ...additionalData
         };
         
@@ -4748,11 +4933,17 @@ async function saveSettings(additionalData = {}) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saqlanmoqda...';
         
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
         const response = await fetch('/api/settings', {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify(settings)
         });
         

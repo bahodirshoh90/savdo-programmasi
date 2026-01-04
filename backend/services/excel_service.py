@@ -8,7 +8,10 @@ from typing import Optional
 import os
 from datetime import datetime
 from models import Product, Sale
-from services.sale_service import SaleService
+try:
+    from .sale_service import SaleService
+except ImportError:
+    from sale_service import SaleService
 
 
 class ExcelService:
@@ -240,7 +243,7 @@ class ExcelService:
                 sale.id,
                 sale.created_at.strftime('%Y-%m-%d %H:%M'),
                 sale.seller.name,
-                sale.customer.name,
+                sale.customer.name if sale.customer else "O'chirilgan mijoz",
                 sale.total_amount
             ])
         
@@ -256,6 +259,99 @@ class ExcelService:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(filepath)
+        return filepath
+    
+    @staticmethod
+    def export_statistics(
+        db: Session,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> str:
+        """Export statistics to Excel file"""
+        stats = SaleService.get_statistics(db, start_date, end_date)
+        
+        exports_dir = ExcelService._get_exports_dir()
+        filename = f"statistics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = os.path.join(exports_dir, filename)
+        
+        wb = Workbook()
+        
+        # Sheet 1: General Statistics
+        ws1 = wb.active
+        ws1.title = "Umumiy Statistika"
+        
+        # Headers
+        header_fill = PatternFill(start_color="6366f1", end_color="6366f1", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        ws1.append(["Ko'rsatkich", "Qiymat"])
+        for cell in ws1[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # General stats
+        ws1.append(["Jami sotuvlar", f"{stats.get('total_amount', 0):,.0f} so'm"])
+        ws1.append(["Sotuvlar soni", f"{stats.get('total_sales', 0)} ta"])
+        ws1.append(["O'rtacha sotuv", f"{stats.get('average_sale', 0):,.0f} so'm"])
+        ws1.append(["Daromad", f"{stats.get('total_profit', 0):,.0f} so'm"])
+        ws1.append(["Jami qarz", f"{stats.get('total_debt', 0):,.0f} so'm"])
+        
+        # Payment methods
+        if 'payment_methods' in stats:
+            ws1.append([])
+            ws1.append(["TO'LOV TURLARI", ""])
+            for cell in ws1[ws1.max_row]:
+                cell.font = Font(bold=True)
+            
+            for method, data in stats['payment_methods'].items():
+                method_name = {
+                    'cash': '💵 Naqd',
+                    'card': '💳 Karta',
+                    'credit': '📝 Nasiya',
+                    'bank_transfer': '🏦 O\'tkazma'
+                }.get(method, method.upper())
+                ws1.append([method_name, f"{data['amount']:,.0f} so'm ({data['count']} ta)"])
+        
+        # Sheet 2: Top Products
+        if 'top_products' in stats:
+            ws2 = wb.create_sheet("Top Mahsulotlar")
+            ws2.append(["Mahsulot", "Sotildi", "Summa"])
+            for cell in ws2[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            for product in stats['top_products']:
+                ws2.append([product['name'], product['quantity'], f"{product['amount']:,.0f}"])
+        
+        # Sheet 3: Top Customers
+        if 'top_customers' in stats:
+            ws3 = wb.create_sheet("Top Mijozlar")
+            ws3.append(["Mijoz", "Xaridlar", "Summa"])
+            for cell in ws3[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            for customer in stats['top_customers']:
+                ws3.append([customer['name'], customer['count'], f"{customer['amount']:,.0f}"])
+        
+        # Auto-adjust column widths for all sheets
+        for sheet in wb.worksheets:
+            for column in sheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                sheet.column_dimensions[column_letter].width = adjusted_width
         
         wb.save(filepath)
         return filepath

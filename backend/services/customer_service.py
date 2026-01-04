@@ -86,8 +86,10 @@ class CustomerService:
     
     @staticmethod
     def delete_customer(db: Session, customer_id: int) -> bool:
-        """Delete a customer - prevents deletion if customer has active debt (debt_balance > 0) or has sales/orders"""
+        """Delete a customer - prevents deletion only if customer has active debt (debt_balance > 0)
+        Sales and orders will remain in the system with customer_id set to NULL"""
         from models import DebtHistory, Sale, Order
+        from sqlalchemy.exc import IntegrityError
         
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not db_customer:
@@ -95,16 +97,22 @@ class CustomerService:
         
         # Check if customer has active debt (debt_balance > 0)
         if db_customer.debt_balance and db_customer.debt_balance > 0:
-            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {db_customer.debt_balance} so'm qarzi bor. Avval qarzni to'lang.")
+            raise ValueError(f"Mijozni o'chirib bo'lmaydi: {db_customer.debt_balance:,.0f} so'm qarzi bor. Avval qarzni to'lang.")
         
-        # Sotuvlar (sales) tekshirilmaydi, sotuvlar saqlanib qoladi
-        
-        # Buyurtmalar (orders) tekshirilmaydi, buyurtmalar saqlanib qoladi
-        
-        # Delete debt history records (if any) before deleting customer
-        db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).delete()
-        
-        db.delete(db_customer)
-        db.commit()
-        return True
+        try:
+            # Set customer_id to NULL in sales (keep sales records)
+            db.query(Sale).filter(Sale.customer_id == customer_id).update({Sale.customer_id: None})
+            
+            # Set customer_id to NULL in orders (keep order records)
+            db.query(Order).filter(Order.customer_id == customer_id).update({Order.customer_id: None})
+            
+            # Delete debt history records (if any) before deleting customer
+            db.query(DebtHistory).filter(DebtHistory.customer_id == customer_id).delete()
+            
+            db.delete(db_customer)
+            db.commit()
+            return True
+        except IntegrityError as e:
+            db.rollback()
+            raise ValueError("Mijozni o'chirib bo'lmaydi: bog'liq ma'lumotlar mavjud.")
 

@@ -1,6 +1,11 @@
 """
 FastAPI Backend for Inventory and Sales Management System
 """
+import sys
+import os
+# Add services directory to path for absolute imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'services'))
+
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -257,8 +262,13 @@ def get_products_count(
 
 # Export endpoint must come BEFORE /api/products/{product_id} to avoid route conflict
 @app.get("/api/products/export")
-def export_products(db: Session = Depends(get_db)):
+def export_products(
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(get_seller_from_header)
+):
     """Export products to Excel file"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
     try:
         file_path = ExcelService.export_products(db)
         if not os.path.exists(file_path):
@@ -542,6 +552,9 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        print(f"Error deleting customer {customer_id}: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error deleting customer: {str(e)}")
 
 
@@ -628,6 +641,26 @@ def get_pending_sales(db: Session = Depends(get_db)):
         Sale.admin_approved == None
     ).order_by(Sale.created_at.desc()).all()
     return [SaleService.sale_to_response(sale, db) for sale in sales]
+
+
+# Export endpoint must come BEFORE /api/sales/{sale_id} to avoid route conflict
+@app.get("/api/sales/export")
+def export_sales(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(get_seller_from_header)
+):
+    """Export sales to Excel file"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    file_path = ExcelService.export_sales(db, start_date, end_date)
+    filename = os.path.basename(file_path)
+    return FileResponse(
+        file_path, 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename
+    )
 
 
 @app.get("/api/sales/{sale_id}", response_model=SaleResponse)
@@ -790,8 +823,12 @@ def get_settings(db: Session = Depends(get_db)):
 
 
 @app.put("/api/settings", response_model=SettingsResponse)
-def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_db)):
-    """Update application settings"""
+def update_settings(
+    settings_update: SettingsUpdate, 
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Update application settings (Admin only)"""
     settings = SettingsService.update_settings(db, settings_update)
     return SettingsResponse.model_validate(settings)
 
@@ -834,8 +871,11 @@ async def upload_seller_image(seller_id: int, file: UploadFile = File(...), db: 
 
 
 @app.post("/api/settings/upload-logo")
-async def upload_logo(file: UploadFile = File(...)):
-    """Upload logo image file"""
+async def upload_logo(
+    file: UploadFile = File(...),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Upload logo image file (Admin only)"""
     import os
     import uuid
     from pathlib import Path
@@ -863,8 +903,13 @@ async def upload_logo(file: UploadFile = File(...)):
 
 
 @app.get("/api/sales/{sale_id}/receipt")
-def get_sale_receipt(sale_id: int, db: Session = Depends(get_db)):
+def get_sale_receipt(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
     """Generate PDF receipt for a sale"""
+    # Receipt uchun autentifikatsiya shart emas (admin panel va sotuvchilar uchun)
     sale = SaleService.get_sale(db, sale_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
@@ -1578,20 +1623,40 @@ async def import_products(file: UploadFile = File(...), db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=f"Import xatosi: {str(e)}")
 
 
-@app.get("/api/sales/export")
-def export_sales(
+@app.get("/api/statistics/export")
+def export_statistics(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    db: Session = Depends(get_db)
+    format: str = "excel",  # excel or pdf
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(get_seller_from_header)
 ):
-    """Export sales to Excel file"""
-    file_path = ExcelService.export_sales(db, start_date, end_date)
-    filename = os.path.basename(file_path)
-    return FileResponse(
-        file_path, 
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=filename
-    )
+    """Export statistics to Excel or PDF file"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        if format.lower() == "pdf":
+            # Export statistics as PDF
+            stats = SaleService.get_statistics(db, start_date, end_date)
+            file_path = PDFService.export_statistics(stats, start_date, end_date)
+            filename = os.path.basename(file_path)
+            return FileResponse(
+                file_path, 
+                media_type="application/pdf",
+                filename=filename
+            )
+        else:
+            # Export statistics as Excel
+            file_path = ExcelService.export_statistics(db, start_date, end_date)
+            filename = os.path.basename(file_path)
+            return FileResponse(
+                file_path, 
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=filename
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export xatosi: {str(e)}")
 
 
 # ==================== OFFLINE SYNC ====================
@@ -1651,6 +1716,13 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_text(f"Message received: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+@app.post("/api/websocket/broadcast")
+async def broadcast_message(message: dict):
+    """Broadcast message to all WebSocket clients"""
+    await manager.broadcast(message)
+    return {"status": "broadcasted", "message": message}
 
 
 # ==================== ADMIN PANEL ====================

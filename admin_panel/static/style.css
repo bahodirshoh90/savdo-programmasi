@@ -522,6 +522,11 @@ tbody tr:hover {
     color: #065f46;
 }
 
+.action-btn-print {
+    background-color: #e0e7ff;
+    color: #3730a3;
+}
+
 /* Map */
 #map {
     background: var(--card-bg);

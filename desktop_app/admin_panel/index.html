@@ -229,6 +229,20 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Statistics Export Buttons -->
+                <div style="margin-top: 2rem; margin-bottom: 1rem; text-align: center;">
+                    <h3>📊 Hisobotlarni yuklab olish</h3>
+                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 1rem;">
+                        <button class="btn btn-success" onclick="exportStatistics('excel')">
+                            <i class="fas fa-file-excel"></i> Excel Hisobot
+                        </button>
+                        <button class="btn btn-danger" onclick="exportStatistics('pdf')">
+                            <i class="fas fa-file-pdf"></i> PDF Hisobot
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="table-container" style="margin-top: 2rem;">
                     <h2>Eng ko'p sotilgan mahsulotlar</h2>
                     <table id="top-products-table">
@@ -754,6 +768,41 @@
                                     </label>
                                 </div>
                                 <small class="form-text" style="display: block; margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">GPS kuzatuv faqat belgilangan kunlarda ishlaydi</small>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h2><i class="fas fa-bell"></i> Bildirishnomalar Sozlamalari</h2>
+                        <form class="settings-form">
+                            <p style="color: #64748b; margin-bottom: 1rem;">Quyidagi hodisalar uchun Telegram bildirishnomalar:</p>
+                            
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="notify-new-sale" checked style="margin-right: 0.5rem;">
+                                    <span>✅ Yangi sotuv (tasdiqlash kerak)</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="notify-low-stock" checked style="margin-right: 0.5rem;">
+                                    <span>✅ Kam qolgan mahsulotlar</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="notify-debt-limit" checked style="margin-right: 0.5rem;">
+                                    <span>✅ Qarz limiti oshganlar</span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="notify-daily-report" checked style="margin-right: 0.5rem;">
+                                    <span>✅ Kunlik hisobotlar</span>
+                                </label>
                             </div>
                         </form>
                     </div>

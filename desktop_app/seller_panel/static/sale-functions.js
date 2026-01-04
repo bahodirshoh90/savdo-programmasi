@@ -1435,10 +1435,16 @@ async function completeSale() {
     const paymentAmountInput = document.getElementById('payment-amount-input');
     const paymentAmount = paymentAmountInput ? parseFloat(paymentAmountInput.value) : null;
     const excessAction = document.getElementById('excess-action')?.value || null;
-    const requiresApproval = document.getElementById('requires-admin-approval')?.checked || false;
+    let requiresApproval = document.getElementById('requires-admin-approval')?.checked || false;
     
     // Calculate total
     const totalAmount = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    
+    // AUTO: Agar qarz bo'lsa yoki to'lov to'liq bo'lmasa - avtomatik admin tasdig'i kerak
+    if (paymentAmount !== null && paymentAmount < totalAmount) {
+        requiresApproval = true;
+        console.log('Auto: Admin tasdig\'i kerak - to\'lov to\'liq emas');
+    }
     
     // Validate payment amount
     if (paymentAmount !== null && paymentAmount < 0) {

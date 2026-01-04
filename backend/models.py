@@ -256,7 +256,7 @@ class Sale(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     seller_id = Column(Integer, ForeignKey("sellers.id"), nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     total_amount = Column(Float, nullable=False, default=0.0)
     
     # Payment method
@@ -311,7 +311,7 @@ class Order(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     seller_id = Column(Integer, ForeignKey("sellers.id"), nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
     total_amount = Column(Float, nullable=False, default=0.0)
     
@@ -471,6 +471,12 @@ class Settings(Base):
     work_start_time = Column(String(10), nullable=True, default="09:00")  # Format: "HH:MM"
     work_end_time = Column(String(10), nullable=True, default="18:00")  # Format: "HH:MM"
     work_days = Column(String(20), nullable=True, default="1,2,3,4,5,6,7")  # Comma-separated: 1=Monday, 7=Sunday
+    
+    # Notification settings
+    notify_new_sale = Column(Boolean, nullable=False, default=True)  # Yangi sotuv bildirishnomasi
+    notify_low_stock = Column(Boolean, nullable=False, default=True)  # Kam qolgan mahsulotlar
+    notify_debt_limit = Column(Boolean, nullable=False, default=True)  # Qarz limiti oshganlar
+    notify_daily_report = Column(Boolean, nullable=False, default=True)  # Kunlik hisobotlar
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

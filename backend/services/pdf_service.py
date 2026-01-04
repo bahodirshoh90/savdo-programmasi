@@ -12,8 +12,12 @@ from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
 from utils import get_uzbekistan_now, format_datetime_uz
-from services.sale_service import SaleService
-from services.settings_service import SettingsService
+try:
+    from .sale_service import SaleService
+    from .settings_service import SettingsService
+except ImportError:
+    from sale_service import SaleService
+    from settings_service import SettingsService
 from reportlab.platypus import Image
 
 
@@ -228,7 +232,7 @@ class PDFService:
         
         payment_info_rows = [
             [Paragraph('Sana:', info_label_style), Paragraph(sale_date, info_value_style)],
-            [Paragraph('Mijoz:', info_label_style), Paragraph(sale.customer.name or 'Noma\'lum', info_value_style)],
+            [Paragraph('Mijoz:', info_label_style), Paragraph((sale.customer.name if sale.customer else "O'chirilgan mijoz") or 'Noma\'lum', info_value_style)],
             [Paragraph('Sotuvchi:', info_label_style), Paragraph(sale.seller.name or 'Noma\'lum', info_value_style)],
             [Paragraph('To\'lov usuli:', info_label_style), Paragraph(payment_method, info_value_style)],
         ]
@@ -444,5 +448,158 @@ class PDFService:
             PDFService._header_footer(canvas_obj, doc, settings)
         
         doc.build(elements, onFirstPage=on_first_page, onLaterPages=on_later_pages)
+        
+        return filepath
+    
+    @staticmethod
+    def export_statistics(stats: dict, start_date: str = None, end_date: str = None) -> str:
+        """Export statistics to PDF file"""
+        PDFService._ensure_receipts_dir()
+        
+        filename = f"statistics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        filepath = os.path.join(PDFService.RECEIPTS_DIR, filename)
+        
+        doc = SimpleDocTemplate(
+            filepath,
+            pagesize=A4,
+            topMargin=25*mm,
+            bottomMargin=25*mm,
+            leftMargin=20*mm,
+            rightMargin=20*mm
+        )
+        
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue
+        )
+        
+        period_text = ""
+        if start_date and end_date:
+            period_text = f" ({start_date} dan {end_date} gacha)"
+        elif start_date:
+            period_text = f" ({start_date} dan)"
+        elif end_date:
+            period_text = f" ({end_date} gacha)"
+            
+        elements.append(Paragraph(f"STATISTIK HISOBOT{period_text}", title_style))
+        elements.append(Spacer(1, 10*mm))
+        
+        # General Statistics
+        general_data = [
+            ["Ko'rsatkich", "Qiymat"]
+        ]
+        
+        general_data.append(["Jami sotuvlar", f"{stats.get('total_amount', 0):,.0f} so'm"])
+        general_data.append(["Sotuvlar soni", f"{stats.get('total_sales', 0)} ta"])
+        general_data.append(["O'rtacha sotuv", f"{stats.get('average_sale', 0):,.0f} so'm"])
+        general_data.append(["Daromad", f"{stats.get('total_profit', 0):,.0f} so'm"])
+        general_data.append(["Jami qarz", f"{stats.get('total_debt', 0):,.0f} so'm"])
+        
+        general_table = Table(general_data, colWidths=[60*mm, 60*mm])
+        general_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ]))
+        
+        elements.append(general_table)
+        elements.append(Spacer(1, 10*mm))
+        
+        # Payment Methods
+        if 'payment_methods' in stats and stats['payment_methods']:
+            elements.append(Paragraph("TO'LOV TURLARI", styles['Heading2']))
+            elements.append(Spacer(1, 5*mm))
+            
+            payment_data = [["To'lov turi", "Soni", "Summa"]]
+            for method, data in stats['payment_methods'].items():
+                method_name = {
+                    'cash': 'Naqd',
+                    'card': 'Karta',
+                    'credit': 'Nasiya',
+                    'bank_transfer': 'O\'tkazma'
+                }.get(method, method.upper())
+                payment_data.append([method_name, f"{data['count']} ta", f"{data['amount']:,.0f} so'm"])
+            
+            payment_table = Table(payment_data, colWidths=[40*mm, 30*mm, 50*mm])
+            payment_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            
+            elements.append(payment_table)
+            elements.append(Spacer(1, 10*mm))
+        
+        # Top Products
+        if 'top_products' in stats and stats['top_products']:
+            elements.append(Paragraph("ENG KO'P SOTILGAN MAHSULOTLAR", styles['Heading2']))
+            elements.append(Spacer(1, 5*mm))
+            
+            products_data = [["Mahsulot", "Miqdor", "Summa"]]
+            for product in stats['top_products'][:10]:  # Top 10
+                products_data.append([product['name'], f"{product['quantity']}", f"{product['amount']:,.0f} so'm"])
+            
+            products_table = Table(products_data, colWidths=[60*mm, 30*mm, 40*mm])
+            products_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.orange),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.lightyellow),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            
+            elements.append(products_table)
+            elements.append(Spacer(1, 10*mm))
+        
+        # Top Customers
+        if 'top_customers' in stats and stats['top_customers']:
+            elements.append(Paragraph("ENG FAOL MIJOZLAR", styles['Heading2']))
+            elements.append(Spacer(1, 5*mm))
+            
+            customers_data = [["Mijoz", "Xaridlar", "Summa"]]
+            for customer in stats['top_customers'][:10]:  # Top 10
+                customers_data.append([customer['name'], f"{customer['count']}", f"{customer['amount']:,.0f} so'm"])
+            
+            customers_table = Table(customers_data, colWidths=[60*mm, 30*mm, 40*mm])
+            customers_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.purple),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.lavender),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            
+            elements.append(customers_table)
+        
+        # Build PDF
+        doc.build(elements)
         
         return filepath

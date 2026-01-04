@@ -262,7 +262,7 @@ class SaleUpdate(BaseModel):
 class SaleResponse(BaseModel):
     id: int
     seller_id: int
-    customer_id: int
+    customer_id: Optional[int] = None
     customer_name: str
     seller_name: str
     total_amount: float
@@ -313,7 +313,7 @@ class OrderItemResponse(BaseModel):
 class OrderResponse(BaseModel):
     id: int
     seller_id: int
-    customer_id: int
+    customer_id: Optional[int] = None
     customer_name: str
     seller_name: str
     status: OrderStatus
@@ -359,6 +359,10 @@ class SettingsBase(BaseModel):
     work_start_time: Optional[str] = None  # Format: "HH:MM"
     work_end_time: Optional[str] = None  # Format: "HH:MM"
     work_days: Optional[str] = None  # Comma-separated: "1,2,3,4,5,6,7" (1=Monday, 7=Sunday)
+    notify_new_sale: bool = True  # Yangi sotuv bildirishnomasi
+    notify_low_stock: bool = True  # Kam qolgan mahsulotlar
+    notify_debt_limit: bool = True  # Qarz limiti oshganlar
+    notify_daily_report: bool = True  # Kunlik hisobotlar
 
 
 class SettingsUpdate(SettingsBase):

@@ -6,9 +6,14 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from models import Order, OrderItem, OrderStatus, Seller, Customer, Product
 from schemas import OrderCreate, OrderResponse, OrderItemResponse
-from services.calculation_service import CalculationService
-from services.inventory_service import InventoryService
-from services.audit_service import AuditService
+try:
+    from .calculation_service import CalculationService
+    from .inventory_service import InventoryService
+    from .audit_service import AuditService
+except ImportError:
+    from calculation_service import CalculationService
+    from inventory_service import InventoryService
+    from audit_service import AuditService
 from sqlalchemy.orm import joinedload
 
 
@@ -221,7 +226,7 @@ class OrderService:
         
         try:
             if order.customer:
-                customer_name = order.customer.name
+                customer_name = order.customer.name if order.customer else "O'chirilgan mijoz"
         except AttributeError:
             pass
         

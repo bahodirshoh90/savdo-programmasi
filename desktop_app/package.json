@@ -37,6 +37,8 @@
       "admin_panel/**/*",
       "seller_panel/**/*",
       "node_modules/**/*"
+      ,"static/**/*"
+      ,"uploads/**/*"
     ],
     "win": {
       "target": [

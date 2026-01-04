@@ -2688,12 +2688,13 @@ function formatMoney(amount) {
 
 function formatDate(dateStr) {
     if (!dateStr) return '-';
-    const date = new Date(dateStr);
+    let date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    
-    // Format in Uzbekistan timezone (UTC+5)
-    return date.toLocaleString('uz-UZ', {
-        timeZone: 'Asia/Tashkent',
+
+    // Agar vaqt stringi oxiri 'Z' (UTC) bo'lsa, +5 soat qo'shamiz
+    let isUTC = typeof dateStr === 'string' && dateStr.endsWith('Z');
+    let showDate = isUTC ? new Date(date.getTime() + (5 * 60 * 60 * 1000)) : date;
+    return showDate.toLocaleString('uz-UZ', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',

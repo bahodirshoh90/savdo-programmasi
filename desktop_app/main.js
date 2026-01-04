@@ -1,4 +1,17 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
+// Chekni chop etish (faqat biror HTML yoki matnni print qilish uchun)
+ipcMain.handle('print-receipt', async (event, receiptHtml) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  // Yangi yashirin oynada HTML ni ochib, print dialogini chaqiramiz
+  let printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+  await printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(receiptHtml));
+  printWin.webContents.on('did-finish-load', () => {
+    printWin.webContents.print({ silent: false }, (success, errorType) => {
+      if (!success) console.error('Print error:', errorType);
+      printWin.close();
+    });
+  });
+});
 const path = require('path');
 const fs = require('fs');
 

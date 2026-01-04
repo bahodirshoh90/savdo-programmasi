@@ -4,7 +4,10 @@ Calculation Service - Core logic for package/piece calculations
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from models import Product, Customer, CustomerType
-from services.audit_service import AuditService
+try:
+    from .audit_service import AuditService
+except ImportError:
+    from audit_service import AuditService
 
 
 class CalculationService:

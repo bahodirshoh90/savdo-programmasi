@@ -6,9 +6,14 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from models import Sale, SaleItem, Product, Customer, Seller, PaymentMethod
 from schemas import SaleCreate, SaleResponse, SaleItemResponse
-from services.calculation_service import CalculationService
-from services.inventory_service import InventoryService
-from services.audit_service import AuditService
+try:
+    from .calculation_service import CalculationService
+    from .inventory_service import InventoryService
+    from .audit_service import AuditService
+except ImportError:
+    from calculation_service import CalculationService
+    from inventory_service import InventoryService
+    from audit_service import AuditService
 
 
 class SaleService:
@@ -126,10 +131,73 @@ class SaleService:
             if requires_approval:
                 db.commit()
                 db.refresh(db_sale)
+                
+                # Adminga bildirishnoma yuborish
+                try:
+                    import asyncio
+                    import os
+                    from dotenv import load_dotenv
+                    from telegram import Bot
+                    
+                    # .env faylni to'g'ri joylashuvdan yuklash
+                    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+                    load_dotenv(env_path)
+                    TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+                    ADMIN_CHAT_IDS = [int(x) for x in (os.getenv('ADMIN_CHAT_IDS') or '').split(',') if x.strip().isdigit()]
+                    
+                    print(f"DEBUG: TELEGRAM_TOKEN={TELEGRAM_TOKEN}")
+                    print(f"DEBUG: ADMIN_CHAT_IDS={ADMIN_CHAT_IDS}")
+                    
+                    if TELEGRAM_TOKEN and ADMIN_CHAT_IDS:
+                        text = f"🔔 YANGI SOTUV TASDIQLASHNI KUTMOQDA!\n\n"
+                        text += f"ID: #{db_sale.id}\n"
+                        text += f"👤 Mijoz: {customer.name}\n"
+                        text += f"👨‍💼 Sotuvchi: {seller.name}\n"
+                        text += f"💰 Summa: {db_sale.total_amount:,.0f} so'm\n\n"
+                        text += f"Ko'rish va tasdiqlash uchun:\n"
+                        text += f"/view_sale {db_sale.id}"
+                        
+                        # Bildirishnomani alohida threadda yuborish
+                        def send_in_thread():
+                            import asyncio
+                            from telegram import Bot
+                            
+                            async def send_notification():
+                                bot = Bot(token=TELEGRAM_TOKEN)
+                                for admin_id in ADMIN_CHAT_IDS:
+                                    try:
+                                        print(f"DEBUG: Adminga {admin_id} xabar yuborish...")
+                                        await bot.send_message(chat_id=admin_id, text=text)
+                                        print(f"DEBUG: Admin {admin_id}ga xabar yuborildi!")
+                                    except Exception as e:
+                                        print(f"DEBUG: Admin {admin_id}ga xabar yuborishda xatolik: {e}")
+                            
+                            # Yangi event loop yaratish
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            try:
+                                loop.run_until_complete(send_notification())
+                                print("DEBUG: Bildirishnoma yuborildi!")
+                            finally:
+                                loop.close()
+                        
+                        # Alohida threadda yuborish
+                        print("DEBUG: Bildirishnoma yuborish boshlandi...")
+                        import threading
+                        thread = threading.Thread(target=send_in_thread, daemon=True)
+                        thread.start()
+                    else:
+                        print(f"DEBUG: Telegram sozlamalari topilmadi! Token={bool(TELEGRAM_TOKEN)}, Admins={bool(ADMIN_CHAT_IDS)}")
+                except Exception as e:
+                    print(f"Bildirishnoma yuborishda xatolik: {e}")
+                
                 return db_sale  # Return without processing payment/debt
             
             # Process payment and debt
-            from services.debt_service import DebtService
+            try:
+                from .debt_service import DebtService
+            except ImportError:
+                from debt_service import DebtService
             from datetime import datetime
             
             payment_amount = sale.payment_amount or total_amount
@@ -481,8 +549,8 @@ class SaleService:
             "id": sale.id,
             "seller_id": sale.seller_id,
             "customer_id": sale.customer_id,
-            "customer_name": sale.customer.name,
-            "seller_name": sale.seller.name,
+            "customer_name": sale.customer.name if sale.customer else "O'chirilgan mijoz",
+            "seller_name": sale.seller.name if sale.seller else "Noma'lum",
             "total_amount": sale.total_amount,
             "payment_method": sale.payment_method.value if sale.payment_method else "cash",
             "payment_amount": sale.payment_amount,
@@ -539,7 +607,10 @@ class SaleService:
         
         if approved:
             # Process payment and debt, deduct inventory
-            from services.debt_service import DebtService
+            try:
+                from .debt_service import DebtService
+            except ImportError:
+                from debt_service import DebtService
             
             # Deduct inventory for each item
             for item in sale.items:
@@ -690,13 +761,16 @@ class SaleService:
         customer_stats = defaultdict(lambda: {"count": 0, "amount": 0.0, "name": ""})
         
         for sale in sales:
+            # Skip sales without customer (deleted customers)
+            if sale.customer_id is None:
+                continue
             customer_stats[sale.customer_id]["count"] += 1
             customer_stats[sale.customer_id]["amount"] += sale.total_amount
-            customer_stats[sale.customer_id]["name"] = sale.customer.name
+            customer_stats[sale.customer_id]["name"] = sale.customer.name if sale.customer else "O'chirilgan mijoz"
         
         top_customers = sorted(
             [{"customer_id": k, "name": v["name"], "count": v["count"], "amount": v["amount"]}
-             for k, v in customer_stats.items()],
+             for k, v in customer_stats.items() if k is not None],
             key=lambda x: x["amount"],
             reverse=True
         )[:10]
@@ -774,8 +848,8 @@ class SaleService:
                 "id": item.id,
                 "sale_id": item.sale_id,
                 "date": item.sale.created_at.isoformat(),
-                "customer_name": item.sale.customer.name,
-                "seller_name": item.sale.seller.name,
+                "customer_name": item.sale.customer.name if item.sale.customer else "O'chirilgan mijoz",
+                "seller_name": item.sale.seller.name if item.sale.seller else "Noma'lum",
                 "requested_quantity": item.requested_quantity,
                 "packages_sold": item.packages_sold,
                 "pieces_sold": item.pieces_sold,

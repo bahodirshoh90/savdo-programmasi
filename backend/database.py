@@ -5,9 +5,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+from pathlib import Path
 
-# SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite:///./inventory.db"
+# Get absolute path to database file (always in backend directory)
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "inventory.db"
+
+# SQLite database URL with absolute path
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 # Create engine
 engine = create_engine(

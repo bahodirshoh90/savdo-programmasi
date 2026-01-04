@@ -14,7 +14,7 @@ class SellerService:
     @staticmethod
     def create_seller(db: Session, seller: SellerCreate) -> Seller:
         """Create a new seller"""
-        from services.auth_service import AuthService
+        from auth_service import AuthService
         
         seller_data = seller.dict(exclude={'password'})
         # Handle role_id properly
@@ -45,7 +45,7 @@ class SellerService:
     @staticmethod
     def update_seller(db: Session, seller_id: int, seller: SellerUpdate) -> Optional[Seller]:
         """Update a seller"""
-        from services.auth_service import AuthService
+        from auth_service import AuthService
         
         db_seller = db.query(Seller).filter(Seller.id == seller_id).first()
         if not db_seller:
@@ -109,7 +109,10 @@ class SellerService:
         """Get all sellers' current locations
         If only_within_work_hours is True, only return locations updated during work hours
         """
-        from services.settings_service import SettingsService
+        try:
+            from .settings_service import SettingsService
+        except ImportError:
+            from settings_service import SettingsService
         from datetime import datetime, timedelta
         from utils import to_uzbekistan_time
         
