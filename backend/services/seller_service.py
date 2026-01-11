@@ -182,6 +182,18 @@ class SellerService:
         return locations
     
     @staticmethod
+    def delete_seller(db: Session, seller_id: int) -> bool:
+        """Delete a seller"""
+        db_seller = db.query(Seller).filter(Seller.id == seller_id).first()
+        if not db_seller:
+            return False
+        
+        # Don't actually delete, just deactivate (soft delete)
+        db_seller.is_active = False
+        db.commit()
+        return True
+    
+    @staticmethod
     def get_seller_permissions(db: Session, seller_id: int) -> List[Dict[str, Any]]:
         """Get all permissions for a seller"""
         seller = db.query(Seller).options(selectinload(Seller.role).selectinload(Role.permissions)).filter(Seller.id == seller_id).first()

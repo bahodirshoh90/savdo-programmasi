@@ -2,8 +2,7 @@ const API_BASE = '/api';
 let map = null;
 let salesChart = null;
 
-// Make loadSellersMarkers globally accessible for refresh button
-window.loadSellersMarkers = loadSellersMarkers;
+// loadSellersMarkers will be assigned after function declaration
 
 // Utility function to escape HTML
 function escapeHtml(text) {
@@ -53,7 +52,7 @@ function checkAuth() {
     const token = localStorage.getItem('admin_token');
     if (token) {
         currentAdminToken = token;
-        verifyAdminAuth();
+        verifyAdminAuth(); // Async function, but we don't await it here
     } else {
         showLogin();
     }
@@ -246,7 +245,10 @@ function showPage(pageName) {
             loadSellers();
             break;
         case 'gps':
-            loadGPSMap();
+            // Wait a bit for page to be visible, then load map
+            setTimeout(() => {
+                loadGPSMap();
+            }, 100);
             break;
         case 'sales':
             loadSellersForFilter();
@@ -260,12 +262,6 @@ function showPage(pageName) {
             break;
         case 'audit-logs':
             loadAuditLogs();
-            break;
-        case 'gps':
-            // Wait a bit for page to be visible, then load map
-            setTimeout(() => {
-                loadGPSMap();
-            }, 100);
             break;
         case 'settings':
             loadSettings();
@@ -664,7 +660,7 @@ async function loadProducts() {
                     imageUrl = window.location.origin + imageUrl;
                 } else {
                     // Relative path - make absolute
-                    imageUrl = window.location.origin + '/' + imageUrl;
+                    imageUrl = window.location.origin + '/uploads/products/' + imageUrl;
                 }
             }
             // Create image cell separately to avoid quote escaping issues
@@ -2576,6 +2572,9 @@ async function loadSellersMarkers() {
         }
     }
 }
+
+// Make loadSellersMarkers globally accessible for refresh button
+window.loadSellersMarkers = loadSellersMarkers;
 
 // Function to clear seller location (called from popup button)
 async function clearSellerLocation(sellerId, sellerName) {

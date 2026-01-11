@@ -702,9 +702,18 @@ function handleProductSearch(e) {
                 ? `<span class="stock-badge">Omborda: ${p.total_pieces || 0} dona</span>`
                 : `<span class="stock-badge out-of-stock">Omborda yo'q</span>`;
             
-            const imageUrl = p.image_url 
-                ? (p.image_url.startsWith('http') ? p.image_url : `${window.location.origin}${p.image_url}`)
-                : null;
+            // Get image URL - use SERVER_BASE for Electron app
+            let imageUrl = null;
+            if (p.image_url) {
+                if (window.getImageUrl) {
+                    imageUrl = window.getImageUrl(p.image_url);
+                } else if (p.image_url.startsWith('http')) {
+                    imageUrl = p.image_url;
+                } else {
+                    const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
+                    imageUrl = p.image_url.startsWith('/') ? serverBase + p.image_url : serverBase + '/' + p.image_url;
+                }
+            }
             
             // Get price based on customer type using getProductPrice function
             const price = getProductPrice(p);
@@ -813,8 +822,9 @@ function renderProductsGrid() {
     const customer = (typeof window !== 'undefined' && window.selectedCustomer) ? window.selectedCustomer : selectedCustomer;
     
     gridContainer.innerHTML = availableProducts.map(p => {
+        // Use getImageUrl helper or SERVER_BASE for Electron app
         const imageUrl = p.image_url 
-            ? (p.image_url.startsWith('http') ? p.image_url : `${window.location.origin}${p.image_url}`)
+            ? (window.getImageUrl ? window.getImageUrl(p.image_url) : (p.image_url.startsWith('http') ? p.image_url : `${window.SERVER_BASE || window.location.origin}${p.image_url}`))
             : null;
         
         // Get price based on customer type using getProductPrice function
@@ -1138,8 +1148,9 @@ function renderSaleItems() {
     }
     
     container.innerHTML = items.map((item, index) => {
+        // Use getImageUrl helper or SERVER_BASE for Electron app
         const imageUrl = item.product.image_url 
-            ? (item.product.image_url.startsWith('http') ? item.product.image_url : `${window.location.origin}${item.product.image_url}`)
+            ? (window.getImageUrl ? window.getImageUrl(item.product.image_url) : (item.product.image_url.startsWith('http') ? item.product.image_url : `${window.SERVER_BASE || window.location.origin}${item.product.image_url}`))
             : null;
         
         return `

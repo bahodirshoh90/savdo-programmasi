@@ -1,5 +1,5 @@
 // API Base URL - will be set from Electron or use default
-let API_BASE = 'http://161.97.184.217/api';
+let API_BASE = 'http://uztoysavdo.uz/api';
 
 // Function to get API URL
 async function getApiBaseUrl() {
@@ -44,12 +44,12 @@ window.fetch = function(url, options) {
   if (typeof url === 'string') {
     if (url.startsWith('/api')) {
       // Replace /api with full API_BASE
-      const apiBase = API_BASE || window.API_BASE || 'http://161.97.184.217/api';
+      const apiBase = API_BASE || window.API_BASE || 'http://uztoysavdo.uz/api';
       url = apiBase + url.substring(4);
       console.log('Fetch URL converted:', url);
     } else if (url.startsWith('api/')) {
       // Handle api/ prefix
-      const apiBase = API_BASE || window.API_BASE || 'http://161.97.184.217/api';
+      const apiBase = API_BASE || window.API_BASE || 'http://uztoysavdo.uz/api';
       url = apiBase + '/' + url.substring(4);
       console.log('Fetch URL converted:', url);
     }
@@ -1213,14 +1213,17 @@ async function loadProducts() {
             const stockClass = (product.total_pieces || 0) === 0 ? 'badge-danger' : 
                               (product.total_pieces || 0) < 10 ? 'badge-warning' : 'badge-success';
             
-            // Get product image
+            // Get product image - use SERVER_BASE for Electron app
             let imageCell = '<td>-</td>';
             if (product.image_url) {
                 let imageUrl = product.image_url;
-                if (!imageUrl.startsWith('http')) {
+                if (window.getImageUrl) {
+                    imageUrl = window.getImageUrl(imageUrl);
+                } else if (!imageUrl.startsWith('http')) {
+                    const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
                     imageUrl = imageUrl.startsWith('/') 
-                        ? window.location.origin + imageUrl 
-                        : window.location.origin + '/' + imageUrl;
+                        ? serverBase + imageUrl 
+                        : serverBase + '/' + imageUrl;
                 }
                 imageCell = `<td><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(product.name)}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer;" onclick="showProductImage('${escapeHtml(imageUrl)}', '${escapeHtml(product.name)}')" title="Rasmni kattalashtirish"></td>`;
             }
@@ -2158,12 +2161,20 @@ async function showProfileModal() {
         document.getElementById('profile-password').value = '';
         document.getElementById('profile-confirm-password').value = '';
         
-        // Show profile image if exists
+        // Show profile image if exists - use SERVER_BASE for Electron app
         const imagePreview = document.getElementById('profile-image-preview');
         if (profile.image_url) {
-            const imageUrl = profile.image_url.startsWith('http') 
-                ? profile.image_url 
-                : `${window.location.origin}${profile.image_url}`;
+            let imageUrl;
+            if (window.getImageUrl) {
+                imageUrl = window.getImageUrl(profile.image_url);
+            } else if (profile.image_url.startsWith('http')) {
+                imageUrl = profile.image_url;
+            } else {
+                const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
+                imageUrl = profile.image_url.startsWith('/') 
+                    ? serverBase + profile.image_url 
+                    : serverBase + '/' + profile.image_url;
+            }
             imagePreview.src = imageUrl;
             imagePreview.style.display = 'block';
         } else {
@@ -2891,7 +2902,17 @@ async function loadAdminProducts() {
         }
         
         tbody.innerHTML = filteredProducts.map(p => {
-            const imageUrl = p.image_url ? (p.image_url.startsWith('http') ? p.image_url : `${window.location.origin}${p.image_url}`) : '';
+            let imageUrl = '';
+            if (p.image_url) {
+                if (window.getImageUrl) {
+                    imageUrl = window.getImageUrl(p.image_url);
+                } else if (p.image_url.startsWith('http')) {
+                    imageUrl = p.image_url;
+                } else {
+                    const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
+                    imageUrl = p.image_url.startsWith('/') ? serverBase + p.image_url : serverBase + '/' + p.image_url;
+                }
+            }
             return `
             <tr>
                 <td>${p.id}</td>
@@ -3459,10 +3480,15 @@ function updateAdminProductImagePreview(imageUrl) {
     if (!preview) return;
     if (imageUrl && imageUrl.trim()) {
         let url = imageUrl;
-        if (url.startsWith('/uploads')) {
-            url = window.location.origin + url;
+        // Use getImageUrl helper if available (for Electron app)
+        if (window.getImageUrl) {
+            url = window.getImageUrl(imageUrl);
+        } else if (url.startsWith('/uploads') || url.startsWith('/')) {
+            const serverBase = window.SERVER_BASE || window.location.origin;
+            url = serverBase + url;
         } else if (!url.startsWith('http')) {
-            url = window.location.origin + '/' + url;
+            const serverBase = window.SERVER_BASE || window.location.origin;
+            url = serverBase + '/' + url;
         }
         const img = document.createElement('img');
         img.src = url;

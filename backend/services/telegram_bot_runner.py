@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple working Telegram bot launcher
+Simple working Telegram bot launcher with scheduled reports
 """
 import os
 import sys
@@ -9,10 +9,16 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
+from datetime import time
+import pytz
+
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN') or 'TOKENNI_BU_YERGA_QO`YING'
 
+# O'zbekiston timezone
+UZBEKISTAN_TZ = pytz.timezone('Asia/Tashkent')
+
 def run_telegram_bot():
-    """Simple Telegram bot runner"""
+    """Simple Telegram bot runner with scheduled jobs"""
     print("🤖 TELEGRAM BOT ISHGA TUSHIRISH")
     print("=" * 35)
     
@@ -27,7 +33,7 @@ def run_telegram_bot():
         # Import all functions from main service
         from telegram_service import (
             start, menu_command, button_handler, handle_search_input,
-            get_main_keyboard
+            get_main_keyboard, send_scheduled_daily_report, send_scheduled_weekly_report
         )
         from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
         
@@ -41,6 +47,28 @@ def run_telegram_bot():
         app.add_handler(CallbackQueryHandler(button_handler))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_input))
         print("✅ Handlers qo'shildi")
+        
+        # Add scheduled jobs for daily and weekly reports
+        job_queue = app.job_queue
+        if job_queue:
+            # Kunlik hisobot - har kuni 21:00 da O'zbekiston vaqti
+            job_queue.run_daily(
+                lambda context: context.application.create_task(send_scheduled_daily_report()),
+                time=time(hour=21, minute=0, tzinfo=UZBEKISTAN_TZ),
+                name='daily_report'
+            )
+            print("✅ Kunlik hisobot scheduler qo'shildi (21:00 Tashkent)")
+            
+            # Haftalik hisobot - har yakshanba 20:00 da O'zbekiston vaqti
+            job_queue.run_daily(
+                lambda context: context.application.create_task(send_scheduled_weekly_report()),
+                time=time(hour=20, minute=0, tzinfo=UZBEKISTAN_TZ),
+                days=(6,),  # 6 = yakshanba
+                name='weekly_report'
+            )
+            print("✅ Haftalik hisobot scheduler qo'shildi (yakshanba 20:00 Tashkent)")
+        else:
+            print("⚠️ JobQueue mavjud emas - scheduled reports ishlamaydi")
         
         # Test main keyboard
         keyboard = get_main_keyboard()

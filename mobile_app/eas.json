@@ -6,31 +6,22 @@
   },
   "build": {
     "base": {
-      "node": "18.18.0"
-        },
+      "node": "20.19.4"
+    },
     "development": {
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "NODE_ENV": "development"
-      },
       "resourceClass": "medium"
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
-      "env": {
-        "NODE_ENV": "production"
-      },
       "resourceClass": "medium"
     },
     "production": {
       "extends": "base",
       "autoIncrement": true,
-      "env": {
-        "NODE_ENV": "production"
-      },
       "resourceClass": "medium"
     }
   },

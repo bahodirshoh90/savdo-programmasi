@@ -931,20 +931,22 @@ async function loadProducts() {
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
             }
             
-            // Fix image URL to use absolute path
+            // Fix image URL to use absolute path - use SERVER_BASE for Electron app
             let imageUrl = product.image_url;
             if (imageUrl) {
-                if (imageUrl.startsWith('/uploads')) {
-                    // Already correct path - add protocol and host for absolute URL
-                    imageUrl = window.location.origin + imageUrl;
+                // Use getImageUrl helper if available, otherwise construct manually
+                if (window.getImageUrl) {
+                    imageUrl = window.getImageUrl(imageUrl);
                 } else if (imageUrl.startsWith('http')) {
                     // External URL - keep as is
-                } else if (imageUrl.startsWith('/')) {
-                    // Absolute path - add origin
-                    imageUrl = window.location.origin + imageUrl;
                 } else {
-                    // Relative path - make absolute
-                    imageUrl = window.location.origin + '/' + imageUrl;
+                    // Use SERVER_BASE or fallback to default server
+                    const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
+                    if (imageUrl.startsWith('/')) {
+                        imageUrl = serverBase + imageUrl;
+                    } else {
+                        imageUrl = serverBase + '/' + imageUrl;
+                    }
                 }
             }
             // Create image cell separately to avoid quote escaping issues
@@ -1342,19 +1344,18 @@ function updateProductImagePreview(imageUrl) {
     const preview = document.getElementById('product-image-preview');
     if (!preview) return;
     if (imageUrl && imageUrl.trim()) {
-        // Fix URL if needed - ensure it's absolute path
+        // Fix URL if needed - ensure it's absolute path using server base
         let url = imageUrl;
-        if (url.startsWith('/uploads')) {
-            // Add origin for absolute URL
-            url = window.location.origin + url;
-        } else if (url.startsWith('http')) {
-            // External URL - keep as is
-        } else if (url.startsWith('/')) {
-            // Absolute path - add origin
-            url = window.location.origin + url;
-        } else {
-            // Relative path - make absolute
-            url = window.location.origin + '/' + url;
+        // Use getImageUrl helper if available (for Electron app)
+        if (window.getImageUrl) {
+            url = window.getImageUrl(imageUrl);
+        } else if (url.startsWith('/uploads') || url.startsWith('/')) {
+            // Fallback: Use SERVER_BASE or location.origin
+            const serverBase = window.SERVER_BASE || window.location.origin;
+            url = serverBase + (url.startsWith('/') ? url : '/' + url);
+        } else if (!url.startsWith('http')) {
+            const serverBase = window.SERVER_BASE || window.location.origin;
+            url = serverBase + '/' + url;
         }
         const img = document.createElement('img');
         img.src = url;
@@ -4084,6 +4085,11 @@ async function exportSales() {
 
 // WebSocket
 function setupWebSocket() {
+    // WebSocket disabled - server doesn't have /ws endpoint configured
+    // Real-time updates not available, but app works normally
+    console.log('WebSocket disabled - using polling for updates instead');
+    return;
+    
     // Build WebSocket URL from API_BASE so it works in packaged app
     try {
         const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'http://161.97.184.217/api';

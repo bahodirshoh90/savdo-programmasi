@@ -15,18 +15,30 @@ ipcMain.handle('print-receipt', async (event, receiptHtml) => {
 const path = require('path');
 const fs = require('fs');
 
+// Config fayl yo'li - packaged va development rejimda to'g'ri ishlashi uchun
+function getConfigPath() {
+  // Packaged app da app.getPath('userData') ishlatamiz
+  if (app.isPackaged) {
+    return path.join(app.getPath('userData'), 'config.json');
+  }
+  // Development rejimda __dirname ishlatamiz
+  return path.join(__dirname, 'config.json');
+}
+
 // API Server URL - config.json dan o'qiladi yoki default qiymat
 function getApiUrl() {
-  const configPath = path.join(__dirname, 'config.json');
+  const configPath = getConfigPath();
   try {
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      return config.apiUrl || 'http://161.97.184.217/api';
+      console.log('Config loaded from:', configPath, 'API URL:', config.apiUrl);
+      return config.apiUrl || 'https://uztoysavdo.uz/api';
     }
   } catch (e) {
     console.error('Error reading config:', e);
   }
-  return 'http://161.97.184.217/api';
+  console.log('Using default API URL, config path:', configPath);
+  return 'https://uztoysavdo.uz/api';
 }
 
 const API_SERVER_URL = getApiUrl();
@@ -157,15 +169,20 @@ function createMainWindow() {
         </div>
     </div>
     <script>
-        const { ipcRenderer } = require('electron');
         function openAdmin() {
-            ipcRenderer.send('open-admin');
+            if (window.electronAPI) {
+                window.electronAPI.openAdmin();
+            }
         }
         function openSeller() {
-            ipcRenderer.send('open-seller');
+            if (window.electronAPI) {
+                window.electronAPI.openSeller();
+            }
         }
         function openSettings() {
-            ipcRenderer.send('open-settings');
+            if (window.electronAPI) {
+                window.electronAPI.openSettings();
+            }
         }
     </script>
 </body>
@@ -384,13 +401,13 @@ function createSettingsWindow() {
     <h2>⚙️ Server Sozlamalari</h2>
     <div class="form-group">
         <label for="api-url">API Server URL:</label>
-        <input type="text" id="api-url" placeholder="http://161.97.184.217/api" value="${API_SERVER_URL}">
+        <input type="text" id="api-url" placeholder="https://uztoysavdo.uz/api" value="${API_SERVER_URL}">
     </div>
     <button onclick="saveSettings()">Saqlash</button>
     <div id="status-message" style="margin-top: 10px; color: green; display: none; font-size: 13px;"></div>
     <div class="info">
         <strong>Eslatma:</strong> Backend server manzilini kiriting. 
-        Masalan: http://161.97.184.217/api yoki https://savdo.uztoysshop.uz/api
+        Masalan: https://uztoysavdo.uz/api yoki https://uztoysavdo.uz/api
     </div>
     <script>
         // Load current API URL when window opens
@@ -508,8 +525,14 @@ ipcMain.on('open-settings', () => {
 });
 
 ipcMain.on('save-api-url', (event, url) => {
-  const configPath = path.join(__dirname, 'config.json');
+  const configPath = getConfigPath();
+  // Papka mavjud bo'lmasa yaratish
+  const configDir = path.dirname(configPath);
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
   fs.writeFileSync(configPath, JSON.stringify({ apiUrl: url }, null, 2));
+  console.log('API URL saved to:', configPath, 'URL:', url);
 });
 
 ipcMain.on('restart-app', () => {

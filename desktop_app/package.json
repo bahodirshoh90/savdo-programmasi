@@ -41,16 +41,22 @@
       ,"uploads/**/*"
     ],
     "win": {
-      "target": [
-        {
-          "target": "dir",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.ico"
+  "target": [
+    {
+      "target": "nsis",
+      "arch": ["x64"]
     },
+    {
+      "target": "portable",
+      "arch": ["x64"]
+    },
+    {
+      "target": "dir",
+      "arch": ["x64"]
+    }
+  ],
+  "icon": "assets/icon.ico"
+},
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

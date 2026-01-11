@@ -365,7 +365,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
                     (Product.name.ilike(f'%{search_query}%')) | 
                     (Product.barcode.ilike(f'%{search_query}%')) |
                     (Product.brand.ilike(f'%{search_query}%'))
-                ).limit(5).all()  # Rasm bilan ko'rsatish uchun 5 tagacha
+                ).limit(20).all()  # Ko'proq natija ko'rsatish - 20 tagacha
                 
                 if not products:
                     text = f"❌ '{search_query}' bo'yicha mahsulot topilmadi"
@@ -3513,8 +3513,63 @@ async def inventory_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inventory_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inventarizatsiyani tasdiqlash"""
-    await update.callback_query.answer("✅ Mahsulot tasdiqlandi!")
-    await inventory_check(update, context)
+    try:
+        from sqlalchemy.orm import Session
+        try:
+            from database import SessionLocal
+            from models import Product
+        except ImportError:
+            import sys, os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from database import SessionLocal
+            from models import Product
+        
+        callback_data = update.callback_query.data
+        
+        db: Session = SessionLocal()
+        try:
+            if callback_data == 'inv_confirm_all':
+                # Tasdiqlash - hozircha faqat log
+                products = db.query(Product).filter(
+                    (Product.packages_in_stock * Product.pieces_per_package + Product.pieces_in_stock) > 0
+                ).all()
+                
+                # Inventarizatsiya sanasini yangilash (agar kerak bo'lsa)
+                from datetime import datetime
+                for p in products:
+                    p.updated_at = datetime.utcnow()
+                
+                db.commit()
+                await update.callback_query.answer(f"✅ {len(products)} ta mahsulot tasdiqlandi!")
+                await products_menu(update, context)
+                return
+            
+            # Bitta mahsulot tasdiqlash
+            product_id = int(callback_data.split('_')[-1])
+            product = db.query(Product).filter(Product.id == product_id).first()
+            
+            if product:
+                # Inventarizatsiya sanasini yangilash
+                from datetime import datetime
+                product.updated_at = datetime.utcnow()
+                db.commit()
+                
+                stock = (product.packages_in_stock * product.pieces_per_package) + product.pieces_in_stock
+                await update.callback_query.answer(
+                    f"✅ {product.name} tasdiqlandi! Qoldiq: {stock} dona",
+                    show_alert=True
+                )
+            else:
+                await update.callback_query.answer("❌ Mahsulot topilmadi", show_alert=True)
+                
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"Inventory confirm error: {e}")
+        import traceback
+        traceback.print_exc()
+        await update.callback_query.answer(f"❌ Xatolik: {e}", show_alert=True)
 
 
 async def delivery_tracking(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -86,6 +86,8 @@ app.add_middleware(
         "https://savdo.uztoysshop.uz",
         "http://localhost:3000",
         "http://localhost:8000",
+        "http://localhost:8081",
+        "http://localhost:19006",
         "capacitor://localhost",
         "ionic://localhost",
     ],  # Production domains + localhost for development
@@ -1109,6 +1111,33 @@ def update_seller(seller_id: int, seller: SellerUpdate, db: Session = Depends(ge
         created_at=updated.created_at,
         updated_at=updated.updated_at
     )
+
+
+@app.delete("/api/sellers/{seller_id}")
+def delete_seller(
+    seller_id: int,
+    seller: Seller = Depends(get_seller_from_header),
+    db: Session = Depends(get_db)
+):
+    """Delete (deactivate) a seller - only for admin"""
+    from services.auth_service import AuthService
+    
+    # Check if current user is admin
+    if not seller or not seller.role:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Check if user has admin permissions (sellers.delete permission)
+    permissions = AuthService.get_seller_permissions(db, seller.id)
+    permission_codes = [p.get('code') for p in permissions]
+    
+    if 'sellers.delete' not in permission_codes and 'admin' not in [r.lower() for r in [seller.role.name or '']]:
+        raise HTTPException(status_code=403, detail="Permission denied: sellers.delete required")
+    
+    deleted = SellerService.delete_seller(db, seller_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Seller not found")
+    
+    return {"success": True, "message": "Sotuvchi o'chirildi"}
 
 
 @app.get("/api/locations/sellers")
