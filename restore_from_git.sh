@@ -21,21 +21,46 @@ commits=(
     "060c52ac5f767830ac7b23398eef6ded08fdc3bb"
 )
 
+TODAY="2026-01-12"
+today_commit=""
+today_index=-1
+
 for i in "${!commits[@]}"; do
     commit="${commits[$i]}"
     date=$(git log -1 --format="%ci" $commit 2>/dev/null)
+    date_only=$(echo "$date" | cut -d' ' -f1)
     message=$(git log -1 --format="%s" $commit 2>/dev/null | cut -c1-60)
-    echo "  [$i] $commit"
+    
+    if [ "$date_only" == "$TODAY" ]; then
+        echo "  [$i] $commit ⭐ BUGUNGI SANA"
+        today_commit="$commit"
+        today_index=$i
+    else
+        echo "  [$i] $commit"
+    fi
     echo "      Sana: $date"
     echo "      Xabar: $message"
     echo ""
 done
 
-echo "Qaysi commit'dan restore qilmoqchisiz? (0-4, default: 0 - eng so'nggisi):"
-read -p "Tanlov: " choice
-
-if [ -z "$choice" ]; then
-    choice=0
+if [ -n "$today_commit" ]; then
+    echo "⭐ Bugungi sana (12.01.2026) dagi commit topildi: $today_commit"
+    echo ""
+    echo "Qaysi commit'dan restore qilmoqchisiz?"
+    echo "  (tavsiya: $today_index - bugungi sana, yoki 0-4, default: $today_index):"
+    read -p "Tanlov: " choice
+    
+    if [ -z "$choice" ]; then
+        choice=$today_index
+    fi
+else
+    echo "⚠️  Bugungi sana dagi commit topilmadi!"
+    echo "Qaysi commit'dan restore qilmoqchisiz? (0-4, default: 0 - eng so'nggisi):"
+    read -p "Tanlov: " choice
+    
+    if [ -z "$choice" ]; then
+        choice=0
+    fi
 fi
 
 selected_commit="${commits[$choice]}"
