@@ -61,7 +61,12 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "allowElevation": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "warningsAsErrors": false,
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "Savdo-Programma-Portable.exe"

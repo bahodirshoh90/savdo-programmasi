@@ -213,8 +213,8 @@ function createAdminWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true,
-      allowRunningInsecureContent: false
+      webSecurity: false, // Disable webSecurity to allow cross-origin images
+      allowRunningInsecureContent: true // Allow loading images from HTTPS server
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false
@@ -276,8 +276,8 @@ function createSellerWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true,
-      allowRunningInsecureContent: false
+      webSecurity: false, // Disable webSecurity to allow cross-origin images
+      allowRunningInsecureContent: true // Allow loading images from HTTPS server
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false

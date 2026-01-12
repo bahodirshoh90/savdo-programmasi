@@ -20,7 +20,7 @@ async function printSaleReceipt(id) {
     }
 }
 // API Base URL - will be set from Electron or use default
-let API_BASE = 'http://161.97.184.217/api';
+let API_BASE = 'https://uztoysavdo.uz/api';
 
 // Function to get API URL
 async function getApiBaseUrl() {
@@ -73,12 +73,12 @@ window.fetch = function(url, options) {
   if (typeof url === 'string') {
     if (url.startsWith('/api')) {
       // Replace /api with full API_BASE
-      const apiBase = API_BASE || 'http://161.97.184.217/api';
+      const apiBase = API_BASE || 'https://uztoysavdo.uz/api';
       url = apiBase + url.substring(4);
       console.log('Fetch URL converted:', url);
     } else if (url.startsWith('api/')) {
       // Handle api/ prefix
-      const apiBase = API_BASE || 'http://161.97.184.217/api';
+      const apiBase = API_BASE || 'https://uztoysavdo.uz/api';
       url = apiBase + '/' + url.substring(4);
       console.log('Fetch URL converted:', url);
     }
@@ -148,7 +148,7 @@ function checkAuth() {
 async function verifyAdminAuth() {
     // Ensure API_BASE is set
     await getApiBaseUrl();
-    const apiBase = API_BASE || 'http://161.97.184.217/api';
+    const apiBase = API_BASE || 'https://uztoysavdo.uz/api';
     
     try {
         const response = await fetch(`${apiBase}/auth/me`, {
@@ -213,7 +213,7 @@ async function handleLogin(e) {
     }
     
     // Ensure API_BASE is set before login
-    let apiBase = 'http://161.97.184.217/api'; // Default
+    let apiBase = 'https://uztoysavdo.uz/api'; // Default
     
     // Check if electronAPI is available
     if (window.electronAPI) {
@@ -240,7 +240,7 @@ async function handleLogin(e) {
     
     // Final check - ensure apiBase is valid
     if (!apiBase || apiBase === '/api' || !apiBase.startsWith('http')) {
-        apiBase = 'http://161.97.184.217/api';
+        apiBase = 'https://uztoysavdo.uz/api';
         API_BASE = apiBase;
         console.warn('API_BASE was invalid, using default:', apiBase);
     }
@@ -249,7 +249,7 @@ async function handleLogin(e) {
     
     // Ensure loginUrl is valid
     if (!loginUrl.startsWith('http')) {
-        loginUrl = 'http://161.97.184.217/api/auth/login';
+        loginUrl = 'https://uztoysavdo.uz/api/auth/login';
         console.warn('Login URL was invalid, using default:', loginUrl);
     }
     
@@ -920,34 +920,91 @@ async function loadProducts() {
             return;
         }
 
+        // Process products and resolve image URLs
+        const imageUrlPromises = [];
+        for (const product of products) {
+            if (product.image_url && window.getImageUrl && typeof window.getImageUrl === 'function') {
+                imageUrlPromises.push(
+                    window.getImageUrl(product.image_url).then(url => {
+                        console.log('Resolved image URL for product', product.id, ':', product.image_url, '->', url);
+                        product.resolvedImageUrl = url;
+                        return { product, url };
+                    }).catch(err => {
+                        console.error('Error getting image URL for product', product.id, ':', err);
+                        // Fallback: construct URL manually
+                        const apiBase = API_BASE.replace(/\/api\/?$/, '') || 'https://uztoysavdo.uz';
+                        if (product.image_url.startsWith('/uploads')) {
+                            product.resolvedImageUrl = apiBase + product.image_url;
+                        } else if (product.image_url.startsWith('/')) {
+                            product.resolvedImageUrl = apiBase + product.image_url;
+                        } else {
+                            product.resolvedImageUrl = apiBase + '/uploads/products/' + product.image_url;
+                        }
+                        return { product, url: product.resolvedImageUrl };
+                    })
+                );
+            } else {
+                product.resolvedImageUrl = product.image_url;
+            }
+        }
+        
+        // Wait for all image URLs to resolve
+        await Promise.all(imageUrlPromises);
+        
+        // Get server base URL once - use getImageUrl if available, otherwise use API_BASE
+        let serverBase = 'https://uztoysavdo.uz';
+        if (window.SERVER_BASE) {
+            if (typeof window.SERVER_BASE === 'function') {
+                try {
+                    serverBase = await window.SERVER_BASE();
+                } catch (err) {
+                    console.error('Error getting SERVER_BASE:', err);
+                    // Extract from API_BASE as fallback
+                    serverBase = API_BASE.replace(/\/api\/?$/, '') || 'https://uztoysavdo.uz';
+                }
+            } else {
+                serverBase = window.SERVER_BASE;
+            }
+        } else {
+            // Extract base URL from API_BASE
+            serverBase = API_BASE.replace(/\/api\/?$/, '') || 'https://uztoysavdo.uz';
+        }
+        
         products.forEach(product => {
             const row = document.createElement('tr');
             const stockClass = product.total_pieces <= 10 ? 'badge-danger' : product.total_pieces <= 20 ? 'badge-warning' : '';
             
-            // Check if product is slow moving (not sold for 30+ days)
-            const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
-            if (isSlowMoving) {
+            // Check if product has low stock (10 or less) - apply yellow background
+            if (product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 10) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
             }
             
-            // Fix image URL to use absolute path - use SERVER_BASE for Electron app
-            let imageUrl = product.image_url;
+            // Check if product is slow moving (not sold for 30+ days)
+            const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
+            if (isSlowMoving && product.total_pieces > 10) {
+                // Only apply slow moving style if not already yellow from low stock
+                row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
+                row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
+            }
+            
+            // Fix image URL to use absolute path - use resolved URL or construct manually
+            let imageUrl = product.resolvedImageUrl || product.image_url;
             if (imageUrl) {
-                // Use getImageUrl helper if available, otherwise construct manually
-                if (window.getImageUrl) {
-                    imageUrl = window.getImageUrl(imageUrl);
-                } else if (imageUrl.startsWith('http')) {
-                    // External URL - keep as is
+                if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+                    // Already absolute URL - keep as is
+                } else if (imageUrl.startsWith('/uploads')) {
+                    // Already has /uploads prefix
+                    imageUrl = serverBase + imageUrl;
+                } else if (imageUrl.startsWith('/')) {
+                    // Absolute path starting with /
+                    imageUrl = serverBase + imageUrl;
                 } else {
-                    // Use SERVER_BASE or fallback to default server
-                    const serverBase = window.SERVER_BASE || 'http://161.97.184.217';
-                    if (imageUrl.startsWith('/')) {
-                        imageUrl = serverBase + imageUrl;
-                    } else {
-                        imageUrl = serverBase + '/' + imageUrl;
-                    }
+                    // Just filename - add /uploads/products/ prefix
+                    imageUrl = serverBase + '/uploads/products/' + imageUrl;
                 }
+                // Debug logging
+                console.log('Product image URL:', product.id, product.image_url, '->', imageUrl);
             }
             // Create image cell separately to avoid quote escaping issues
             row.innerHTML = `
@@ -1030,7 +1087,9 @@ async function loadProducts() {
             
             // Add image to the image cell separately to avoid quote escaping issues
             const imageCell = row.querySelector('.product-image-cell');
-            if (product.image_url && imageUrl) {
+            if (!imageCell) {
+                console.error('Image cell not found for product:', product.id);
+            } else if (product.image_url && imageUrl) {
                 const img = document.createElement('img');
                 img.src = imageUrl;
                 img.alt = product.name || '';
@@ -1050,26 +1109,43 @@ async function loadProducts() {
                     };
                     const imgLarge = document.createElement('img');
                     imgLarge.src = imageUrl;
+                    imgLarge.crossOrigin = 'anonymous'; // Add crossorigin for CORS
                     imgLarge.style.cssText = 'max-width: 80%; max-height: 80%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+                    imgLarge.onerror = function() {
+                        console.error('Large image failed to load:', imageUrl);
+                        this.style.display = 'none';
+                        const errorMsg = document.createElement('div');
+                        errorMsg.textContent = 'Rasm yuklanmadi';
+                        errorMsg.style.cssText = 'color: red; padding: 20px; text-align: center;';
+                        if (this.parentNode) {
+                            this.parentNode.replaceChild(errorMsg, this);
+                        }
+                    };
                     modal.appendChild(imgLarge);
                     document.body.appendChild(modal);
                 };
                 img.onerror = function() {
+                    console.error('Image failed to load:', imageUrl, this.src);
                     this.onerror = null;
                     this.style.display = 'none';
                     const span = document.createElement('span');
                     span.style.cssText = 'color: var(--text-light); font-size: 0.8em;';
                     span.textContent = 'Rasm yo\'q';
-                    this.parentNode.replaceChild(span, this);
+                    if (this.parentNode) {
+                        this.parentNode.replaceChild(span, this);
+                    }
                 };
                 img.onload = function() {
-                    console.log('Image loaded:', imageUrl);
+                    console.log('Image loaded successfully:', imageUrl);
                 };
+                // Add crossorigin attribute for CORS
+                img.crossOrigin = 'anonymous';
                 imageCell.appendChild(img);
             } else {
+                // No image URL - show "Rasm yo'q"
                 const span = document.createElement('span');
-                span.style.color = 'var(--text-light)';
-                span.textContent = '-';
+                span.style.cssText = 'color: #999; font-size: 0.875rem;';
+                span.textContent = 'Rasm yo\'q';
                 imageCell.appendChild(span);
             }
         });
@@ -4092,7 +4168,7 @@ function setupWebSocket() {
     
     // Build WebSocket URL from API_BASE so it works in packaged app
     try {
-        const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'http://161.97.184.217/api';
+        const apiBase = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'https://uztoysavdo.uz/api';
         const protocol = apiBase.startsWith('https') ? 'wss:' : 'ws:';
         // Remove scheme and trailing /api from apiBase to get host[:port]
         const host = apiBase.replace(/^https?:\/\//, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
