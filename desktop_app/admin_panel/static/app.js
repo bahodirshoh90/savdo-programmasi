@@ -2381,9 +2381,78 @@ async function loadSellers() {
         if (!tbody) return;
         tbody.innerHTML = '';
 
+        // Check if current user has permission to delete sellers
+        const canDeleteSeller = (() => {
+            if (!currentAdminUser) {
+                console.log('loadSellers: No currentAdminUser');
+                return false;
+            }
+            
+            // Check permissions array (can be array of strings or objects)
+            const permissions = currentAdminUser.permissions || [];
+            const hasDeletePermission = Array.isArray(permissions) && (
+                permissions.includes('sellers.delete') || 
+                permissions.includes('admin') ||
+                permissions.some(p => 
+                    (typeof p === 'string' && (p === 'sellers.delete' || p === 'admin')) ||
+                    (typeof p === 'object' && p !== null && (p.code === 'sellers.delete' || p.code === 'admin'))
+                )
+            );
+            
+            // Check role name (include all admin roles)
+            const roleName = (currentAdminUser.role_name || '').toLowerCase();
+            const hasAdminRole = roleName === 'admin' || 
+                                roleName === 'super admin' || 
+                                roleName === 'direktor' || 
+                                roleName === 'director';
+            
+            const result = hasDeletePermission || hasAdminRole;
+            
+            console.log('loadSellers: Permission check:', {
+                currentAdminUser: currentAdminUser.id,
+                roleName: currentAdminUser.role_name,
+                permissions: permissions,
+                hasDeletePermission,
+                hasAdminRole,
+                canDeleteSeller: result
+            });
+            
+            return result;
+        })();
+
         sellers.forEach(seller => {
             const row = document.createElement('tr');
             row.setAttribute('data-seller-id', seller.id);
+            
+            // Build action buttons HTML
+            let actionButtons = `
+                <button class="action-btn action-btn-view" onclick="viewSellerHistory(${seller.id}, '${escapeHtml(seller.name)}')" title="Sotuv tarixi">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button class="action-btn action-btn-edit" onclick="editSeller(${seller.id})" title="Tahrirlash">
+                    <i class="fas fa-edit"></i>
+                </button>
+            `;
+            
+            if (seller.username) {
+                actionButtons += `<button class="action-btn action-btn-view" onclick="toggleSellerLoginInfo(${seller.id}, '${escapeHtml(seller.username)}')" title="Login ma'lumotlarini ko'rsatish/yashirish"><i class="fas fa-user-circle"></i></button>`;
+            }
+            
+            if (seller.role_id) {
+                actionButtons += `<button class="action-btn action-btn-view" onclick="viewSellerPermissions(${seller.id})" title="Ruxsatlarni ko'rish"><i class="fas fa-key"></i></button>`;
+            }
+            
+            // Always show delete button for all sellers
+            // Permission check is done in deleteSeller function
+            const isSelf = currentAdminUser && currentAdminUser.id === seller.id;
+            const disabledClass = (!canDeleteSeller || isSelf) ? ' disabled' : '';
+            const disabledAttr = (!canDeleteSeller || isSelf) ? ' disabled' : '';
+            const titleText = isSelf ? 'O\'zingizni o\'chira olmaysiz' : (canDeleteSeller ? 'O\'chirish' : 'Ruxsat yo\'q');
+            
+            actionButtons += `<button class="action-btn action-btn-delete${disabledClass}" onclick="deleteSeller(${seller.id}, '${escapeHtml(seller.name || seller.username || 'Sotuvchi')}')" title="${titleText}" ${disabledAttr}>
+                <i class="fas fa-trash"></i>
+            </button>`;
+            
             row.innerHTML = `
                 <td>${seller.id}</td>
                 <td>${seller.name}</td>
@@ -2394,17 +2463,7 @@ async function loadSellers() {
                 <td><span class="badge badge-info">${seller.role_name || 'Role yo\'q'}</span></td>
                 <td>
                     <div class="action-buttons">
-                        <button class="action-btn action-btn-view" onclick="viewSellerHistory(${seller.id}, '${escapeHtml(seller.name)}')" title="Sotuv tarixi">
-                            <i class="fas fa-history"></i>
-                        </button>
-                        <button class="action-btn action-btn-edit" onclick="editSeller(${seller.id})" title="Tahrirlash">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        ${seller.username ? `<button class="action-btn action-btn-view" onclick="toggleSellerLoginInfo(${seller.id}, '${escapeHtml(seller.username)}')" title="Login ma'lumotlarini ko'rsatish/yashirish"><i class="fas fa-user-circle"></i></button>` : ''}
-                        ${seller.role_id ? `<button class="action-btn action-btn-view" onclick="viewSellerPermissions(${seller.id})" title="Ruxsatlarni ko'rish"><i class="fas fa-key"></i></button>` : ''}
-                        <button class="action-btn action-btn-delete" onclick="deleteSeller(${seller.id}, '${escapeHtml(seller.name || seller.username || 'Sotuvchi')}')" title="O'chirish">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        ${actionButtons}
                     </div>
                 </td>
             `;

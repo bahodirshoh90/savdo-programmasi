@@ -1126,11 +1126,26 @@ def delete_seller(
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # Check if user has admin permissions (sellers.delete permission)
-    permissions = AuthService.get_seller_permissions(db, seller.id)
-    permission_codes = [p.get('code') for p in permissions]
+    try:
+        from auth import get_seller_permissions as get_permissions
+        permissions = get_permissions(db, seller)
+        # permissions is List[str] (permission codes)
+        permission_codes = permissions if isinstance(permissions, list) else []
+    except Exception as e:
+        print(f"Error getting permissions: {e}")
+        permission_codes = []
     
-    if 'sellers.delete' not in permission_codes and 'admin' not in [r.lower() for r in [seller.role.name or '']]:
-        raise HTTPException(status_code=403, detail="Permission denied: sellers.delete required")
+    # Check role name (case-insensitive)
+    role_name_lower = (seller.role.name or '').lower() if seller.role else ''
+    has_admin_role = role_name_lower in ['admin', 'super admin', 'direktor', 'director']
+    
+    has_delete_permission = 'sellers.delete' in permission_codes or 'admin' in permission_codes
+    
+    if not (has_delete_permission or has_admin_role):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Permission denied: sellers.delete required. Current role: {seller.role.name if seller.role else 'None'}, Permissions: {permission_codes}"
+        )
     
     deleted = SellerService.delete_seller(db, seller_id)
     if not deleted:

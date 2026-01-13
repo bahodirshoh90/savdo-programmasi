@@ -2031,6 +2031,9 @@ async function loadSellers() {
                         </button>
                         ${seller.username ? `<button class="action-btn action-btn-view" onclick="toggleSellerLoginInfo(${seller.id}, '${escapeHtml(seller.username)}')" title="Login ma'lumotlarini ko'rsatish/yashirish"><i class="fas fa-user-circle"></i></button>` : ''}
                         ${seller.role_id ? `<button class="action-btn action-btn-view" onclick="viewSellerPermissions(${seller.id})" title="Ruxsatlarni ko'rish"><i class="fas fa-key"></i></button>` : ''}
+                        <button class="action-btn action-btn-delete" onclick="deleteSeller(${seller.id}, '${escapeHtml(seller.name || seller.username || 'Sotuvchi')}')" title="O'chirish">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </td>
             `;
@@ -2039,6 +2042,60 @@ async function loadSellers() {
     } catch (error) {
         console.error('Error loading sellers:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteSeller(id, sellerName) {
+    // Check permission
+    if (!currentAdminUser) {
+        alert('Xatolik: Admin ma\'lumotlari topilmadi');
+        return;
+    }
+    
+    const hasPermission = currentAdminUser.permissions?.includes('sellers.delete') || 
+                         currentAdminUser.permissions?.includes('admin') ||
+                         currentAdminUser.role_name?.toLowerCase() === 'admin' ||
+                         currentAdminUser.role_name?.toLowerCase() === 'super admin' ||
+                         currentAdminUser.role_name?.toLowerCase() === 'direktor';
+    
+    if (!hasPermission) {
+        alert('Ruxsat yo\'q: Sotuvchilarni o\'chirish uchun ruxsatingiz yo\'q');
+        return;
+    }
+    
+    // Prevent deleting yourself
+    if (currentAdminUser.id === id) {
+        alert('Xatolik: O\'zingizni o\'chira olmaysiz');
+        return;
+    }
+    
+    // Confirmation dialog
+    if (!confirm(`"${sellerName}" sotuvchisini o'chirishni tasdiqlaysizmi?\n\n⚠️ Eslatma: Bu amalni qaytarib bo'lmaydi.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/sellers/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentAdminToken}`,
+                'X-Seller-ID': currentAdminUser.id
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || 'Sotuvchini o\'chirishda xatolik');
+        }
+        
+        const result = await response.json();
+        alert('Muvaffaqiyatli: Sotuvchi o\'chirildi');
+        
+        // Reload sellers list
+        loadSellers();
+    } catch (error) {
+        console.error('Error deleting seller:', error);
+        alert('Xatolik: ' + (error.message || 'Sotuvchini o\'chirishda xatolik'));
     }
 }
 
