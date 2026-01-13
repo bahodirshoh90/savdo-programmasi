@@ -82,8 +82,7 @@ app = FastAPI(title="Inventory & Sales Management API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://uztoysshop.uz",
-        "https://savdo.uztoysshop.uz",
+        "https://uztoysavdo.uz",
         "http://localhost:3000",
         "http://localhost:8000",
         "http://localhost:8081",
