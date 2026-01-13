@@ -14,11 +14,21 @@ class ProductService:
     @staticmethod
     def create_product(db: Session, product: ProductCreate) -> Product:
         """Create a new product"""
-        db_product = Product(**product.dict())
-        db.add(db_product)
-        db.commit()
-        db.refresh(db_product)
-        return db_product
+        try:
+            # Handle Pydantic v2 (model_dump) and v1 (dict) compatibility
+            try:
+                product_data = product.model_dump()
+            except AttributeError:
+                product_data = product.dict()
+            
+            db_product = Product(**product_data)
+            db.add(db_product)
+            db.commit()
+            db.refresh(db_product)
+            return db_product
+        except Exception as e:
+            db.rollback()
+            raise e
     
     @staticmethod
     def get_products(

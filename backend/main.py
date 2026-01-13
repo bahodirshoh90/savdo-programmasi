@@ -78,7 +78,7 @@ except Exception as e:
 
 app = FastAPI(title="Inventory & Sales Management API", version="1.0.0")
 
-# CORS middleware
+# CORS middleware - Allow all origins for development, specific for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -87,12 +87,16 @@ app.add_middleware(
         "http://localhost:8000",
         "http://localhost:8081",
         "http://localhost:19006",
+        "http://127.0.0.1:8081",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
         "capacitor://localhost",
         "ionic://localhost",
     ],  # Production domains + localhost for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # WebSocket manager
@@ -141,7 +145,15 @@ async def upload_product_image(file: UploadFile = File(...)):
 @app.post("/api/products", response_model=ProductResponse)
 def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     """Create a new product"""
-    created = ProductService.create_product(db, product)
+    try:
+        created = ProductService.create_product(db, product)
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error creating product: {e}")
+        print(f"Traceback: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Mahsulot yaratishda xatolik: {str(e)}")
     # Convert to response with computed properties
     product_dict = {
         "id": created.id,
