@@ -23,7 +23,15 @@ fi
 echo ""
 echo "Git o'zgarishlarini tekshirish..."
 git status
-git fetch origin
+echo ""
+echo "Git remote'ni tekshirish..."
+git remote -v
+echo ""
+echo "Git fetch qilish..."
+if ! git fetch origin; then
+    echo "❌ Git fetch xatolik! Internet aloqasini tekshiring."
+    exit 1
+fi
 
 # 3. Database faylini Git'dan himoya qilish
 echo ""
@@ -34,7 +42,15 @@ git restore backend/inventory.db 2>/dev/null || true
 # 4. Yangilash
 echo ""
 echo "Git'dan yangilash..."
-git reset --hard origin/main
+echo "Joriy commit: $(git rev-parse HEAD)"
+echo "Remote commit: $(git rev-parse origin/main)"
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+    echo "Yangilanishlar mavjud. Yangilanmoqda..."
+    git reset --hard origin/main
+    echo "✅ Yangilanishlar qo'llandi"
+else
+    echo "✅ Hozirgi versiya eng yangi"
+fi
 
 # 5. Database faylini qayta tiklash (agar o'chib ketgan bo'lsa)
 if [ ! -f backend/inventory.db ]; then
