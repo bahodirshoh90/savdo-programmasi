@@ -297,6 +297,21 @@
                         <option value="low">Kam qolganlar (≤10 dona)</option>
                         <option value="very-low">Juda kam (≤5 dona)</option>
                     </select>
+                    <select id="product-sort" onchange="loadProducts()" style="min-width: 180px;">
+                        <option value="">Tartiblash...</option>
+                        <option value="id_desc">ID (Yangi → Eski)</option>
+                        <option value="id_asc">ID (Eski → Yangi)</option>
+                        <option value="name_asc">Nomi (A → Z)</option>
+                        <option value="name_desc">Nomi (Z → A)</option>
+                        <option value="stock_desc">Omborda borlar (Ko'p → Kam)</option>
+                        <option value="stock_asc">Omborda borlar (Kam → Ko'p)</option>
+                        <option value="price_low_asc">Eng past narxli</option>
+                        <option value="price_high_desc">Eng baland narxli</option>
+                        <option value="brand_asc">Brand (A → Z)</option>
+                        <option value="brand_desc">Brand (Z → A)</option>
+                        <option value="supplier_asc">Yetkazib beruvchi (A → Z)</option>
+                        <option value="supplier_desc">Yetkazib beruvchi (Z → A)</option>
+                    </select>
                     <button class="btn btn-secondary" onclick="printProductsTable()">
                         <i class="fas fa-print"></i> Chop etish
                     </button>

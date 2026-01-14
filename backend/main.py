@@ -427,12 +427,15 @@ def get_products(
     brand: Optional[str] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = 'desc',
     db: Session = Depends(get_db)
 ):
-    """Get all products with optional search and filtering"""
+    """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, supplier=supplier, location=location)
+                                      brand=brand, supplier=supplier, location=location,
+                                      sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
     for p in products:

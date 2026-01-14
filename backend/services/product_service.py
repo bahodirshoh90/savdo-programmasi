@@ -8,6 +8,31 @@ from models import Product
 from schemas import ProductCreate, ProductUpdate, ProductResponse
 
 
+def _sort_products(products: List[Product], sort_by: str, sort_order: str = 'desc') -> List[Product]:
+    """Sort products by custom criteria"""
+    reverse = (sort_order == 'desc')
+    
+    if sort_by == 'stock':
+        # Sort by total_pieces (omborda borlar birinchi)
+        products.sort(key=lambda p: (p.packages_in_stock or 0) * (p.pieces_per_package or 1) + (p.pieces_in_stock or 0), reverse=reverse)
+    elif sort_by == 'price_low':
+        # Sort by minimum price
+        products.sort(key=lambda p: min(
+            p.wholesale_price or 0,
+            p.retail_price or 0,
+            p.regular_price or 0
+        ), reverse=reverse)
+    elif sort_by == 'price_high':
+        # Sort by maximum price
+        products.sort(key=lambda p: max(
+            p.wholesale_price or 0,
+            p.retail_price or 0,
+            p.regular_price or 0
+        ), reverse=reverse)
+    
+    return products
+
+
 class ProductService:
     """Service for product management"""
     
@@ -76,7 +101,9 @@ class ProductService:
         min_stock: int = 0,
         brand: Optional[str] = None,
         supplier: Optional[str] = None,
-        location: Optional[str] = None
+        location: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = 'desc'  # 'asc' or 'desc'
     ) -> List[Product]:
         """Get all products with optional search and filtering"""
         from sqlalchemy.orm import joinedload
@@ -103,11 +130,33 @@ class ProductService:
         if location:
             query = query.filter(Product.location.ilike(f"%{location}%"))
         
+        # Apply sorting (before filtering for low_stock)
+        if sort_by and sort_by not in ['stock', 'price_low', 'price_high']:
+            # SQL-level sorting for simple fields
+            if sort_by == 'name':
+                order_col = Product.name
+            elif sort_by == 'id':
+                order_col = Product.id
+            elif sort_by == 'brand':
+                order_col = Product.brand
+            elif sort_by == 'supplier':
+                order_col = Product.supplier
+            else:
+                order_col = Product.id
+            
+            if sort_order == 'asc':
+                query = query.order_by(order_col.asc())
+            else:
+                query = query.order_by(order_col.desc())
+        elif not sort_by:
+            # Default: newest first
+            query = query.order_by(Product.id.desc())
+        
         # For low_stock_only filter, we need to load all products, filter, then paginate
         # This is because SQLite doesn't support complex calculations in WHERE clause
         if low_stock_only:
             # Load all products matching other filters (no pagination yet)
-            all_products = query.order_by(Product.id.desc()).all()
+            all_products = query.all()
             
             # Filter by low stock in Python
             filtered_products = []
@@ -124,12 +173,22 @@ class ProductService:
                     if 0 < total_pieces <= min_stock:
                         filtered_products.append(product)
             
+            # Apply custom sorting if needed (for stock and price sorting)
+            if sort_by in ['stock', 'price_low', 'price_high']:
+                filtered_products = _sort_products(filtered_products, sort_by, sort_order)
+            
             # Apply pagination after filtering
             return filtered_products[skip:skip + limit]
         
-        # For normal queries, use standard pagination
-        query = query.order_by(Product.id.desc())
-        return query.offset(skip).limit(limit).all()
+        # For normal queries, load products first
+        products = query.offset(skip).limit(limit * 2 if sort_by in ['stock', 'price_low', 'price_high'] else limit).all()
+        
+        # Apply custom sorting if needed (for stock and price sorting)
+        if sort_by in ['stock', 'price_low', 'price_high']:
+            products = _sort_products(products, sort_by, sort_order)
+            return products[:limit]
+        
+        return products
     
     @staticmethod
     def get_products_count(

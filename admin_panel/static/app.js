@@ -560,7 +560,17 @@ async function loadProducts() {
         const supplier = document.getElementById('product-supplier-filter')?.value || '';
         const location = document.getElementById('product-location-filter')?.value || '';
         const stockFilter = document.getElementById('stock-filter')?.value || 'all';
+        const sortValue = document.getElementById('product-sort')?.value || '';
         const skip = (currentProductPage - 1) * productsPerPage;
+        
+        // Parse sort value (format: "field_order" e.g., "name_asc", "stock_desc")
+        let sortBy = null;
+        let sortOrder = 'desc';
+        if (sortValue) {
+            const [field, order] = sortValue.split('_');
+            sortBy = field;
+            sortOrder = order || 'desc';
+        }
         
         // Build URL with all filters
         const params = new URLSearchParams();
@@ -571,6 +581,10 @@ async function loadProducts() {
         if (brand) params.append('brand', brand);
         if (supplier) params.append('supplier', supplier);
         if (location) params.append('location', location);
+        if (sortBy) {
+            params.append('sort_by', sortBy);
+            params.append('sort_order', sortOrder);
+        }
         
         let lowStockOnly = false;
         let minStock = 0;
