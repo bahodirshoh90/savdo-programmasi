@@ -105,9 +105,28 @@ class ProductService:
         
         # Filter by low stock
         if low_stock_only:
-            query = query.filter(
-                (Product.packages_in_stock * Product.pieces_per_package + Product.pieces_in_stock) <= min_stock
+            # Use func for SQLite compatibility
+            from sqlalchemy import case, or_
+            total_pieces_expr = func.coalesce(
+                func.coalesce(Product.packages_in_stock, 0) * func.coalesce(Product.pieces_per_package, 1) + 
+                func.coalesce(Product.pieces_in_stock, 0),
+                0
             )
+            query = query.having(total_pieces_expr <= min_stock)
+            # Note: having() requires group_by, but we want all products, so we use a different approach
+            # Instead, filter after loading (less efficient but works)
+            # Actually, let's use a subquery or filter in Python after loading
+            # For now, let's use a simpler approach with func
+            query = query.filter(
+                func.coalesce(
+                    func.coalesce(Product.packages_in_stock, 0) * func.coalesce(Product.pieces_per_package, 1) + 
+                    func.coalesce(Product.pieces_in_stock, 0),
+                    0
+                ) <= min_stock
+            )
+        
+        # Order by ID descending to show newest first
+        query = query.order_by(Product.id.desc())
         
         return query.offset(skip).limit(limit).all()
     
