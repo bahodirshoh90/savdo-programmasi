@@ -289,6 +289,17 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=error_msg)
     
     # Convert to response with computed properties
+    # Ensure created_at and updated_at are set (SQLite may not set server_default immediately)
+    now = datetime.now()
+    if created.created_at is None:
+        created.created_at = now
+        db.commit()
+        db.refresh(created)
+    if created.updated_at is None:
+        created.updated_at = now
+        db.commit()
+        db.refresh(created)
+    
     product_dict = {
         "id": created.id,
         "name": created.name,
@@ -312,8 +323,8 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         "last_sold_date": last_sold_date,
         "days_since_last_sale": days_since_last_sale,
         "is_slow_moving": is_slow_moving,
-        "created_at": created.created_at,
-        "updated_at": created.updated_at
+        "created_at": created.created_at or now,
+        "updated_at": created.updated_at or now
     }
     
     # Try to create ProductResponse
