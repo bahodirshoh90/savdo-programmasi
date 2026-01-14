@@ -113,33 +113,57 @@ def get_db():
 
 # ==================== PRODUCTS ====================
 
-@app.post("/api/products/upload-image")
-async def upload_product_image(file: UploadFile = File(...)):
-    """Upload product image file"""
+@app.post("/api/products/{product_id}/upload-image")
+async def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload product image file and update product"""
     import os
     import uuid
     from pathlib import Path
     
+    # Verify product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
     # Validate file type
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Fayl nomi topilmadi")
+    
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi (jpg, png, gif, webp)")
     
-    # Generate unique filename
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "products")
-    os.makedirs(uploads_dir, exist_ok=True)
-    file_path = os.path.join(uploads_dir, unique_filename)
-    
-    # Save file
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-    
-    # Return URL
-    image_url = f"/uploads/products/{unique_filename}"
-    return {"url": image_url, "filename": unique_filename}
+    try:
+        # Generate unique filename
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "products")
+        os.makedirs(uploads_dir, exist_ok=True)
+        file_path = os.path.join(uploads_dir, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Update product image_url
+        image_url = f"/uploads/products/{unique_filename}"
+        product.image_url = image_url
+        db.commit()
+        db.refresh(product)
+        
+        return {"url": image_url, "filename": unique_filename, "success": True}
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error uploading product image: {e}")
+        print(f"Traceback: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Rasm yuklashda xatolik: {str(e)}")
 
 
 @app.post("/api/products", response_model=ProductResponse)
@@ -147,6 +171,48 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     """Create a new product"""
     try:
         created = ProductService.create_product(db, product)
+        
+        # Ensure computed properties are available
+        # Refresh to get all database-computed values
+        db.refresh(created)
+        
+        # Calculate computed properties safely
+        try:
+            total_pieces = created.total_pieces
+        except Exception:
+            total_pieces = (created.packages_in_stock or 0) * (created.pieces_per_package or 1) + (created.pieces_in_stock or 0)
+        
+        try:
+            total_value = created.total_value
+        except Exception:
+            avg_price = ((created.wholesale_price or 0.0) + (created.retail_price or 0.0) + (created.regular_price or 0.0)) / 3
+            total_value = total_pieces * avg_price
+        
+        try:
+            total_value_cost = created.total_value_cost
+        except Exception:
+            total_value_cost = total_pieces * (created.cost_price or 0.0)
+        
+        try:
+            total_value_wholesale = created.total_value_wholesale
+        except Exception:
+            total_value_wholesale = total_pieces * (created.wholesale_price or 0.0)
+        
+        try:
+            last_sold_date = created.last_sold_date
+        except Exception:
+            last_sold_date = None
+        
+        try:
+            days_since_last_sale = created.days_since_last_sale
+        except Exception:
+            days_since_last_sale = None
+        
+        try:
+            is_slow_moving = created.is_slow_moving
+        except Exception:
+            is_slow_moving = False
+        
     except Exception as e:
         db.rollback()
         import traceback
@@ -154,6 +220,7 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         print(f"Error creating product: {e}")
         print(f"Traceback: {error_details}")
         raise HTTPException(status_code=500, detail=f"Mahsulot yaratishda xatolik: {str(e)}")
+    
     # Convert to response with computed properties
     product_dict = {
         "id": created.id,
@@ -164,24 +231,34 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         "received_date": created.received_date,
         "image_url": created.image_url,
         "location": created.location,
-        "pieces_per_package": created.pieces_per_package,
-        "cost_price": max(0.0, created.cost_price or 0.0),  # Ensure cost_price is >= 0
+        "pieces_per_package": created.pieces_per_package or 1,
+        "cost_price": max(0.0, created.cost_price or 0.0),
         "wholesale_price": max(0.0, created.wholesale_price or 0.0),
         "retail_price": max(0.0, created.retail_price or 0.0),
         "regular_price": max(0.0, created.regular_price or 0.0),
         "packages_in_stock": max(0, created.packages_in_stock or 0),
         "pieces_in_stock": max(0, created.pieces_in_stock or 0),
-        "total_pieces": created.total_pieces,
-        "total_value": created.total_value,
-        "total_value_cost": created.total_value_cost,
-        "total_value_wholesale": created.total_value_wholesale,
-        "last_sold_date": None,
-        "days_since_last_sale": None,
-        "is_slow_moving": False,
+        "total_pieces": total_pieces,
+        "total_value": total_value,
+        "total_value_cost": total_value_cost,
+        "total_value_wholesale": total_value_wholesale,
+        "last_sold_date": last_sold_date,
+        "days_since_last_sale": days_since_last_sale,
+        "is_slow_moving": is_slow_moving,
         "created_at": created.created_at,
         "updated_at": created.updated_at
     }
-    return ProductResponse.model_validate(product_dict)
+    
+    try:
+        return ProductResponse.model_validate(product_dict)
+    except Exception as e:
+        # Fallback: try with from_orm for Pydantic v1 compatibility
+        try:
+            return ProductResponse.from_orm(created)
+        except Exception:
+            # Last resort: return dict directly
+            print(f"Warning: Could not create ProductResponse, returning dict: {e}")
+            return product_dict
 
 
 @app.get("/api/products", response_model=List[ProductResponse])
