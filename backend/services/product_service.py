@@ -103,24 +103,33 @@ class ProductService:
         if location:
             query = query.filter(Product.location.ilike(f"%{location}%"))
         
-        # Order by ID descending to show newest first (before filtering)
-        query = query.order_by(Product.id.desc())
-        
-        # Load products first
-        products = query.offset(skip).limit(limit * 2 if low_stock_only else limit).all()
-        
-        # Filter by low stock in Python if needed (for SQLite compatibility)
+        # For low_stock_only filter, we need to load all products, filter, then paginate
+        # This is because SQLite doesn't support complex calculations in WHERE clause
         if low_stock_only:
+            # Load all products matching other filters (no pagination yet)
+            all_products = query.order_by(Product.id.desc()).all()
+            
+            # Filter by low stock in Python
             filtered_products = []
-            for product in products:
+            for product in all_products:
                 total_pieces = (product.packages_in_stock or 0) * (product.pieces_per_package or 1) + (product.pieces_in_stock or 0)
-                if total_pieces <= min_stock:
-                    filtered_products.append(product)
-                    if len(filtered_products) >= limit:
-                        break
-            return filtered_products
+                # Only include products with stock <= min_stock AND stock > 0 (omborda bor)
+                # But if min_stock is 0, include only products with stock = 0 (omborda yo'q)
+                if min_stock == 0:
+                    # "Tugagan" filter - only products with 0 stock
+                    if total_pieces == 0:
+                        filtered_products.append(product)
+                else:
+                    # "Kam qolgan" filter - products with stock > 0 but <= min_stock
+                    if 0 < total_pieces <= min_stock:
+                        filtered_products.append(product)
+            
+            # Apply pagination after filtering
+            return filtered_products[skip:skip + limit]
         
-        return products
+        # For normal queries, use standard pagination
+        query = query.order_by(Product.id.desc())
+        return query.offset(skip).limit(limit).all()
     
     @staticmethod
     def get_products_count(
