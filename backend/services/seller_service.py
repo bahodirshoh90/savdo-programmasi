@@ -184,7 +184,7 @@ class SellerService:
     @staticmethod
     def delete_seller(db: Session, seller_id: int) -> bool:
         """Delete a seller (hard delete)"""
-        from models import Sale, SaleItem, Order, OrderItem, LocationHistory, AuditLog, DebtHistory
+        from models import Sale, SaleItem, Order, OrderItem, AuditLog, DebtHistory
         
         db_seller = db.query(Seller).filter(Seller.id == seller_id).first()
         if not db_seller:
@@ -199,8 +199,11 @@ class SellerService:
             # 2. Delete debt history where seller created it
             db.query(DebtHistory).filter(DebtHistory.created_by == seller_id).delete()
             
-            # 3. Delete location history
-            db.query(LocationHistory).filter(LocationHistory.seller_id == seller_id).delete()
+            # 3. Location history is stored in Seller model itself (latitude, longitude, last_location_update)
+            # Just clear these fields before deletion (optional, but cleaner)
+            db_seller.latitude = None
+            db_seller.longitude = None
+            db_seller.last_location_update = None
             
             # 4. Delete order items first, then orders
             orders = db.query(Order).filter(Order.seller_id == seller_id).all()

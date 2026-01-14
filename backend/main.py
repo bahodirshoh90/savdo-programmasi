@@ -250,11 +250,28 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     }
     
     try:
-        return ProductResponse.model_validate(product_dict)
-    except Exception as e:
-        # Fallback: try with from_orm for Pydantic v1 compatibility
+        # Try Pydantic v2 first
         try:
-            return ProductResponse.from_orm(created)
+            return ProductResponse.model_validate(product_dict)
+        except AttributeError:
+            # Fallback to Pydantic v1
+            try:
+                return ProductResponse.from_orm(created)
+            except Exception as e1:
+                # Try constructing directly
+                try:
+                    return ProductResponse(**product_dict)
+                except Exception as e2:
+                    print(f"Warning: Could not create ProductResponse: {e1}, {e2}")
+                    # Last resort: return dict directly (will be converted by FastAPI)
+                    return product_dict
+    except Exception as e:
+        import traceback
+        print(f"Error creating ProductResponse: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        # Try constructing directly
+        try:
+            return ProductResponse(**product_dict)
         except Exception:
             # Last resort: return dict directly
             print(f"Warning: Could not create ProductResponse, returning dict: {e}")
