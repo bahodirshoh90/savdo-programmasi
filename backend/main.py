@@ -102,8 +102,19 @@ async def general_exception_handler(request: Request, exc: Exception):
     """Handle all other exceptions"""
     import traceback
     error_details = traceback.format_exc()
-    print(f"[GENERAL EXCEPTION] {str(exc)}")
-    print(f"[GENERAL EXCEPTION] Traceback:\n{error_details}")
+    print(f"[GENERAL EXCEPTION HANDLER] Exception type: {type(exc).__name__}")
+    print(f"[GENERAL EXCEPTION HANDLER] Exception message: {str(exc)}")
+    print(f"[GENERAL EXCEPTION HANDLER] Traceback:\n{error_details}")
+    print(f"[GENERAL EXCEPTION HANDLER] Request URL: {request.url}")
+    print(f"[GENERAL EXCEPTION HANDLER] Request method: {request.method}")
+    
+    # If it's already an HTTPException, use its detail
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "status_code": exc.status_code}
+        )
+    
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal Server Error: {str(exc)}", "status_code": 500}
