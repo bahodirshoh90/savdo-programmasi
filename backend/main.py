@@ -261,8 +261,9 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         except Exception:
             is_slow_moving = False
         
-    except HTTPException:
-        # Re-raise HTTPExceptions as-is
+    except HTTPException as http_exc:
+        # Re-raise HTTPExceptions as-is (they will be handled by exception handler)
+        print(f"[CREATE PRODUCT] HTTPException raised: {http_exc.detail}")
         raise
     except Exception as e:
         db.rollback()
@@ -271,6 +272,7 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         error_msg = f"Mahsulot yaratishda xatolik: {str(e)}"
         print(f"[CREATE PRODUCT] ERROR: {error_msg}")
         print(f"[CREATE PRODUCT] Traceback:\n{error_details}")
+        # Raise HTTPException - it will be caught by exception handler and returned as JSON
         raise HTTPException(status_code=500, detail=error_msg)
     
     # Convert to response with computed properties
