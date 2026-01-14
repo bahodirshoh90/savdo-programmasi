@@ -1543,27 +1543,47 @@ async function saveProduct(e) {
         console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
         // Get response text first (before checking ok)
-        const responseText = await response.text();
-        console.log('Response text:', responseText);
+        let responseText = '';
+        try {
+            responseText = await response.text();
+            console.log('Response text length:', responseText ? responseText.length : 0);
+            console.log('Response text (first 500 chars):', responseText ? responseText.substring(0, 500) : '(empty)');
+        } catch (textError) {
+            console.error('Error reading response text:', textError);
+            responseText = '';
+        }
         
         if (!response.ok) {
-            let errorData;
-            try {
-                errorData = JSON.parse(responseText);
-                console.error('Parsed error data:', errorData);
-            } catch (parseError) {
-                console.error('Failed to parse error response as JSON:', parseError);
-                console.error('Response was:', responseText);
-                // Try to extract error from HTML if it's HTML
-                if (responseText.includes('<title>')) {
-                    errorData = { detail: `Server xatolik: HTTP ${response.status} - HTML javob qaytdi` };
-                } else {
-                    errorData = { detail: `HTTP ${response.status}: ${response.statusText || responseText || 'Unknown error'}` };
+            let errorData = {};
+            let errorMessage = `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
+            
+            if (responseText && responseText.trim()) {
+                try {
+                    errorData = JSON.parse(responseText);
+                    console.error('Parsed error data:', errorData);
+                } catch (parseError) {
+                    console.error('Failed to parse error response as JSON:', parseError);
+                    console.error('Response was:', responseText);
+                    // Try to extract error from HTML if it's HTML
+                    if (responseText.includes('<title>') || responseText.includes('<html>')) {
+                        errorData = { detail: `Server xatolik: HTTP ${response.status} - HTML javob qaytdi` };
+                    } else if (responseText.trim()) {
+                        // Use response text as error message if it's not JSON
+                        errorData = { detail: responseText.trim() };
+                    }
                 }
             }
             
-            const errorMessage = errorData.detail || errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
+            // Try multiple error message fields
+            errorMessage = errorData.detail || 
+                          errorData.message || 
+                          errorData.error || 
+                          errorData.msg ||
+                          (responseText && responseText.trim() ? responseText.trim() : null) ||
+                          `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
+            
             console.error('Final error message:', errorMessage);
+            console.error('Full error data:', errorData);
             throw new Error(errorMessage);
         }
         
