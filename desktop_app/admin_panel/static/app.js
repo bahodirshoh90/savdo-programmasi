@@ -1531,27 +1531,51 @@ async function saveProduct(e) {
         const url = id ? `${API_BASE}/products/${id}` : `${API_BASE}/products`;
         const method = id ? 'PUT' : 'POST';
         
+        console.log('Sending product data:', JSON.stringify(data, null, 2));
+        
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        console.log('Response status:', response.status, response.statusText);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        // Get response text first (before checking ok)
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
         if (!response.ok) {
             let errorData;
             try {
-                const text = await response.text();
-                console.error('Server response error:', text);
-                errorData = JSON.parse(text);
+                errorData = JSON.parse(responseText);
+                console.error('Parsed error data:', errorData);
             } catch (parseError) {
-                console.error('Failed to parse error response:', parseError);
-                errorData = { detail: `HTTP ${response.status}: ${response.statusText || 'Unknown error'}` };
+                console.error('Failed to parse error response as JSON:', parseError);
+                console.error('Response was:', responseText);
+                // Try to extract error from HTML if it's HTML
+                if (responseText.includes('<title>')) {
+                    errorData = { detail: `Server xatolik: HTTP ${response.status} - HTML javob qaytdi` };
+                } else {
+                    errorData = { detail: `HTTP ${response.status}: ${response.statusText || responseText || 'Unknown error'}` };
+                }
             }
-            console.error('Error data:', errorData);
-            throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Unknown error`);
+            
+            const errorMessage = errorData.detail || errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
+            console.error('Final error message:', errorMessage);
+            throw new Error(errorMessage);
         }
         
-        const result = await response.json();
+        // Parse success response
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('Failed to parse success response:', parseError);
+            throw new Error('Server javobini o\'qib bo\'lmadi');
+        }
+        
         console.log('Product saved:', result);
         
         closeModal('product-modal');
@@ -1559,8 +1583,10 @@ async function saveProduct(e) {
         alert('Mahsulot muvaffaqiyatli saqlandi!');
     } catch (error) {
         console.error('Save product error:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
-        alert('Xatolik: ' + error.message);
+        alert('Xatolik: ' + (error.message || 'Noma\'lum xatolik'));
     }
 }
 

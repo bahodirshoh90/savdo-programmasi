@@ -173,18 +173,21 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         # Log received data for debugging
         try:
             product_dict = product.model_dump() if hasattr(product, 'model_dump') else product.dict()
-            print(f"Creating product with data: {product_dict}")
+            print(f"[CREATE PRODUCT] Received data: {json.dumps(product_dict, indent=2, default=str)}")
         except Exception as log_error:
-            print(f"Error logging product data: {log_error}")
+            print(f"[CREATE PRODUCT] Error logging product data: {log_error}")
+            import traceback
+            traceback.print_exc()
         
         # Validate pieces_per_package before creating
         if product.pieces_per_package is None or product.pieces_per_package <= 0:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"pieces_per_package 0 dan katta bo'lishi kerak. Olingan qiymat: {product.pieces_per_package}"
-            )
+            error_msg = f"pieces_per_package 0 dan katta bo'lishi kerak. Olingan qiymat: {product.pieces_per_package}"
+            print(f"[CREATE PRODUCT] Validation error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
         
+        print(f"[CREATE PRODUCT] Calling ProductService.create_product...")
         created = ProductService.create_product(db, product)
+        print(f"[CREATE PRODUCT] Product created with ID: {created.id}")
         
         # Ensure computed properties are available
         # Refresh to get all database-computed values
@@ -227,13 +230,17 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         except Exception:
             is_slow_moving = False
         
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         db.rollback()
         import traceback
         error_details = traceback.format_exc()
-        print(f"Error creating product: {e}")
-        print(f"Traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Mahsulot yaratishda xatolik: {str(e)}")
+        error_msg = f"Mahsulot yaratishda xatolik: {str(e)}"
+        print(f"[CREATE PRODUCT] ERROR: {error_msg}")
+        print(f"[CREATE PRODUCT] Traceback:\n{error_details}")
+        raise HTTPException(status_code=500, detail=error_msg)
     
     # Convert to response with computed properties
     product_dict = {
