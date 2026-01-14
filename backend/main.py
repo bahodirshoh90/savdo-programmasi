@@ -84,6 +84,8 @@ app = FastAPI(title="Inventory & Sales Management API", version="1.0.0")
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Ensure HTTPException returns JSON"""
+    print(f"[HTTP EXCEPTION HANDLER] Status: {exc.status_code}, Detail: {exc.detail}")
+    print(f"[HTTP EXCEPTION HANDLER] Request URL: {request.url}")
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "status_code": exc.status_code}
