@@ -306,6 +306,7 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     # Try to create ProductResponse
     try:
         print(f"[CREATE PRODUCT] Creating ProductResponse from dict...")
+        print(f"[CREATE PRODUCT] product_dict keys: {list(product_dict.keys())}")
         # Try Pydantic v2 first
         try:
             response_obj = ProductResponse.model_validate(product_dict)
@@ -319,6 +320,8 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
                 return response_obj
             except Exception as e1:
                 print(f"[CREATE PRODUCT] from_orm failed: {e1}")
+                import traceback
+                print(f"[CREATE PRODUCT] from_orm traceback: {traceback.format_exc()}")
                 # Try constructing directly
                 try:
                     response_obj = ProductResponse(**product_dict)
@@ -326,9 +329,16 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
                     return response_obj
                 except Exception as e2:
                     print(f"[CREATE PRODUCT] Direct construction failed: {e2}")
-                    # Last resort: return dict directly (will be converted by FastAPI)
-                    print(f"[CREATE PRODUCT] Returning dict as fallback")
-                    return product_dict
+                    import traceback
+                    print(f"[CREATE PRODUCT] Direct construction traceback: {traceback.format_exc()}")
+                    # Raise HTTPException instead of returning dict - this ensures JSON response
+                    raise HTTPException(
+                        status_code=500, 
+                        detail=f"ProductResponse yaratishda xatolik: {str(e2)}"
+                    )
+    except HTTPException:
+        # Re-raise HTTPExceptions
+        raise
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
@@ -341,9 +351,13 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
             return response_obj
         except Exception as retry_error:
             print(f"[CREATE PRODUCT] Retry also failed: {retry_error}")
-            # Last resort: return dict directly
-            print(f"[CREATE PRODUCT] Returning dict as final fallback")
-            return product_dict
+            import traceback
+            print(f"[CREATE PRODUCT] Retry traceback: {traceback.format_exc()}")
+            # Raise HTTPException instead of returning dict - this ensures JSON response
+            raise HTTPException(
+                status_code=500, 
+                detail=f"ProductResponse yaratishda xatolik: {str(retry_error)}"
+            )
 
 
 @app.get("/api/products", response_model=List[ProductResponse])
