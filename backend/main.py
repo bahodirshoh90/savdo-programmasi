@@ -270,32 +270,46 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         "updated_at": created.updated_at
     }
     
+    # Try to create ProductResponse
     try:
+        print(f"[CREATE PRODUCT] Creating ProductResponse from dict...")
         # Try Pydantic v2 first
         try:
-            return ProductResponse.model_validate(product_dict)
+            response_obj = ProductResponse.model_validate(product_dict)
+            print(f"[CREATE PRODUCT] ProductResponse created successfully (v2)")
+            return response_obj
         except AttributeError:
             # Fallback to Pydantic v1
             try:
-                return ProductResponse.from_orm(created)
+                response_obj = ProductResponse.from_orm(created)
+                print(f"[CREATE PRODUCT] ProductResponse created successfully (v1 from_orm)")
+                return response_obj
             except Exception as e1:
+                print(f"[CREATE PRODUCT] from_orm failed: {e1}")
                 # Try constructing directly
                 try:
-                    return ProductResponse(**product_dict)
+                    response_obj = ProductResponse(**product_dict)
+                    print(f"[CREATE PRODUCT] ProductResponse created successfully (direct)")
+                    return response_obj
                 except Exception as e2:
-                    print(f"Warning: Could not create ProductResponse: {e1}, {e2}")
+                    print(f"[CREATE PRODUCT] Direct construction failed: {e2}")
                     # Last resort: return dict directly (will be converted by FastAPI)
+                    print(f"[CREATE PRODUCT] Returning dict as fallback")
                     return product_dict
     except Exception as e:
         import traceback
-        print(f"Error creating ProductResponse: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
-        # Try constructing directly
+        error_details = traceback.format_exc()
+        print(f"[CREATE PRODUCT] ERROR creating ProductResponse: {e}")
+        print(f"[CREATE PRODUCT] Traceback:\n{error_details}")
+        # Try constructing directly one more time
         try:
-            return ProductResponse(**product_dict)
-        except Exception:
+            response_obj = ProductResponse(**product_dict)
+            print(f"[CREATE PRODUCT] ProductResponse created on retry")
+            return response_obj
+        except Exception as retry_error:
+            print(f"[CREATE PRODUCT] Retry also failed: {retry_error}")
             # Last resort: return dict directly
-            print(f"Warning: Could not create ProductResponse, returning dict: {e}")
+            print(f"[CREATE PRODUCT] Returning dict as final fallback")
             return product_dict
 
 
