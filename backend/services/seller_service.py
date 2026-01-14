@@ -183,13 +183,31 @@ class SellerService:
     
     @staticmethod
     def delete_seller(db: Session, seller_id: int) -> bool:
-        """Delete a seller"""
+        """Delete a seller (hard delete)"""
+        from models import Sale, SaleItem, Order, OrderItem, LocationHistory
+        
         db_seller = db.query(Seller).filter(Seller.id == seller_id).first()
         if not db_seller:
             return False
         
-        # Don't actually delete, just deactivate (soft delete)
-        db_seller.is_active = False
+        # Delete related data first
+        # Delete location history
+        db.query(LocationHistory).filter(LocationHistory.seller_id == seller_id).delete()
+        
+        # Delete order items first, then orders
+        orders = db.query(Order).filter(Order.seller_id == seller_id).all()
+        for order in orders:
+            db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
+        db.query(Order).filter(Order.seller_id == seller_id).delete()
+        
+        # Delete sale items first, then sales
+        sales = db.query(Sale).filter(Sale.seller_id == seller_id).all()
+        for sale in sales:
+            db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
+        db.query(Sale).filter(Sale.seller_id == seller_id).delete()
+        
+        # Finally delete the seller
+        db.delete(db_seller)
         db.commit()
         return True
     
