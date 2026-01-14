@@ -167,8 +167,15 @@ class ProductService:
             count = 0
             for product in all_products:
                 total_pieces = (product.packages_in_stock or 0) * (product.pieces_per_package or 1) + (product.pieces_in_stock or 0)
-                if total_pieces <= min_stock:
-                    count += 1
+                # Same logic as get_products
+                if min_stock == 0:
+                    # "Tugagan" filter - only products with 0 stock
+                    if total_pieces == 0:
+                        count += 1
+                else:
+                    # "Kam qolgan" filter - products with stock > 0 but <= min_stock
+                    if 0 < total_pieces <= min_stock:
+                        count += 1
             return count
         
         return query.count()
