@@ -21,13 +21,49 @@ class ProductService:
             except AttributeError:
                 product_data = product.dict()
             
+            print(f"[ProductService.create_product] Product data: {product_data}")
+            
+            # Ensure pieces_per_package is at least 1
+            if 'pieces_per_package' not in product_data or product_data['pieces_per_package'] is None:
+                product_data['pieces_per_package'] = 1
+            elif product_data['pieces_per_package'] <= 0:
+                product_data['pieces_per_package'] = 1
+            
+            # Ensure all required fields have defaults
+            if 'cost_price' not in product_data or product_data['cost_price'] is None:
+                product_data['cost_price'] = 0.0
+            if 'wholesale_price' not in product_data or product_data['wholesale_price'] is None:
+                product_data['wholesale_price'] = 0.0
+            if 'retail_price' not in product_data or product_data['retail_price'] is None:
+                product_data['retail_price'] = 0.0
+            if 'regular_price' not in product_data or product_data['regular_price'] is None:
+                product_data['regular_price'] = 0.0
+            if 'packages_in_stock' not in product_data or product_data['packages_in_stock'] is None:
+                product_data['packages_in_stock'] = 0
+            if 'pieces_in_stock' not in product_data or product_data['pieces_in_stock'] is None:
+                product_data['pieces_in_stock'] = 0
+            
+            print(f"[ProductService.create_product] Final product data: {product_data}")
+            
             db_product = Product(**product_data)
+            print(f"[ProductService.create_product] Product object created: {db_product.name}")
+            
             db.add(db_product)
+            print(f"[ProductService.create_product] Product added to session")
+            
             db.commit()
+            print(f"[ProductService.create_product] Changes committed")
+            
             db.refresh(db_product)
+            print(f"[ProductService.create_product] Product refreshed, ID: {db_product.id}")
+            
             return db_product
         except Exception as e:
             db.rollback()
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"[ProductService.create_product] ERROR: {str(e)}")
+            print(f"[ProductService.create_product] Traceback:\n{error_details}")
             raise e
     
     @staticmethod
