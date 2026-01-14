@@ -184,32 +184,49 @@ class SellerService:
     @staticmethod
     def delete_seller(db: Session, seller_id: int) -> bool:
         """Delete a seller (hard delete)"""
-        from models import Sale, SaleItem, Order, OrderItem, LocationHistory
+        from models import Sale, SaleItem, Order, OrderItem, LocationHistory, AuditLog, DebtHistory
         
         db_seller = db.query(Seller).filter(Seller.id == seller_id).first()
         if not db_seller:
             return False
         
-        # Delete related data first
-        # Delete location history
-        db.query(LocationHistory).filter(LocationHistory.seller_id == seller_id).delete()
-        
-        # Delete order items first, then orders
-        orders = db.query(Order).filter(Order.seller_id == seller_id).all()
-        for order in orders:
-            db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
-        db.query(Order).filter(Order.seller_id == seller_id).delete()
-        
-        # Delete sale items first, then sales
-        sales = db.query(Sale).filter(Sale.seller_id == seller_id).all()
-        for sale in sales:
-            db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
-        db.query(Sale).filter(Sale.seller_id == seller_id).delete()
-        
-        # Finally delete the seller
-        db.delete(db_seller)
-        db.commit()
-        return True
+        try:
+            # Delete related data first (in correct order to avoid foreign key constraints)
+            
+            # 1. Delete audit logs where seller is the user
+            db.query(AuditLog).filter(AuditLog.user_id == seller_id).delete()
+            
+            # 2. Delete debt history where seller created it
+            db.query(DebtHistory).filter(DebtHistory.created_by == seller_id).delete()
+            
+            # 3. Delete location history
+            db.query(LocationHistory).filter(LocationHistory.seller_id == seller_id).delete()
+            
+            # 4. Delete order items first, then orders
+            orders = db.query(Order).filter(Order.seller_id == seller_id).all()
+            for order in orders:
+                db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
+            db.query(Order).filter(Order.seller_id == seller_id).delete()
+            
+            # 5. Delete sale items first, then sales
+            sales = db.query(Sale).filter(Sale.seller_id == seller_id).all()
+            for sale in sales:
+                db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
+            db.query(Sale).filter(Sale.seller_id == seller_id).delete()
+            
+            # 6. Update approved_by in sales to NULL if this seller approved them
+            db.query(Sale).filter(Sale.approved_by == seller_id).update({Sale.approved_by: None})
+            
+            # 7. Finally delete the seller
+            db.delete(db_seller)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            print(f"Error deleting seller {seller_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     @staticmethod
     def get_seller_permissions(db: Session, seller_id: int) -> List[Dict[str, Any]]:
