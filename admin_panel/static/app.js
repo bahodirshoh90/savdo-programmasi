@@ -1124,11 +1124,20 @@ async function saveProduct(e) {
     
     // Always include these required fields
     data.name = document.getElementById('product-name').value;
-    data.pieces_per_package = parseInt(document.getElementById('product-pieces-per-package').value);
+    
+    // Validate pieces_per_package - must be at least 1
+    const piecesPerPackageInput = document.getElementById('product-pieces-per-package').value;
+    const piecesPerPackage = parseInt(piecesPerPackageInput);
+    if (!piecesPerPackage || piecesPerPackage <= 0 || isNaN(piecesPerPackage)) {
+        alert('Xatolik: "Paketdagi donalar soni" kamida 1 bo\'lishi kerak');
+        return;
+    }
+    data.pieces_per_package = piecesPerPackage;
+    
     data.cost_price = parseFloat(document.getElementById('product-cost-price').value) || 0;
-    data.wholesale_price = parseFloat(document.getElementById('product-wholesale-price').value);
-    data.retail_price = parseFloat(document.getElementById('product-retail-price').value);
-    data.regular_price = parseFloat(document.getElementById('product-regular-price').value);
+    data.wholesale_price = parseFloat(document.getElementById('product-wholesale-price').value) || 0;
+    data.retail_price = parseFloat(document.getElementById('product-retail-price').value) || 0;
+    data.regular_price = parseFloat(document.getElementById('product-regular-price').value) || 0;
     data.packages_in_stock = packagesInStock;
     data.pieces_in_stock = piecesInStock;
     
@@ -1168,8 +1177,17 @@ async function saveProduct(e) {
         });
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            let errorData;
+            try {
+                const text = await response.text();
+                console.error('Server response error:', text);
+                errorData = JSON.parse(text);
+            } catch (parseError) {
+                console.error('Failed to parse error response:', parseError);
+                errorData = { detail: `HTTP ${response.status}: ${response.statusText || 'Unknown error'}` };
+            }
+            console.error('Error data:', errorData);
+            throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Unknown error`);
         }
         
         const result = await response.json();
@@ -1180,6 +1198,7 @@ async function saveProduct(e) {
         alert('Mahsulot muvaffaqiyatli saqlandi!');
     } catch (error) {
         console.error('Save product error:', error);
+        console.error('Error stack:', error.stack);
         alert('Xatolik: ' + error.message);
     }
 }

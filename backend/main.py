@@ -170,6 +170,20 @@ async def upload_product_image(
 def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     """Create a new product"""
     try:
+        # Log received data for debugging
+        try:
+            product_dict = product.model_dump() if hasattr(product, 'model_dump') else product.dict()
+            print(f"Creating product with data: {product_dict}")
+        except Exception as log_error:
+            print(f"Error logging product data: {log_error}")
+        
+        # Validate pieces_per_package before creating
+        if product.pieces_per_package is None or product.pieces_per_package <= 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"pieces_per_package 0 dan katta bo'lishi kerak. Olingan qiymat: {product.pieces_per_package}"
+            )
+        
         created = ProductService.create_product(db, product)
         
         # Ensure computed properties are available
