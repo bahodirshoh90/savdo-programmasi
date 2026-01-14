@@ -211,7 +211,7 @@ async def upload_product_image(
 
 
 @app.post("/api/products", response_model=ProductResponse)
-def create_product(product: ProductCreate, db: Session = Depends(get_db)):
+async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     """Create a new product"""
     try:
         # Log received data for debugging
