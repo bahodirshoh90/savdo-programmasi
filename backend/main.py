@@ -335,6 +335,17 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         try:
             response_obj = ProductResponse.model_validate(product_dict)
             print(f"[CREATE PRODUCT] ProductResponse created successfully (v2)")
+            
+            # Broadcast new product via WebSocket
+            try:
+                await manager.broadcast({
+                    "type": "new_product",
+                    "data": product_dict
+                })
+                print(f"[CREATE PRODUCT] WebSocket broadcast sent for product {created.id}")
+            except Exception as ws_error:
+                print(f"[CREATE PRODUCT] WebSocket broadcast error: {ws_error}")
+            
             return response_obj
         except AttributeError:
             # Fallback to Pydantic v1
@@ -350,6 +361,17 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
                 try:
                     response_obj = ProductResponse(**product_dict)
                     print(f"[CREATE PRODUCT] ProductResponse created successfully (direct)")
+                    
+                    # Broadcast new product via WebSocket
+                    try:
+                        await manager.broadcast({
+                            "type": "new_product",
+                            "data": product_dict
+                        })
+                        print(f"[CREATE PRODUCT] WebSocket broadcast sent for product {created.id}")
+                    except Exception as ws_error:
+                        print(f"[CREATE PRODUCT] WebSocket broadcast error: {ws_error}")
+                    
                     return response_obj
                 except Exception as e2:
                     print(f"[CREATE PRODUCT] Direct construction failed: {e2}")
@@ -372,6 +394,17 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
         try:
             response_obj = ProductResponse(**product_dict)
             print(f"[CREATE PRODUCT] ProductResponse created on retry")
+            
+            # Broadcast new product via WebSocket
+            try:
+                await manager.broadcast({
+                    "type": "new_product",
+                    "data": product_dict
+                })
+                print(f"[CREATE PRODUCT] WebSocket broadcast sent for product {created.id}")
+            except Exception as ws_error:
+                print(f"[CREATE PRODUCT] WebSocket broadcast error: {ws_error}")
+            
             return response_obj
         except Exception as retry_error:
             print(f"[CREATE PRODUCT] Retry also failed: {retry_error}")

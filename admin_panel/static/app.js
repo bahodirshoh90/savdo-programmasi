@@ -3973,6 +3973,16 @@ function setupWebSocket() {
             if (activePage === 'sales') loadSales();
             if (activePage === 'dashboard') loadDashboard();
         }
+        if (data.type === 'new_product' || data.type === 'product_updated') {
+            // Refresh products page if active
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'products') {
+                loadProducts();
+            }
+            if (activePage === 'dashboard') {
+                loadDashboard();
+            }
+        }
         // Tasdiqlash yoki rad etish
         if (data.type === 'sale_approved' || data.type === 'sale_rejected') {
             const activePage = document.querySelector('.page.active').id;
