@@ -80,6 +80,35 @@ except Exception as e:
 
 app = FastAPI(title="Inventory & Sales Management API", version="1.0.0")
 
+# Exception handlers to ensure all errors return JSON
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Ensure HTTPException returns JSON"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "status_code": exc.status_code}
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors"""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "status_code": 422}
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle all other exceptions"""
+    import traceback
+    error_details = traceback.format_exc()
+    print(f"[GENERAL EXCEPTION] {str(exc)}")
+    print(f"[GENERAL EXCEPTION] Traceback:\n{error_details}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}", "status_code": 500}
+    )
+
 # CORS middleware - Allow all origins for development, specific for production
 app.add_middleware(
     CORSMiddleware,
