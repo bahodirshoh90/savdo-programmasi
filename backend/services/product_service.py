@@ -196,6 +196,13 @@ class ProductService:
             products = _sort_products(products, sort_by, sort_order)
             return products[:limit]
         
+        # Default sorting: omborda borlar birinchi (total_pieces > 0), keyin yo'qlari (total_pieces = 0)
+        if not sort_by:
+            products.sort(key=lambda p: (
+                0 if ((p.packages_in_stock or 0) * (p.pieces_per_package or 1) + (p.pieces_in_stock or 0)) > 0 else 1,
+                p.id
+            ))
+        
         return products
     
     @staticmethod

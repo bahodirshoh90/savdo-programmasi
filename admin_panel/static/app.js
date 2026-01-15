@@ -1310,12 +1310,14 @@ async function saveTotalPiecesInline(productId, inputElement) {
             displaySpan.textContent = newTotalPieces;
             
             // Update badge class based on stock level
+            // Only show warning/error badges for products that are actually low stock
             displaySpan.className = 'badge total-pieces-display';
             if (newTotalPieces <= 10) {
                 displaySpan.classList.add('badge-danger');
-            } else if (newTotalPieces <= 20) {
+            } else if (newTotalPieces > 10 && newTotalPieces <= 20) {
                 displaySpan.classList.add('badge-warning');
             }
+            // If > 20, no badge class (normal stock)
         }
         
         // Update packages and pieces cells too
