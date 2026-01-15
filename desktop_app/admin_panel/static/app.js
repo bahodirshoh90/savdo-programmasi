@@ -980,9 +980,14 @@ async function loadProducts() {
             const stockClass = totalPieces <= 10 ? 'badge-danger' : (totalPieces > 10 && totalPieces <= 20 ? 'badge-warning' : '');
             
             // Check if product has low stock (10 or less) - apply yellow background
-            if (product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 10) {
+            // Only show yellow background for products with stock > 0 and <= 10
+            if (totalPieces > 0 && totalPieces <= 10) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
+            } else {
+                // Clear background for products with normal stock
+                row.style.backgroundColor = '';
+                row.style.borderLeft = '';
             }
             
             // Check if product is slow moving (not sold for 30+ days)
