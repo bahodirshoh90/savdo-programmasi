@@ -113,7 +113,11 @@ class Product(Base):
     @property
     def total_pieces(self):
         """Calculate total pieces in stock"""
-        return (self.packages_in_stock * self.pieces_per_package) + self.pieces_in_stock
+        # Ensure pieces_per_package is at least 1 to avoid division by zero
+        pieces_per_package = self.pieces_per_package if self.pieces_per_package and self.pieces_per_package > 0 else 1
+        packages_in_stock = self.packages_in_stock if self.packages_in_stock is not None else 0
+        pieces_in_stock = self.pieces_in_stock if self.pieces_in_stock is not None else 0
+        return (packages_in_stock * pieces_per_package) + pieces_in_stock
     
     @property
     def total_value(self):
