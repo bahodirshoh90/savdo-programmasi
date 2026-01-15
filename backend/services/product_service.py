@@ -149,8 +149,8 @@ class ProductService:
             else:
                 query = query.order_by(order_col.desc())
         elif not sort_by:
-            # Default sorting will be done in Python after loading (SQLite limitation)
-            # Omborda borlar birinchi (total_pieces > 0), keyin yo'qlari (total_pieces = 0)
+            # Default: omborda borlar birinchi (stock desc), keyin yo'qlari
+            # We'll sort by stock in Python after loading
             query = query.order_by(Product.id.asc())
         
         # For low_stock_only filter, we need to load all products, filter, then paginate
@@ -188,13 +188,6 @@ class ProductService:
         if sort_by in ['stock', 'price_low', 'price_high']:
             products = _sort_products(products, sort_by, sort_order)
             return products[:limit]
-        
-        # Default sorting: omborda borlar birinchi (total_pieces > 0), keyin yo'qlari (total_pieces = 0)
-        if not sort_by:
-            products.sort(key=lambda p: (
-                0 if ((p.packages_in_stock or 0) * (p.pieces_per_package or 1) + (p.pieces_in_stock or 0)) > 0 else 1,
-                p.id
-            ))
         
         return products
     

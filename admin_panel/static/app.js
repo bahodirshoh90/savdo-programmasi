@@ -564,12 +564,17 @@ async function loadProducts() {
         const skip = (currentProductPage - 1) * productsPerPage;
         
         // Parse sort value (format: "field_order" e.g., "name_asc", "stock_desc")
+        // Default: omborda borlar birinchi (stock desc), keyin yo'qlari
         let sortBy = null;
         let sortOrder = 'desc';
         if (sortValue) {
             const [field, order] = sortValue.split('_');
             sortBy = field;
             sortOrder = order || 'desc';
+        } else {
+            // Default sorting: omborda borlar birinchi (stock desc)
+            sortBy = 'stock';
+            sortOrder = 'desc';
         }
         
         // Build URL with all filters
@@ -652,23 +657,23 @@ async function loadProducts() {
 
         products.forEach(product => {
             const row = document.createElement('tr');
-            // Only show warning/error badges for products that are actually low stock
-            // Red badge: <= 10 pieces (very low)
-            // Yellow badge: > 10 and <= 20 pieces (low)
-            // No badge: > 20 pieces (normal stock)
-            const totalPieces = product.total_pieces || 0;
-            const stockClass = totalPieces <= 10 ? 'badge-danger' : (totalPieces > 10 && totalPieces <= 20 ? 'badge-warning' : '');
+            // Calculate total_pieces correctly (same as backend)
+            const packagesInStock = product.packages_in_stock || 0;
+            const piecesInStock = product.pieces_in_stock || 0;
+            const piecesPerPackage = product.pieces_per_package && product.pieces_per_package > 0 ? product.pieces_per_package : 1;
+            const calculatedTotalPieces = (packagesInStock * piecesPerPackage) + piecesInStock;
+            // Use calculated value if product.total_pieces is not available or seems incorrect
+            const totalPieces = (product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces > 0) 
+                ? product.total_pieces 
+                : calculatedTotalPieces;
+            // Only show warning/error badge if stock is actually low (<= 10) or out (0)
+            const stockClass = totalPieces === 0 ? 'badge-danger' : totalPieces <= 10 ? 'badge-warning' : '';
             
             // Check if product is slow moving (not sold for 30+ days)
             const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
-            // Also check if product has low stock (10 or less) - apply yellow background
-            if (isSlowMoving || (totalPieces > 0 && totalPieces <= 10)) {
+            if (isSlowMoving) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
-            } else {
-                // Clear background for products with normal stock
-                row.style.backgroundColor = '';
-                row.style.borderLeft = '';
             }
             
             // Fix image URL to use absolute path
@@ -701,8 +706,8 @@ async function loadProducts() {
                 <td>${product.packages_in_stock || 0}</td>
                 <td>${product.pieces_in_stock || 0}</td>
                 <td class="total-pieces-cell" data-product-id="${product.id}" data-pieces-per-package="${product.pieces_per_package}" style="cursor: pointer; position: relative;">
-                    <span class="badge ${stockClass} total-pieces-display">${product.total_pieces || 0}</span>
-                    <input type="number" class="total-pieces-input" value="${product.total_pieces || 0}" min="0" 
+                    <span class="badge ${stockClass} total-pieces-display">${totalPieces}</span>
+                    <input type="number" class="total-pieces-input" value="${totalPieces}" min="0" 
                            style="display: none; width: 80px; padding: 2px 4px; border: 2px solid #4f46e5; border-radius: 4px; font-size: 0.875rem;"
                            onblur="saveTotalPiecesInline(${product.id}, this)" 
                            onkeypress="if(event.key==='Enter') { this.blur(); }">
@@ -817,8 +822,17 @@ async function loadProducts() {
             loadProducts();
         });
         
-        // Show low stock warning
-        const lowStockProducts = products.filter(p => p.total_pieces <= 10);
+        // Show low stock warning (calculate total_pieces correctly)
+        const lowStockProducts = products.filter(p => {
+            const packagesInStock = p.packages_in_stock || 0;
+            const piecesInStock = p.pieces_in_stock || 0;
+            const piecesPerPackage = p.pieces_per_package && p.pieces_per_package > 0 ? p.pieces_per_package : 1;
+            const calculatedTotalPieces = (packagesInStock * piecesPerPackage) + piecesInStock;
+            const totalPieces = (p.total_pieces !== undefined && p.total_pieces !== null && p.total_pieces > 0) 
+                ? p.total_pieces 
+                : calculatedTotalPieces;
+            return totalPieces <= 10;
+        });
         if (lowStockProducts.length > 0 && stockFilter === 'all') {
             showLowStockWarning(lowStockProducts.length);
         } else {
@@ -1315,14 +1329,12 @@ async function saveTotalPiecesInline(productId, inputElement) {
             displaySpan.textContent = newTotalPieces;
             
             // Update badge class based on stock level
-            // Only show warning/error badges for products that are actually low stock
             displaySpan.className = 'badge total-pieces-display';
             if (newTotalPieces <= 10) {
                 displaySpan.classList.add('badge-danger');
-            } else if (newTotalPieces > 10 && newTotalPieces <= 20) {
+            } else if (newTotalPieces <= 20) {
                 displaySpan.classList.add('badge-warning');
             }
-            // If > 20, no badge class (normal stock)
         }
         
         // Update packages and pieces cells too
