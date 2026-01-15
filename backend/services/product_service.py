@@ -182,11 +182,18 @@ class ProductService:
             return filtered_products[skip:skip + limit]
         
         # For normal queries, load products first
-        products = query.offset(skip).limit(limit * 2 if sort_by in ['stock', 'price_low', 'price_high'] else limit).all()
+        # If default sorting (no sort_by), we need to load more to sort by stock
+        load_limit = limit * 2 if (sort_by in ['stock', 'price_low', 'price_high'] or not sort_by) else limit
+        products = query.offset(skip).limit(load_limit).all()
         
         # Apply custom sorting if needed (for stock and price sorting)
         if sort_by in ['stock', 'price_low', 'price_high']:
             products = _sort_products(products, sort_by, sort_order)
+            return products[:limit]
+        
+        # Default sorting: omborda borlar birinchi (stock desc), keyin yo'qlari
+        if not sort_by:
+            products = _sort_products(products, 'stock', 'desc')
             return products[:limit]
         
         return products
