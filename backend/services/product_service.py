@@ -14,7 +14,20 @@ def _sort_products(products: List[Product], sort_by: str, sort_order: str = 'des
     
     if sort_by == 'stock':
         # Sort by total_pieces (omborda borlar birinchi)
-        products.sort(key=lambda p: (p.packages_in_stock or 0) * (p.pieces_per_package or 1) + (p.pieces_in_stock or 0), reverse=reverse)
+        # Calculate total_pieces correctly
+        def get_total_pieces(p):
+            pieces_per_package = p.pieces_per_package if p.pieces_per_package and p.pieces_per_package > 0 else 1
+            packages_in_stock = p.packages_in_stock if p.packages_in_stock is not None else 0
+            pieces_in_stock = p.pieces_in_stock if p.pieces_in_stock is not None else 0
+            return (packages_in_stock * pieces_per_package) + pieces_in_stock
+        
+        # Sort: omborda borlar birinchi (desc), keyin yo'qlari
+        # For desc: positive values first (sorted descending), then zeros
+        # For asc: zeros first, then positive values (sorted ascending)
+        if reverse:  # desc
+            products.sort(key=lambda p: (-get_total_pieces(p) if get_total_pieces(p) > 0 else float('inf')))
+        else:  # asc
+            products.sort(key=lambda p: (get_total_pieces(p) if get_total_pieces(p) > 0 else -1))
     elif sort_by == 'price_low':
         # Sort by minimum price
         products.sort(key=lambda p: min(
