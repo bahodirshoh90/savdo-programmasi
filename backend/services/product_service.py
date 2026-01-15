@@ -149,8 +149,16 @@ class ProductService:
             else:
                 query = query.order_by(order_col.desc())
         elif not sort_by:
-            # Default: all products (no specific order, but we'll order by id for consistency)
-            query = query.order_by(Product.id.asc())
+            # Default: omborda borlar birinchi (total_pieces > 0), keyin yo'qlari (total_pieces = 0)
+            # Use CASE expression to sort: products with stock first, then by ID
+            from sqlalchemy import case
+            query = query.order_by(
+                case(
+                    ((Product.packages_in_stock * func.coalesce(Product.pieces_per_package, 1) + func.coalesce(Product.pieces_in_stock, 0)) > 0, 0),
+                    else_=1
+                ),
+                Product.id.asc()
+            )
         
         # For low_stock_only filter, we need to load all products, filter, then paginate
         # This is because SQLite doesn't support complex calculations in WHERE clause

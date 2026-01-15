@@ -652,7 +652,12 @@ async function loadProducts() {
 
         products.forEach(product => {
             const row = document.createElement('tr');
-            const stockClass = product.total_pieces <= 10 ? 'badge-danger' : product.total_pieces <= 20 ? 'badge-warning' : '';
+            // Only show warning/error badges for products that are actually low stock
+            // Red badge: <= 10 pieces (very low)
+            // Yellow badge: > 10 and <= 20 pieces (low)
+            // No badge: > 20 pieces (normal stock)
+            const totalPieces = product.total_pieces || 0;
+            const stockClass = totalPieces <= 10 ? 'badge-danger' : (totalPieces > 10 && totalPieces <= 20 ? 'badge-warning' : '');
             
             // Check if product is slow moving (not sold for 30+ days)
             const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
