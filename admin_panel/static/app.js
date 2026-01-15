@@ -661,9 +661,14 @@ async function loadProducts() {
             
             // Check if product is slow moving (not sold for 30+ days)
             const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
-            if (isSlowMoving) {
+            // Also check if product has low stock (10 or less) - apply yellow background
+            if (isSlowMoving || (totalPieces > 0 && totalPieces <= 10)) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
+            } else {
+                // Clear background for products with normal stock
+                row.style.backgroundColor = '';
+                row.style.borderLeft = '';
             }
             
             // Fix image URL to use absolute path
