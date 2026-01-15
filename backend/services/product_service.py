@@ -149,8 +149,8 @@ class ProductService:
             else:
                 query = query.order_by(order_col.desc())
         elif not sort_by:
-            # Default: newest first
-            query = query.order_by(Product.id.desc())
+            # Default: all products (no specific order, but we'll order by id for consistency)
+            query = query.order_by(Product.id.asc())
         
         # For low_stock_only filter, we need to load all products, filter, then paginate
         # This is because SQLite doesn't support complex calculations in WHERE clause
