@@ -115,3 +115,33 @@ export const verifyToken = async () => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Sign up (Register) a new customer
+ */
+export const signup = async (customerData) => {
+  try {
+    // Create customer
+    const customerResponse = await api.post(API_ENDPOINTS.CUSTOMERS.CREATE, {
+      name: customerData.name,
+      phone: customerData.phone,
+      address: customerData.address || '',
+      customer_type: 'retail', // Default to retail
+    });
+
+    // After successful signup, try to login using phone or name
+    // For now, we'll just return the created customer
+    // The user will need to login separately or we can auto-login
+    console.log('Customer created:', customerResponse);
+
+    return {
+      success: true,
+      customer: customerResponse,
+      message: 'Ro\'yxatdan o\'tdingiz! Endi login qilishingiz mumkin.',
+    };
+  } catch (error) {
+    console.error('Signup error:', error);
+    const errorMessage = error.response?.data?.detail || error.message || 'Ro\'yxatdan o\'tishda xatolik';
+    return { success: false, error: errorMessage };
+  }
+};

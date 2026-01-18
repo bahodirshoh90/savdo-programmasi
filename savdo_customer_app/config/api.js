@@ -51,6 +51,7 @@ export const API_ENDPOINTS = {
   
   // Customers
   CUSTOMERS: {
+    CREATE: '/customers',
     GET: (id) => `/customers/${id}`,
     UPDATE: (id) => `/customers/${id}`,
   },
