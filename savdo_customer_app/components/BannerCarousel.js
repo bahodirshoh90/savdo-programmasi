@@ -18,16 +18,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_HEIGHT = 200;
 const ROTATION_INTERVAL = 2000; // 2 seconds
 
-// Default banners - will be replaced with backend data later
-const DEFAULT_BANNERS = [
-  { id: 1, image_url: 'https://via.placeholder.com/800x200/4CAF50/FFFFFF?text=Banner+1' },
-  { id: 2, image_url: 'https://via.placeholder.com/800x200/2196F3/FFFFFF?text=Banner+2' },
-  { id: 3, image_url: 'https://via.placeholder.com/800x200/FF9800/FFFFFF?text=Banner+3' },
-  { id: 4, image_url: 'https://via.placeholder.com/800x200/9C27B0/FFFFFF?text=Banner+4' },
-  { id: 5, image_url: 'https://via.placeholder.com/800x200/E91E63/FFFFFF?text=Banner+5' },
-];
-
-export default function BannerCarousel({ banners = DEFAULT_BANNERS, onBannerPress }) {
+export default function BannerCarousel({ banners = [], onBannerPress }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef(null);
   const intervalRef = useRef(null);
