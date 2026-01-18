@@ -105,11 +105,25 @@ export default function ProfileScreen({ navigation }) {
           text: 'Chiqish',
           style: 'destructive',
           onPress: async () => {
-            await logout();
-            // Navigation will be handled by App.js based on isAuthenticated state
-            // Force navigation reset if needed
-            if (navigation && navigation.navigate) {
-              navigation.navigate('Login');
+            try {
+              await logout();
+              // Use navigation reset to go back to login screen
+              if (navigation) {
+                // Navigate to login by resetting the navigation stack
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }
+            } catch (error) {
+              console.error('Logout error:', error);
+              // Still try to navigate even if logout fails
+              if (navigation) {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }
             }
           },
         },

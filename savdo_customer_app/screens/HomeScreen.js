@@ -1,7 +1,7 @@
 /**
  * Home Screen for Customer App
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +9,52 @@ import Colors from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import BannerCarousel from '../components/BannerCarousel';
+import api from '../services/api';
+import API_CONFIG from '../config/api';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { getTotalItems } = useCart();
+  const [banners, setBanners] = useState([]);
+
+  useEffect(() => {
+    loadBanners();
+  }, []);
+
+  const loadBanners = async () => {
+    try {
+      const response = await api.get('/api/banners?is_active=true');
+      const activeBanners = Array.isArray(response) ? response : [];
+      // Sort by display_order
+      activeBanners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      // Convert relative URLs to absolute URLs if needed
+      const bannersWithUrls = activeBanners.map(banner => ({
+        ...banner,
+        image_url: banner.image_url?.startsWith('http') 
+          ? banner.image_url 
+          : `${API_CONFIG.BASE_URL}${banner.image_url}`
+      }));
+      setBanners(bannersWithUrls);
+    } catch (error) {
+      console.error('Error loading banners:', error);
+      // If banners fail to load, just use empty array
+      setBanners([]);
+    }
+  };
 
   const handleBannerPress = (banner) => {
     // Handle banner click - can navigate to product or external URL
     console.log('Banner pressed:', banner);
-    // You can add navigation logic here based on banner.link or banner.product_id
+    if (banner.link_url) {
+      // Open external URL if provided
+      if (banner.link_url.startsWith('http')) {
+        // In web: window.open, in native: Linking.openURL
+        if (typeof window !== 'undefined' && window.open) {
+          window.open(banner.link_url, '_blank');
+        }
+      }
+    }
   };
 
   return (
@@ -31,11 +67,12 @@ export default function HomeScreen() {
       </View>
 
       {/* Advertisement Banners */}
-      {/* Banners will be loaded from backend later - for now show placeholder if needed */}
-      <BannerCarousel 
-        banners={[]} 
-        onBannerPress={handleBannerPress}
-      />
+      {banners.length > 0 && (
+        <BannerCarousel 
+          banners={banners} 
+          onBannerPress={handleBannerPress}
+        />
+      )}
 
       <View style={styles.quickActions}>
         <TouchableOpacity

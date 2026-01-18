@@ -1850,8 +1850,8 @@ async def process_order_payment(
     if not order:
         raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
     
-    if order.status != "pending":
-        raise HTTPException(status_code=400, detail="Faqat 'pending' holatdagi buyurtmalar uchun to'lov qabul qilinadi")
+    if order.status not in ["pending", "processing"]:
+        raise HTTPException(status_code=400, detail="Faqat 'pending' yoki 'processing' holatdagi buyurtmalar uchun to'lov qabul qilinadi")
     
     # Get seller info for audit
     seller = db.query(Seller).filter(Seller.id == order.seller_id).first()

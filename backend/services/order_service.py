@@ -254,6 +254,44 @@ class OrderService:
                     except Exception as e:
                         print(f"Warning: Failed to log audit: {e}")
         
+        # If order is being completed, create a sale record
+        if new_status == OrderStatus.COMPLETED and old_status != OrderStatus.COMPLETED:
+            try:
+                # Import SaleService and schemas
+                try:
+                    from .sale_service import SaleService
+                    from schemas import SaleCreate, SaleItemCreate
+                except ImportError:
+                    from sale_service import SaleService
+                    from schemas import SaleCreate, SaleItemCreate
+                
+                # Convert order items to sale items
+                sale_items = []
+                for order_item in db_order.items:
+                    sale_items.append(SaleItemCreate(
+                        product_id=order_item.product_id,
+                        requested_quantity=order_item.requested_quantity
+                    ))
+                
+                # Create sale from order
+                sale_create = SaleCreate(
+                    seller_id=db_order.seller_id,
+                    customer_id=db_order.customer_id,
+                    items=sale_items,
+                    payment_method="cash",  # Default to cash for orders
+                    payment_amount=db_order.total_amount,
+                    requires_admin_approval=False  # Orders are already approved
+                )
+                
+                # Create the sale
+                sale = SaleService.create_sale(db, sale_create)
+                print(f"Order #{order_id} completed - Sale #{sale.id} created automatically")
+            except Exception as e:
+                # Log error but don't fail the order status update
+                print(f"Warning: Failed to create sale from order #{order_id}: {e}")
+                import traceback
+                traceback.print_exc()
+        
         db_order.status = new_status
         db.commit()
         db.refresh(db_order)

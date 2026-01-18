@@ -266,6 +266,9 @@ function showPage(pageName) {
         case 'settings':
             loadSettings();
             break;
+        case 'banners':
+            loadBanners();
+            break;
     }
 }
 
@@ -2036,7 +2039,7 @@ async function loadOrders() {
                             <i class="fas fa-eye"></i>
                         </button>
                         ${order.status === 'pending' ? `<button class="action-btn action-btn-edit" onclick="updateOrderStatus(${order.id}, 'processing')" title="Qabul qilish">Qabul qilish</button>` : ''}
-                        ${order.status === 'pending' ? `<button class="action-btn action-btn-success" onclick="showOrderPaymentModal(${order.id}, ${order.total_amount || 0})" title="To'lov">To'lov</button>` : ''}
+                        ${['pending', 'processing'].includes(order.status) ? `<button class="action-btn action-btn-success" onclick="showOrderPaymentModal(${order.id}, ${order.total_amount || 0})" title="To'lov">To'lov</button>` : ''}
                         ${order.status === 'processing' ? `<button class="action-btn action-btn-success" onclick="updateOrderStatus(${order.id}, 'completed')" title="Tugallash">Tugallash</button>` : ''}
                         ${['pending', 'processing'].includes(order.status) ? `<button class="action-btn action-btn-delete" onclick="cancelOrder(${order.id})" title="Bekor qilish">Bekor</button>` : ''}
                         ${order.status === 'completed' ? `<button class="action-btn action-btn-delete" onclick="returnOrder(${order.id})" title="Qaytarish">Qaytarish</button>` : ''}
@@ -5073,5 +5076,215 @@ async function saveSettings(additionalData = {}) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = '<i class="fas fa-save"></i> Sozlamalarni Saqlash';
         }
+    }
+}
+
+// ==================== BANNERS ====================
+
+async function loadBanners() {
+    try {
+        const banners = await fetch(`${API_BASE}/banners`).then(r => r.json());
+        const tbody = document.getElementById('banners-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        if (!banners || banners.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Bannerlar topilmadi</td></tr>';
+            return;
+        }
+        
+        banners.forEach(banner => {
+            const row = document.createElement('tr');
+            const imageUrl = banner.image_url ? (banner.image_url.startsWith('http') ? banner.image_url : `${window.location.origin}${banner.image_url}`) : '';
+            row.innerHTML = `
+                <td>${banner.id}</td>
+                <td>${escapeHtml(banner.title || '-')}</td>
+                <td>
+                    ${imageUrl ? `<img src="${imageUrl}" alt="Banner" style="max-width: 150px; max-height: 80px; object-fit: cover; border-radius: 4px;">` : '-'}
+                </td>
+                <td>${banner.link_url ? `<a href="${escapeHtml(banner.link_url)}" target="_blank" style="color: #4f46e5;">${escapeHtml(banner.link_url)}</a>` : '-'}</td>
+                <td>${banner.display_order}</td>
+                <td><span class="badge badge-${banner.is_active ? 'success' : 'danger'}">${banner.is_active ? 'Faol' : 'Nofaol'}</span></td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn action-btn-edit" onclick="editBanner(${banner.id})" title="Tahrirlash">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn action-btn-delete" onclick="deleteBanner(${banner.id})" title="O'chirish">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading banners:', error);
+        const tbody = document.getElementById('banners-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="color: red;">Xatolik yuz berdi: ' + (error.message || 'Noma\'lum xatolik') + '</td></tr>';
+        }
+    }
+}
+
+function showAddBannerModal() {
+    document.getElementById('banner-id').value = '';
+    document.getElementById('banner-modal-title').textContent = 'Yangi Banner';
+    document.getElementById('banner-title').value = '';
+    document.getElementById('banner-image-url').value = '';
+    document.getElementById('banner-link-url').value = '';
+    document.getElementById('banner-display-order').value = '0';
+    document.getElementById('banner-is-active').checked = true;
+    document.getElementById('banner-image-preview').innerHTML = '';
+    document.getElementById('banner-modal').style.display = 'block';
+}
+
+async function editBanner(id) {
+    try {
+        const banner = await fetch(`${API_BASE}/banners/${id}`).then(r => r.json());
+        document.getElementById('banner-id').value = banner.id;
+        document.getElementById('banner-modal-title').textContent = 'Bannerni Tahrirlash';
+        document.getElementById('banner-title').value = banner.title || '';
+        document.getElementById('banner-image-url').value = banner.image_url || '';
+        document.getElementById('banner-link-url').value = banner.link_url || '';
+        document.getElementById('banner-display-order').value = banner.display_order || 0;
+        document.getElementById('banner-is-active').checked = banner.is_active !== false;
+        
+        // Show preview if image URL exists
+        if (banner.image_url) {
+            const imageUrl = banner.image_url.startsWith('http') ? banner.image_url : `${window.location.origin}${banner.image_url}`;
+            document.getElementById('banner-image-preview').innerHTML = `
+                <img src="${imageUrl}" alt="Banner preview" style="max-width: 300px; max-height: 200px; border-radius: 4px; border: 1px solid #e2e8f0;">
+            `;
+        } else {
+            document.getElementById('banner-image-preview').innerHTML = '';
+        }
+        
+        document.getElementById('banner-modal').style.display = 'block';
+    } catch (error) {
+        console.error('Error loading banner:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+function handleBannerImagePreview(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('banner-image-preview').innerHTML = `
+                <img src="${e.target.result}" alt="Preview" style="max-width: 300px; max-height: 200px; border-radius: 4px; border: 1px solid #e2e8f0;">
+            `;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function saveBanner(event) {
+    event.preventDefault();
+    try {
+        const bannerId = document.getElementById('banner-id').value;
+        const title = document.getElementById('banner-title').value.trim();
+        let imageUrl = document.getElementById('banner-image-url').value.trim();
+        const linkUrl = document.getElementById('banner-link-url').value.trim();
+        const displayOrder = parseInt(document.getElementById('banner-display-order').value) || 0;
+        const isActive = document.getElementById('banner-is-active').checked;
+        
+        // Handle image file upload if selected
+        const imageFile = document.getElementById('banner-image-file').files[0];
+        if (imageFile && bannerId) {
+            // Upload image for existing banner
+            const formData = new FormData();
+            formData.append('file', imageFile);
+            
+            const sellerId = localStorage.getItem('admin_seller_id');
+            const headers = {
+                'Authorization': `Bearer ${currentAdminToken}`
+            };
+            if (sellerId) {
+                headers['X-Seller-ID'] = sellerId;
+            }
+            
+            const uploadResponse = await fetch(`${API_BASE}/banners/${bannerId}/upload-image`, {
+                method: 'POST',
+                headers: headers,
+                body: formData
+            });
+            
+            if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json();
+                imageUrl = uploadResult.url;
+            }
+        }
+        
+        // Save banner data
+        const bannerData = {
+            title: title || null,
+            image_url: imageUrl,
+            link_url: linkUrl || null,
+            display_order: displayOrder,
+            is_active: isActive
+        };
+        
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentAdminToken}`
+        };
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const url = bannerId ? `${API_BASE}/banners/${bannerId}` : `${API_BASE}/banners`;
+        const method = bannerId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: headers,
+            body: JSON.stringify(bannerData)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Bannerni saqlashda xatolik');
+        }
+        
+        showToast('Banner muvaffaqiyatli saqlandi!');
+        closeModal('banner-modal');
+        loadBanners();
+    } catch (error) {
+        console.error('Error saving banner:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteBanner(id) {
+    if (!confirm('Bannerni o\'chirishni xohlaysizmi?')) return;
+    
+    try {
+        const sellerId = localStorage.getItem('admin_seller_id');
+        const headers = {
+            'Authorization': `Bearer ${currentAdminToken}`
+        };
+        if (sellerId) {
+            headers['X-Seller-ID'] = sellerId;
+        }
+        
+        const response = await fetch(`${API_BASE}/banners/${id}`, {
+            method: 'DELETE',
+            headers: headers
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Bannerni o\'chirishda xatolik');
+        }
+        
+        showToast('Banner o\'chirildi');
+        loadBanners();
+    } catch (error) {
+        console.error('Error deleting banner:', error);
+        alert('Xatolik: ' + error.message);
     }
 }

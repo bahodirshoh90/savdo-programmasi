@@ -89,6 +89,9 @@
                 <a href="#" class="nav-item" data-page="audit-logs">
                     <i class="fas fa-history"></i> Audit Log
                 </a>
+                <a href="#" class="nav-item" data-page="banners">
+                    <i class="fas fa-image"></i> Bannerlar
+                </a>
                 <a href="#" class="nav-item" data-page="settings">
                     <i class="fas fa-cog"></i> Sozlamalar
                 </a>
@@ -656,6 +659,33 @@
                 <div id="audit-logs-pagination" class="pagination"></div>
             </div>
 
+            <!-- Banners Page -->
+            <div id="banners" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-image"></i> Bannerlar</h1>
+                    <button class="btn btn-primary" onclick="showAddBannerModal()">
+                        <i class="fas fa-plus"></i> Yangi Banner
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="banners-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Sarlavha</th>
+                                <th>Rasm</th>
+                                <th>Link</th>
+                                <th>Tartib</th>
+                                <th>Holat</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="banners-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Settings Page -->
             <div id="settings" class="page">
                 <h1><i class="fas fa-cog"></i> Sozlamalar</h1>
@@ -1140,6 +1170,51 @@
                 </div>
             </form>
         </div>
+        </div>
+    </div>
+
+    <!-- Banner Modal -->
+    <div id="banner-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('banner-modal')">&times;</span>
+            <h2 id="banner-modal-title">Yangi Banner</h2>
+            <form id="banner-form" onsubmit="saveBanner(event)">
+                <input type="hidden" id="banner-id">
+                <div class="form-group">
+                    <label>Sarlavha (ixtiyoriy)</label>
+                    <input type="text" id="banner-title" placeholder="Banner sarlavhasi">
+                </div>
+                <div class="form-group">
+                    <label>Rasm URL *</label>
+                    <input type="text" id="banner-image-url" placeholder="https://example.com/image.jpg" required>
+                    <small style="color: var(--text-light);">Yoki rasm fayl yuklang</small>
+                </div>
+                <div class="form-group">
+                    <label>Rasm fayl yuklash</label>
+                    <input type="file" id="banner-image-file" accept="image/*" onchange="handleBannerImagePreview(event)">
+                    <div id="banner-image-preview" style="margin-top: 0.5rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label>Link URL (ixtiyoriy)</label>
+                    <input type="text" id="banner-link-url" placeholder="https://example.com">
+                    <small style="color: var(--text-light);">Banner bosilganda ochiladigan havola</small>
+                </div>
+                <div class="form-group">
+                    <label>Tartib (ko'rsatish tartibi)</label>
+                    <input type="number" id="banner-display-order" min="0" value="0">
+                    <small style="color: var(--text-light);">Qancha kichik, shuncha yuqorida ko'rsatiladi</small>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="banner-is-active" checked style="margin-right: 0.5rem;">
+                        <span>Faol</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('banner-modal')">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
         </div>
     </div>
 
