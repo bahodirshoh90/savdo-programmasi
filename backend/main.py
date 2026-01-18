@@ -1396,24 +1396,28 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/api/auth/me")
 def get_current_user(
     seller: Optional[Seller] = Depends(get_seller_from_header),
-    x_customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
     db: Session = Depends(get_db)
 ):
     """Get current logged-in user info (seller or customer)"""
     # Try customer first if X-Customer-ID header is present
     if x_customer_id:
-        customer = db.query(Customer).filter(Customer.id == x_customer_id).first()
-        if customer:
-            return {
-                "id": customer.id,
-                "name": customer.name,
-                "username": customer.username,
-                "phone": customer.phone,
-                "address": customer.address,
-                "customer_type": customer.customer_type.value if customer.customer_type else None,
-                "debt_balance": customer.debt_balance or 0.0,
-                "user_type": "customer"
-            }
+        try:
+            customer_id_int = int(x_customer_id)
+            customer = db.query(Customer).filter(Customer.id == customer_id_int).first()
+            if customer:
+                return {
+                    "id": customer.id,
+                    "name": customer.name,
+                    "username": customer.username,
+                    "phone": customer.phone,
+                    "address": customer.address,
+                    "customer_type": customer.customer_type.value if customer.customer_type else None,
+                    "debt_balance": customer.debt_balance or 0.0,
+                    "user_type": "customer"
+                }
+        except (ValueError, TypeError) as e:
+            print(f"Error parsing customer_id from header: {e}")
     
     # Fallback to seller
     if seller:

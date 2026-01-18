@@ -73,7 +73,11 @@ apiClient.interceptors.request.use(
       
       const customerId = await AsyncStorage.getItem('customer_id');
       if (customerId) {
-        config.headers['X-Customer-ID'] = customerId;
+        // Convert to integer for backend compatibility
+        const customerIdInt = parseInt(customerId, 10);
+        if (!isNaN(customerIdInt)) {
+          config.headers['X-Customer-ID'] = customerIdInt.toString();
+        }
       }
     } catch (error) {
       console.error('Error getting token:', error);
