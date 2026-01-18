@@ -87,11 +87,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      // Token expired - clear auth
-      await tokenStorage.removeItem('customer_token');
-      await AsyncStorage.removeItem('customer_id');
-      await AsyncStorage.removeItem('customer_data');
+    // Only clear auth on 401 for non-auth endpoints (not /auth/me during initial check)
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/me')) {
+      // Token expired - clear auth (but don't clear during initial auth check)
+      try {
+        await tokenStorage.removeItem('customer_token');
+        await AsyncStorage.removeItem('customer_id');
+        await AsyncStorage.removeItem('customer_data');
+      } catch (clearError) {
+        console.warn('Error clearing auth data:', clearError);
+      }
     }
     return Promise.reject(error);
   }
