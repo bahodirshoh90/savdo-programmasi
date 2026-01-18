@@ -373,6 +373,30 @@ class PDFService:
                 Paragraph(f'{abs(excess):,.0f} so\'m', table_total_style)
             ])
         
+        # Show customer's total debt balance if exists
+        try:
+            customer_debt = None
+            if sale.customer:
+                customer_debt = getattr(sale.customer, 'debt_balance', None)
+                # Debug: Print customer debt info
+                print(f"[PDF RECEIPT] Customer ID: {sale.customer.id}, Debt Balance: {customer_debt}")
+            
+            if customer_debt and customer_debt > 0:
+                table_data.append([
+                    Paragraph('', table_total_style),
+                    Paragraph('MIJOZ QARZI:', table_total_style),
+                    Paragraph('', table_total_style),
+                    Paragraph('', table_total_style),
+                    Paragraph(f'{customer_debt:,.0f} so\'m', table_total_style)
+                ])
+                print(f"[PDF RECEIPT] Customer debt row added: {customer_debt:,.0f} so'm")
+            else:
+                print(f"[PDF RECEIPT] Customer debt not shown - customer: {sale.customer is not None}, debt: {customer_debt}")
+        except Exception as e:
+            print(f"[PDF RECEIPT] Error showing customer debt: {e}")
+            import traceback
+            traceback.print_exc()
+        
         total_start_row = separator_row + 1
         
         items_table = Table(table_data, colWidths=[12*mm, 85*mm, 28*mm, 32*mm, 33*mm])
