@@ -65,10 +65,20 @@ export default function CartScreen({ navigation }) {
           onPress: async () => {
             setIsSubmitting(true);
             try {
-              const orderItems = cartItems.map(item => ({
-                product_id: item.product.id,
-                requested_quantity: item.quantity,
-              }));
+              // Ensure items are in correct format for backend
+              const orderItems = cartItems
+                .filter(item => item.product && item.product.id && item.quantity && item.quantity > 0)
+                .map(item => ({
+                  product_id: parseInt(item.product.id, 10), // Ensure integer
+                  requested_quantity: parseInt(item.quantity, 10), // Ensure integer and > 0
+                }))
+                .filter(item => item.product_id > 0 && item.requested_quantity > 0); // Final validation
+              
+              if (orderItems.length === 0) {
+                Alert.alert('Xatolik', 'Buyurtma uchun mahsulot topilmadi.');
+                setIsSubmitting(false);
+                return;
+              }
 
               const orderData = {
                 items: orderItems,
