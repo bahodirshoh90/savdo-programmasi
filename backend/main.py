@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     CustomerCreate, CustomerUpdate, CustomerResponse,
@@ -30,7 +30,8 @@ from schemas import (
     OrderCreate, OrderResponse, OrderItemCreate,
     LocationUpdate, RoleCreate, RoleUpdate, RoleResponse, PermissionResponse,
     DebtHistoryResponse, LoginRequest, LoginResponse,
-    SettingsUpdate, SettingsResponse
+    SettingsUpdate, SettingsResponse,
+    BannerCreate, BannerUpdate, BannerResponse
 )
 from services import (
     ProductService, CustomerService, SaleService,
@@ -1786,10 +1787,37 @@ def get_orders_count(
     return {"count": count}
 
 
+@app.get("/api/orders/{order_id}", response_model=OrderResponse)
+def get_order(order_id: int, db: Session = Depends(get_db)):
+    """Get a specific order by ID"""
+    from sqlalchemy.orm import joinedload
+    from models import Order, OrderItem
+    
+    order = db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.seller),
+        joinedload(Order.items).joinedload(OrderItem.product)
+    ).filter(Order.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    return OrderService.order_to_response(order)
+
+
 @app.put("/api/orders/{order_id}/status")
-async def update_order_status(order_id: int, status_data: dict, db: Session = Depends(get_db)):
-    """Update order status (pending -> processing -> completed, or cancel/return)"""
-    status = status_data.get('status')
+async def update_order_status(
+    order_id: int, 
+    status: Optional[str] = None,
+    status_data: Optional[dict] = None,
+    db: Session = Depends(get_db)
+):
+    """Update order status (pending -> processing -> completed, or cancel/return)
+    Supports both query parameter (?status=processing) and request body ({"status": "processing"})
+    """
+    # Support both query parameter and body
+    if not status and status_data:
+        status = status_data.get('status')
     if not status:
         raise HTTPException(status_code=400, detail="status field is required")
     
@@ -2282,6 +2310,119 @@ async def serve_seller_static(file_path: str):
 uploads_base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(os.path.join(uploads_base_dir, "products"), exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_base_dir), name="uploads")
+
+
+# ==================== BANNERS API ====================
+
+@app.get("/api/banners", response_model=List[BannerResponse])
+def get_banners(is_active: Optional[bool] = None, db: Session = Depends(get_db)):
+    """Get all banners (optionally filtered by is_active)"""
+    query = db.query(Banner)
+    if is_active is not None:
+        query = query.filter(Banner.is_active == is_active)
+    banners = query.order_by(Banner.display_order.asc(), Banner.created_at.desc()).all()
+    return [BannerResponse.model_validate(banner) for banner in banners]
+
+
+@app.get("/api/banners/{banner_id}", response_model=BannerResponse)
+def get_banner(banner_id: int, db: Session = Depends(get_db)):
+    """Get a specific banner by ID"""
+    banner = db.query(Banner).filter(Banner.id == banner_id).first()
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return BannerResponse.model_validate(banner)
+
+
+@app.post("/api/banners", response_model=BannerResponse)
+def create_banner(
+    banner: BannerCreate,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Create a new banner (admin only)"""
+    db_banner = Banner(**banner.dict())
+    db.add(db_banner)
+    db.commit()
+    db.refresh(db_banner)
+    return BannerResponse.model_validate(db_banner)
+
+
+@app.put("/api/banners/{banner_id}", response_model=BannerResponse)
+def update_banner(
+    banner_id: int,
+    banner: BannerUpdate,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Update a banner (admin only)"""
+    db_banner = db.query(Banner).filter(Banner.id == banner_id).first()
+    if not db_banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    update_data = banner.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_banner, field, value)
+    
+    db.commit()
+    db.refresh(db_banner)
+    return BannerResponse.model_validate(db_banner)
+
+
+@app.delete("/api/banners/{banner_id}")
+def delete_banner(
+    banner_id: int,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Delete a banner (admin only)"""
+    db_banner = db.query(Banner).filter(Banner.id == banner_id).first()
+    if not db_banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    db.delete(db_banner)
+    db.commit()
+    return {"success": True, "message": "Banner deleted"}
+
+
+@app.post("/api/banners/{banner_id}/upload-image")
+async def upload_banner_image(
+    banner_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Upload banner image (admin only)"""
+    import uuid
+    from pathlib import Path
+    
+    # Verify banner exists
+    banner = db.query(Banner).filter(Banner.id == banner_id).first()
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    # Validate file type
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi (jpg, png, gif, webp)")
+    
+    # Generate unique filename
+    unique_filename = f"banner_{banner_id}_{uuid.uuid4()}{file_ext}"
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "banners")
+    os.makedirs(uploads_dir, exist_ok=True)
+    file_path = os.path.join(uploads_dir, unique_filename)
+    
+    # Save file
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+    
+    # Update banner image_url
+    image_url = f"/uploads/banners/{unique_filename}"
+    banner.image_url = image_url
+    db.commit()
+    
+    return {"url": image_url, "filename": unique_filename}
 
 
 # ==================== INITIALIZE ====================

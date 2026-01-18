@@ -490,3 +490,19 @@ class Settings(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+class Banner(Base):
+    """Advertisement banner model"""
+    __tablename__ = "banners"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=True)  # Banner sarlavhasi (ixtiyoriy)
+    image_url = Column(String(500), nullable=False)  # Rasm URL
+    link_url = Column(String(500), nullable=True)  # Link URL (ixtiyoriy)
+    is_active = Column(Boolean, nullable=False, default=True)  # Faollik holati
+    display_order = Column(Integer, nullable=False, default=0)  # Ko'rsatish tartibi
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+

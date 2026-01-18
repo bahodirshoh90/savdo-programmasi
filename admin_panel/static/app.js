@@ -2107,9 +2107,123 @@ function clearOrderFilters() {
 
 async function updateOrderStatus(id, status) {
     try {
-        await fetch(`${API_BASE}/orders/${id}/status?status=${status}`, { method: 'PUT' });
+        const response = await fetch(`${API_BASE}/orders/${id}/status?status=${encodeURIComponent(status)}`, { 
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: status })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Xatolik yuz berdi');
+        }
+        
+        showToast('Buyurtma holati yangilandi');
         loadOrders();
     } catch (error) {
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function viewOrder(orderId) {
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`);
+        if (!response.ok) {
+            throw new Error('Buyurtma topilmadi');
+        }
+        
+        const order = await response.json();
+        
+        // Create modal HTML
+        let itemsHtml = '';
+        if (order.items && order.items.length > 0) {
+            order.items.forEach(item => {
+                itemsHtml += `
+                    <tr>
+                        <td>${escapeHtml(item.product_name || 'Noma\'lum')}</td>
+                        <td>${item.requested_quantity || 0}</td>
+                        <td>${formatMoney(item.unit_price || 0)}</td>
+                        <td>${formatMoney(item.subtotal || 0)}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            itemsHtml = '<tr><td colspan="4" class="text-center">Mahsulotlar topilmadi</td></tr>';
+        }
+        
+        const modalHtml = `
+            <div id="order-detail-modal" class="modal" style="display: block;">
+                <div class="modal-content" style="max-width: 800px;">
+                    <span class="close" onclick="closeModal('order-detail-modal')">&times;</span>
+                    <h2>Buyurtma #${order.id}</h2>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <strong>Mijoz:</strong><br>
+                                ${escapeHtml(order.customer_name || 'Noma\'lum')}
+                            </div>
+                            <div>
+                                <strong>Sotuvchi:</strong><br>
+                                ${escapeHtml(order.seller_name || 'Noma\'lum')}
+                            </div>
+                            <div>
+                                <strong>Sana:</strong><br>
+                                ${formatDate(order.created_at)}
+                            </div>
+                            <div>
+                                <strong>Holat:</strong><br>
+                                <span class="badge badge-${getStatusBadgeClass(order.status)}">${getStatusText(order.status)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h3>Mahsulotlar</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
+                        <thead>
+                            <tr style="background: var(--primary-color); color: white;">
+                                <th style="padding: 0.75rem; text-align: left;">Mahsulot</th>
+                                <th style="padding: 0.75rem; text-align: right;">Miqdor</th>
+                                <th style="padding: 0.75rem; text-align: right;">Narx</th>
+                                <th style="padding: 0.75rem; text-align: right;">Jami</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+                    
+                    <div style="text-align: right; padding: 1rem; background: #f5f5f5; border-radius: 0.375rem; margin-bottom: 1rem;">
+                        <strong style="font-size: 1.2em;">Jami: ${formatMoney(order.total_amount || 0)}</strong>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('order-detail-modal')">Yopish</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('order-detail-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Close modal on background click
+        const modal = document.getElementById('order-detail-modal');
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal('order-detail-modal');
+            }
+        });
+    } catch (error) {
+        console.error('Error loading order:', error);
         alert('Xatolik: ' + error.message);
     }
 }

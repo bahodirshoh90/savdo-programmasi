@@ -71,17 +71,33 @@ export const createOrder = async (orderData) => {
       is_offline: false,
     };
 
-    console.log('[ORDERS] Creating order with payload:', JSON.stringify(orderPayload, null, 2));
+    console.log('[ORDERS] ===== CREATING ORDER =====');
+    console.log('[ORDERS] Payload:', JSON.stringify(orderPayload, null, 2));
     console.log('[ORDERS] API endpoint:', API_ENDPOINTS.ORDERS.CREATE);
     console.log('[ORDERS] Full URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.ORDERS.CREATE);
+    console.log('[ORDERS] Making POST request...');
     
-    // Use api.post directly (it's already exported from api.js)
-    const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
-    console.log('[ORDERS] Order creation response:', response);
-    console.log('[ORDERS] Response type:', typeof response);
-    console.log('[ORDERS] Response keys:', Object.keys(response || {}));
-    
-    return response;
+    try {
+      // Use api.post directly (it's already exported from api.js)
+      // api.post returns response.data directly (see api.js apiCall function)
+      console.log('[ORDERS] Making POST request to:', API_CONFIG.BASE_URL + API_ENDPOINTS.ORDERS.CREATE);
+      const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
+      console.log('[ORDERS] ===== ORDER CREATED SUCCESSFULLY =====');
+      console.log('[ORDERS] Response received:', response);
+      console.log('[ORDERS] Response type:', typeof response);
+      console.log('[ORDERS] Response keys:', Object.keys(response || {}));
+      console.log('[ORDERS] Response data:', JSON.stringify(response, null, 2));
+      
+      // api.post already returns response.data, so return directly
+      return response;
+    } catch (apiError) {
+      console.error('[ORDERS] ===== API CALL FAILED =====');
+      console.error('[ORDERS] API Error:', apiError);
+      console.error('[ORDERS] Error message:', apiError.message);
+      console.error('[ORDERS] Error response data:', apiError.response?.data);
+      console.error('[ORDERS] Error response status:', apiError.response?.status);
+      throw apiError;
+    }
   } catch (error) {
     console.error('[ORDERS] Error creating order:', error);
     console.error('[ORDERS] Error message:', error.message);

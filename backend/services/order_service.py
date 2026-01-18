@@ -27,14 +27,44 @@ class OrderService:
         Similar to sale but with order status tracking
         """
         # Verify seller and customer exist
-        seller = db.query(Seller).filter(Seller.id == order.seller_id).first()
+        # For orders from customer app, always use an admin seller
+        seller = None
+        # Try to find admin seller (seller with admin role or admin permissions)
+        admin_sellers = db.query(Seller).options(joinedload(Seller.role)).filter(
+            Seller.is_active == True
+        ).all()
+        
+        for s in admin_sellers:
+            # Check if seller has admin role
+            if s.role and s.role.name:
+                role_name_lower = s.role.name.lower()
+                if 'admin' in role_name_lower or 'direktor' in role_name_lower or 'director' in role_name_lower:
+                    seller = s
+                    order.seller_id = s.id
+                    break
+            
+            # Check if seller has admin permissions
+            if s.role and s.role.permissions:
+                for perm in s.role.permissions:
+                    if 'admin' in perm.code.lower():
+                        seller = s
+                        order.seller_id = s.id
+                        break
+                if seller:
+                    break
+        
+        # If no admin seller found, use first active seller as fallback
         if not seller:
-            # Try to get first active seller as fallback
             fallback_seller = db.query(Seller).filter(Seller.is_active == True).first()
             if not fallback_seller:
                 raise ValueError("Seller not found and no active sellers available")
             order.seller_id = fallback_seller.id
             seller = fallback_seller
+        
+        # If seller_id was provided, verify it exists (but still use admin seller for customer app orders)
+        if order.seller_id and order.seller_id != seller.id:
+            # Log that we're overriding the provided seller_id
+            pass  # We'll use the admin seller we found
         
         customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
         if not customer:

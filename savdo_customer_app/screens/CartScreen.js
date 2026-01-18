@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import Colors from '../constants/colors';
 import { useCart } from '../context/CartContext';
@@ -33,6 +34,112 @@ export default function CartScreen({ navigation }) {
     }
     const imagePath = product.image_url.startsWith('/') ? product.image_url : `/${product.image_url}`;
     return `${baseUrl}${imagePath}`.replace('http://', 'https://');
+  };
+
+  // Extract order creation logic to a separate function
+  const executeOrderCreation = async () => {
+    const customerId = await AsyncStorage.getItem('customer_id');
+    console.log('[CART] Starting order creation process...');
+    setIsSubmitting(true);
+            try {
+              console.log('[CART] Step 1: Validating cart items...');
+              // Ensure items are in correct format for backend
+              const orderItems = cartItems
+                .filter(item => {
+                  const isValid = item.product && item.product.id && item.quantity && item.quantity > 0;
+                  if (!isValid) {
+                    console.warn('[CART] Invalid cart item filtered out:', item);
+                  }
+                  return isValid;
+                })
+                .map(item => {
+                  const productId = parseInt(item.product.id, 10);
+                  const quantity = parseInt(item.quantity, 10);
+                  console.log(`[CART] Processing item: product_id=${productId}, quantity=${quantity}`);
+                  return {
+                    product_id: productId,
+                    requested_quantity: quantity,
+                  };
+                })
+                .filter(item => {
+                  const isValid = item.product_id > 0 && item.requested_quantity > 0;
+                  if (!isValid) {
+                    console.warn('[CART] Item failed final validation:', item);
+                  }
+                  return isValid;
+                });
+              
+              console.log('[CART] Step 2: Validated order items:', JSON.stringify(orderItems, null, 2));
+              
+              if (orderItems.length === 0) {
+                console.error('[CART] No valid items found after validation');
+        Alert.alert('Xatolik', 'Buyurtma uchun mahsulot topilmadi.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const orderData = {
+      items: orderItems,
+    };
+
+    console.log('[CART] Step 3: Order data prepared:', JSON.stringify(orderData, null, 2));
+    console.log('[CART] Step 4: Customer ID from storage:', customerId);
+    console.log('[CART] Step 5: Calling createOrder service...');
+    
+      const result = await createOrder(orderData);
+      console.log('[CART] Step 6: Order created successfully!');
+      console.log('[CART] Order result:', JSON.stringify(result, null, 2));
+      
+      // Clear cart immediately after successful order creation
+      clearCart();
+      console.log('[CART] Cart cleared after successful order');
+      
+      Alert.alert(
+        'Muvaffaqiyatli',
+        `Buyurtma muvaffaqiyatli yaratildi!\n\nBuyurtma raqami: #${result.id || 'N/A'}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (navigation && navigation.navigate) {
+                navigation.navigate('Orders');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('[CART] ===== ORDER CREATION FAILED =====');
+      console.error('[CART] Error object:', error);
+      console.error('[CART] Error message:', error.message);
+      console.error('[CART] Error response:', error.response?.data);
+      console.error('[CART] Error status:', error.response?.status);
+      console.error('[CART] Error config URL:', error.config?.url);
+      console.error('[CART] Error config method:', error.config?.method);
+      console.error('[CART] Error config data:', error.config?.data);
+      console.error('[CART] Full error stringified:', JSON.stringify(error, null, 2));
+      
+      let errorMessage = 'Buyurtma yaratishda xatolik';
+      
+      if (error.response?.data) {
+        const detail = error.response.data.detail || error.response.data.message || error.response.data.error;
+        if (typeof detail === 'string') {
+          errorMessage = detail;
+        } else if (Array.isArray(detail)) {
+          errorMessage = detail.map(d => d.msg || d.message).join(', ');
+        } else {
+          errorMessage = JSON.stringify(detail);
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Vaqt tugadi. Internetni tekshiring va qayta urinib ko\'ring.';
+      }
+      
+      Alert.alert('Xatolik', errorMessage);
+    } finally {
+    setIsSubmitting(false);
+  }
   };
 
   const handleCheckout = async () => {
@@ -61,88 +168,45 @@ export default function CartScreen({ navigation }) {
     }
 
     console.log('[CART] Showing confirmation alert');
-    Alert.alert(
-      'Buyurtma berish',
-      `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`,
-      [
-        { text: 'Bekor qilish', style: 'cancel', onPress: () => console.log('[CART] Order cancelled by user') },
-        {
-          text: 'Tasdiqlash',
-          onPress: async () => {
-            console.log('[CART] User confirmed order');
-            setIsSubmitting(true);
-            try {
-              // Ensure items are in correct format for backend
-              const orderItems = cartItems
-                .filter(item => item.product && item.product.id && item.quantity && item.quantity > 0)
-                .map(item => ({
-                  product_id: parseInt(item.product.id, 10), // Ensure integer
-                  requested_quantity: parseInt(item.quantity, 10), // Ensure integer and > 0
-                }))
-                .filter(item => item.product_id > 0 && item.requested_quantity > 0); // Final validation
-              
-              if (orderItems.length === 0) {
-                Alert.alert('Xatolik', 'Buyurtma uchun mahsulot topilmadi.');
-                setIsSubmitting(false);
-                return;
-              }
-
-              const orderData = {
-                items: orderItems,
-              };
-
-              console.log('[CART] Creating order with data:', JSON.stringify(orderData, null, 2));
-              console.log('[CART] Customer ID:', customerId);
-              
-              const result = await createOrder(orderData);
-              console.log('[CART] Order created successfully:', result);
-              
-              Alert.alert(
-                'Muvaffaqiyatli',
-                `Buyurtma muvaffaqiyatli yaratildi!\n\nBuyurtma raqami: #${result.id || 'N/A'}`,
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      clearCart();
-                      if (navigation && navigation.navigate) {
-                        navigation.navigate('Orders');
-                      }
-                    },
-                  },
-                ]
-              );
-            } catch (error) {
-              console.error('[CART] Order creation error:', error);
-              console.error('[CART] Error response:', error.response?.data);
-              console.error('[CART] Error status:', error.response?.status);
-              console.error('[CART] Full error:', JSON.stringify(error, null, 2));
-              
-              let errorMessage = 'Buyurtma yaratishda xatolik';
-              
-              if (error.response?.data) {
-                const detail = error.response.data.detail || error.response.data.message || error.response.data.error;
-                if (typeof detail === 'string') {
-                  errorMessage = detail;
-                } else if (Array.isArray(detail)) {
-                  errorMessage = detail.map(d => d.msg || d.message).join(', ');
-                } else {
-                  errorMessage = JSON.stringify(detail);
-                }
-              } else if (error.message) {
-                errorMessage = error.message;
-              } else if (error.code === 'ECONNABORTED') {
-                errorMessage = 'Vaqt tugadi. Internetni tekshiring va qayta urinib ko\'ring.';
-              }
-              
-              Alert.alert('Xatolik', errorMessage);
-            } finally {
+    console.log('[CART] Total amount:', getTotalAmount());
+    console.log('[CART] Cart items for order:', JSON.stringify(cartItems.map(item => ({
+      product_id: item.product?.id,
+      quantity: item.quantity,
+      product_name: item.product?.name
+    })), null, 2));
+    
+    // Use window.confirm on web for better compatibility
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`
+      );
+      if (confirmed) {
+        console.log('[CART] User confirmed via window.confirm');
+        await executeOrderCreation();
+      } else {
+        console.log('[CART] Order cancelled by user (web)');
+      }
+    } else {
+      // Use Alert.alert on native platforms
+      Alert.alert(
+        'Buyurtma berish',
+        `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`,
+        [
+          { 
+            text: 'Bekor qilish', 
+            style: 'cancel', 
+            onPress: () => {
+              console.log('[CART] Order cancelled by user');
               setIsSubmitting(false);
             }
           },
-        },
-      ]
-    );
+          {
+            text: 'Tasdiqlash',
+            onPress: () => executeOrderCreation(),
+          },
+        ]
+      );
+    }
   };
 
   if (cartItems.length === 0) {
