@@ -4,22 +4,55 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Configure asset extensions to exclude .ico files and x-icon MIME types
+// Configure asset extensions to exclude .ico files
 if (config.resolver && config.resolver.assetExts) {
   config.resolver.assetExts = config.resolver.assetExts.filter(ext => ext !== 'ico');
 }
 
-// Exclude problematic image types
-if (config.resolver && config.resolver.sourceExts) {
-  config.resolver.sourceExts = [...config.resolver.sourceExts, 'jsx', 'js', 'ts', 'tsx', 'json'];
+// Custom transformer to skip .ico files
+const originalTransform = config.transformer?.transform;
+if (originalTransform) {
+  config.transformer.transform = async (params) => {
+    // Skip .ico files
+    if (params.filename && params.filename.endsWith('.ico')) {
+      return {
+        output: [
+          {
+            type: 'js',
+            data: {
+              code: 'module.exports = null;',
+              map: null,
+            },
+          },
+        ],
+      };
+    }
+    return originalTransform(params);
+  };
 }
 
-// Disable Jimp for .ico files
-config.transformer = {
-  ...config.transformer,
-  assetPlugins: (config.transformer?.assetPlugins || []).filter(
-    (plugin) => !plugin.includes('jimp')
-  ),
-};
+// Custom resolver to skip .ico files
+const originalResolveRequest = config.resolver?.resolveRequest;
+if (originalResolveRequest) {
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    // Skip .ico files
+    if (moduleName && moduleName.endsWith('.ico')) {
+      return {
+        type: 'empty',
+      };
+    }
+    return originalResolveRequest(context, moduleName, platform);
+  };
+} else {
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    // Skip .ico files
+    if (moduleName && moduleName.endsWith('.ico')) {
+      return {
+        type: 'empty',
+      };
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  };
+}
 
 module.exports = config;

@@ -26,7 +26,6 @@
       "package": "com.savdo.customerapp"
     },
     "web": {
-      "favicon": "./assets/icon.png",
       "bundler": "metro"
     }
   }
