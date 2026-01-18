@@ -24,7 +24,7 @@ export default function HomeScreen() {
 
   const loadBanners = async () => {
     try {
-      const response = await api.get('/api/banners?is_active=true');
+      const response = await api.get('/banners?is_active=true');
       const activeBanners = Array.isArray(response) ? response : [];
       // Sort by display_order
       activeBanners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
