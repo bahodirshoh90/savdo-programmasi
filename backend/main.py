@@ -1774,8 +1774,25 @@ def get_orders(
     db: Session = Depends(get_db)
 ):
     """Get all orders (can filter by status, seller_id, or customer_id)"""
-    orders = OrderService.get_orders(db, status=status, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
-    return [OrderService.order_to_response(order) for order in orders]
+    try:
+        orders = OrderService.get_orders(db, status=status, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
+        result = []
+        for order in orders:
+            try:
+                order_response = OrderService.order_to_response(order)
+                result.append(OrderResponse.model_validate(order_response))
+            except Exception as e:
+                print(f"Error converting order {order.id if order else 'unknown'} to response: {e}")
+                import traceback
+                traceback.print_exc()
+                # Skip this order instead of failing completely
+                continue
+        return result
+    except Exception as e:
+        print(f"Error in get_orders endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Xatolik: {str(e)}")
 
 
 @app.get("/api/orders/count")

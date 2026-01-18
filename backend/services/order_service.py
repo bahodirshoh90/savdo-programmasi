@@ -340,13 +340,18 @@ class OrderService:
         except AttributeError:
             pass
         
+        # Handle status enum conversion
+        status_value = order.status
+        if hasattr(status_value, 'value'):
+            status_value = status_value.value
+        
         return {
             "id": order.id,
             "seller_id": order.seller_id,
             "customer_id": order.customer_id,
             "customer_name": customer_name,
             "seller_name": seller_name,
-            "status": order.status,
+            "status": status_value,
             "total_amount": order.total_amount,
             "items": items_data,
             "is_offline": order.is_offline,
