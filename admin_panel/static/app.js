@@ -1083,8 +1083,12 @@ async function handleProductImageUpload(event) {
     formData.append('file', file);
     
     try {
+        // Get auth headers including X-Seller-ID
+        const headers = getAuthHeaders();
+        // Don't set Content-Type for FormData - browser will set it with boundary
         const response = await fetch(`${API_BASE}/products/upload-image`, {
             method: 'POST',
+            headers: headers,
             body: formData
         });
         
