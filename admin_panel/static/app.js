@@ -1084,10 +1084,22 @@ async function handleProductImageUpload(event) {
             method: 'POST',
             body: formData
         });
+        
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`Server error: ${response.status} ${errorText}`);
+        }
+        
         const result = await response.json();
-        document.getElementById('product-image-url').value = result.url;
-        updateProductImagePreview(result.url);
+        
+        if (result.url) {
+            document.getElementById('product-image-url').value = result.url;
+            updateProductImagePreview(result.url);
+        } else {
+            throw new Error('Server response missing URL');
+        }
     } catch (error) {
+        console.error('Image upload error:', error);
         alert('Rasm yuklashda xatolik: ' + error.message);
     }
 }
@@ -1116,10 +1128,18 @@ function updateProductImagePreview(imageUrl) {
         img.style.cssText = 'max-width: 200px; max-height: 200px; border-radius: 4px; margin-top: 0.5rem; border: 1px solid var(--border-color);';
         img.onerror = function() {
             this.onerror = null;
-            const span = document.createElement('span');
-            span.style.color = 'red';
-            span.textContent = 'Rasm yuklanmadi';
-            this.parentElement.replaceChild(span, this);
+            const parent = this.parentElement;
+            if (parent) {
+                const span = document.createElement('span');
+                span.style.color = 'red';
+                span.textContent = 'Rasm yuklanmadi';
+                try {
+                    parent.replaceChild(span, this);
+                } catch (e) {
+                    // If replaceChild fails, just clear and show error
+                    parent.innerHTML = '<span style="color: red;">Rasm yuklanmadi</span>';
+                }
+            }
         };
         preview.innerHTML = '';
         preview.appendChild(img);
@@ -1142,7 +1162,12 @@ async function saveProduct(e) {
     e.preventDefault();
     const id = document.getElementById('product-id').value;
     const receivedDate = document.getElementById('product-received-date').value;
-    const imageUrl = document.getElementById('product-image-url').value.trim() || null;
+    let imageUrl = document.getElementById('product-image-url').value.trim();
+    
+    // Fix: Convert "undefined" string to null, and empty strings to null
+    if (!imageUrl || imageUrl === '' || imageUrl === 'undefined' || imageUrl === 'null') {
+        imageUrl = null;
+    }
     
     // Get location and trim it, set to null if empty
     const locationInput = document.getElementById('product-location');

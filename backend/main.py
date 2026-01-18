@@ -6,7 +6,7 @@ import os
 # Add services directory to path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'services'))
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Header, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -123,9 +123,15 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # CORS middleware - Allow all origins for development, specific for production
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# Get allowed origins from environment variable or use defaults
+import os
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    # Parse comma-separated list from environment
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+else:
+    # Default: production domain + localhost for development
+    allowed_origins = [
         "https://uztoysavdo.uz",
         "http://localhost:3000",
         "http://localhost:8000",
@@ -136,7 +142,11 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "capacitor://localhost",
         "ionic://localhost",
-    ],  # Production domains + localhost for development
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -157,13 +167,68 @@ def get_db():
 
 # ==================== PRODUCTS ====================
 
+@app.post("/api/products/upload-image")
+async def upload_product_image_temporary(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.create"))
+):
+    """Upload product image file (for new products - doesn't require product_id)"""
+    import os
+    import uuid
+    from pathlib import Path
+    
+    # Validate file type
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    
+    # If filename is empty, generate one based on content type
+    if not file.filename:
+        # Determine extension from content type
+        ext = ".jpg"  # default
+        if file.content_type == "image/png":
+            ext = ".png"
+        elif file.content_type == "image/gif":
+            ext = ".gif"
+        elif file.content_type == "image/webp":
+            ext = ".webp"
+        file.filename = f"upload_{uuid.uuid4()}{ext}"
+    
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi (jpg, png, gif, webp)")
+    
+    try:
+        # Generate unique filename
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "products")
+        os.makedirs(uploads_dir, exist_ok=True)
+        file_path = os.path.join(uploads_dir, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Return image URL (without updating product - will be saved when product is created)
+        image_url = f"/uploads/products/{unique_filename}"
+        
+        return {"url": image_url, "filename": unique_filename, "success": True}
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error uploading product image: {e}")
+        print(f"Traceback: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Rasm yuklashda xatolik: {str(e)}")
+
+
 @app.post("/api/products/{product_id}/upload-image")
 async def upload_product_image(
     product_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
 ):
-    """Upload product image file and update product"""
+    """Upload product image file and update existing product"""
     import os
     import uuid
     from pathlib import Path
@@ -175,8 +240,18 @@ async def upload_product_image(
     
     # Validate file type
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    
+    # If filename is empty, generate one based on content type
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Fayl nomi topilmadi")
+        # Determine extension from content type
+        ext = ".jpg"  # default
+        if file.content_type == "image/png":
+            ext = ".png"
+        elif file.content_type == "image/gif":
+            ext = ".gif"
+        elif file.content_type == "image/webp":
+            ext = ".webp"
+        file.filename = f"upload_{uuid.uuid4()}{ext}"
     
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
@@ -211,7 +286,11 @@ async def upload_product_image(
 
 
 @app.post("/api/products", response_model=ProductResponse)
-async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
+async def create_product(
+    product: ProductCreate, 
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.create"))
+):
     """Create a new product"""
     try:
         # Log received data for debugging
@@ -228,6 +307,16 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
             error_msg = f"pieces_per_package 0 dan katta bo'lishi kerak. Olingan qiymat: {product.pieces_per_package}"
             print(f"[CREATE PRODUCT] Validation error: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Validate prices are not negative
+        if product.cost_price is not None and product.cost_price < 0:
+            raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (cost_price)")
+        if product.wholesale_price is not None and product.wholesale_price < 0:
+            raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (wholesale_price)")
+        if product.retail_price is not None and product.retail_price < 0:
+            raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (retail_price)")
+        if product.regular_price is not None and product.regular_price < 0:
+            raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (regular_price)")
         
         print(f"[CREATE PRODUCT] Calling ProductService.create_product...")
         created = ProductService.create_product(db, product)
@@ -420,7 +509,7 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
 @app.get("/api/products", response_model=List[ProductResponse])
 def get_products(
     skip: int = 0, 
-    limit: int = 100,
+    limit: int = Query(100, le=1000, ge=1),
     search: Optional[str] = None,
     low_stock_only: bool = False,
     min_stock: int = 0,
@@ -429,7 +518,8 @@ def get_products(
     location: Optional[str] = None,
     sort_by: Optional[str] = None,
     sort_order: Optional[str] = 'desc',
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
 ):
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
@@ -584,8 +674,15 @@ def get_low_stock_products(min_stock: int = 10, db: Session = Depends(get_db)):
 
 
 @app.post("/api/products/bulk-delete")
-def bulk_delete_products(product_ids: List[int], db: Session = Depends(get_db)):
-    """Delete multiple products at once"""
+def bulk_delete_products(
+    product_ids: List[int], 
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.delete"))
+):
+    """Delete multiple products at once (requires products.delete permission)"""
+    if not product_ids:
+        raise HTTPException(status_code=400, detail="Mahsulot ID'lari ko'rsatilmagan")
+    
     deleted = 0
     for product_id in product_ids:
         if ProductService.delete_product(db, product_id):
@@ -694,7 +791,11 @@ def update_product(product_id: int, product: ProductUpdate, db: Session = Depend
 
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(
+    product_id: int, 
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.delete"))
+):
     """Delete a product"""
     success = ProductService.delete_product(db, product_id)
     if not success:
@@ -1083,7 +1184,12 @@ def update_settings(
 
 
 @app.post("/api/sellers/{seller_id}/upload-image")
-async def upload_seller_image(seller_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_seller_image(
+    seller_id: int, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.sellers"))
+):
     """Upload seller profile image"""
     import os
     import uuid
@@ -1096,6 +1202,18 @@ async def upload_seller_image(seller_id: int, file: UploadFile = File(...), db: 
     
     # Validate file type
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    
+    # If filename is empty, generate one based on content type
+    if not file.filename:
+        ext = ".jpg"  # default
+        if file.content_type == "image/png":
+            ext = ".png"
+        elif file.content_type == "image/gif":
+            ext = ".gif"
+        elif file.content_type == "image/webp":
+            ext = ".webp"
+        file.filename = f"seller_{seller_id}_{uuid.uuid4()}{ext}"
+    
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi (jpg, png, gif, webp)")
@@ -1131,6 +1249,20 @@ async def upload_logo(
     
     # Validate file type
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+    
+    # If filename is empty, generate one based on content type
+    if not file.filename:
+        ext = ".png"  # default for logo
+        if file.content_type == "image/jpeg" or file.content_type == "image/jpg":
+            ext = ".jpg"
+        elif file.content_type == "image/gif":
+            ext = ".gif"
+        elif file.content_type == "image/webp":
+            ext = ".webp"
+        elif file.content_type == "image/svg+xml":
+            ext = ".svg"
+        file.filename = f"logo_{uuid.uuid4()}{ext}"
+    
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi (jpg, png, gif, webp, svg)")

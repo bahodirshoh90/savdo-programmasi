@@ -972,22 +972,12 @@ async function loadProducts() {
         
         products.forEach(product => {
             const row = document.createElement('tr');
-            // Only show warning/error badges for products that are actually low stock
-            // Red badge: <= 10 pieces (very low)
-            // Yellow badge: > 10 and <= 20 pieces (low)
-            // No badge: > 20 pieces (normal stock)
-            const totalPieces = product.total_pieces || 0;
-            const stockClass = totalPieces <= 10 ? 'badge-danger' : (totalPieces > 10 && totalPieces <= 20 ? 'badge-warning' : '');
+            const stockClass = product.total_pieces <= 10 ? 'badge-danger' : product.total_pieces <= 20 ? 'badge-warning' : '';
             
             // Check if product has low stock (10 or less) - apply yellow background
-            // Only show yellow background for products with stock > 0 and <= 10
-            if (totalPieces > 0 && totalPieces <= 10) {
+            if (product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 10) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
-            } else {
-                // Clear background for products with normal stock
-                row.style.backgroundColor = '';
-                row.style.borderLeft = '';
             }
             
             // Check if product is slow moving (not sold for 30+ days)
@@ -1662,14 +1652,12 @@ async function saveTotalPiecesInline(productId, inputElement) {
             displaySpan.textContent = newTotalPieces;
             
             // Update badge class based on stock level
-            // Only show warning/error badges for products that are actually low stock
             displaySpan.className = 'badge total-pieces-display';
             if (newTotalPieces <= 10) {
                 displaySpan.classList.add('badge-danger');
-            } else if (newTotalPieces > 10 && newTotalPieces <= 20) {
+            } else if (newTotalPieces <= 20) {
                 displaySpan.classList.add('badge-warning');
             }
-            // If > 20, no badge class (normal stock)
         }
         
         // Update packages and pieces cells too
