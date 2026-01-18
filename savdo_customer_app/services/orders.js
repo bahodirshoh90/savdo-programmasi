@@ -1,7 +1,7 @@
 /**
  * Orders Service for Customer App
  */
-import api from './api';
+import api, { apiCall } from './api';
 import { API_ENDPOINTS } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -72,9 +72,13 @@ export const createOrder = async (orderData) => {
 
     console.log('[ORDERS] Creating order with payload:', JSON.stringify(orderPayload, null, 2));
     console.log('[ORDERS] API endpoint:', API_ENDPOINTS.ORDERS.CREATE);
+    console.log('[ORDERS] Full URL:', API_CONFIG.BASE_URL + API_ENDPOINTS.ORDERS.CREATE);
     
+    // Use api.post directly (it's already exported from api.js)
     const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
     console.log('[ORDERS] Order creation response:', response);
+    console.log('[ORDERS] Response type:', typeof response);
+    console.log('[ORDERS] Response keys:', Object.keys(response || {}));
     
     return response;
   } catch (error) {
