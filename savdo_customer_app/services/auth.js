@@ -103,8 +103,22 @@ export const login = async (username, password) => {
 
 export const logout = async () => {
   try {
+    // Get customer ID before removing it
+    const customerId = await AsyncStorage.getItem('customer_id');
+    
+    // Remove auth data
     await tokenStorage.removeItem('customer_token');
     await AsyncStorage.multiRemove(['customer_id', 'customer_data']);
+    
+    // Clear cart for this customer
+    if (customerId) {
+      try {
+        await AsyncStorage.removeItem(`customer_cart_${customerId}`);
+      } catch (cartError) {
+        console.warn('Error clearing cart on logout:', cartError);
+      }
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Logout error:', error);

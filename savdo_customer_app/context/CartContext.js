@@ -1,8 +1,9 @@
 /**
  * Cart Context for Customer App
  */
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -16,25 +17,54 @@ export const useCart = () => {
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
+  const { isAuthenticated } = useAuth();
+  const lastCustomerIdRef = useRef(null);
 
   useEffect(() => {
     loadCart();
   }, []);
 
+  // Reload cart when authentication state changes
+  useEffect(() => {
+    const checkCustomerChange = async () => {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (customerId !== lastCustomerIdRef.current) {
+        lastCustomerIdRef.current = customerId;
+        await loadCart();
+      } else if (!isAuthenticated && lastCustomerIdRef.current) {
+        // User logged out
+        lastCustomerIdRef.current = null;
+        setCartItems([]);
+      }
+    };
+    
+    checkCustomerChange();
+  }, [isAuthenticated]);
+
+  const getCartKey = async () => {
+    const customerId = await AsyncStorage.getItem('customer_id');
+    return customerId ? `customer_cart_${customerId}` : 'customer_cart';
+  };
+
   const loadCart = async () => {
     try {
-      const cartData = await AsyncStorage.getItem('customer_cart');
+      const cartKey = await getCartKey();
+      const cartData = await AsyncStorage.getItem(cartKey);
       if (cartData) {
         setCartItems(JSON.parse(cartData));
+      } else {
+        setCartItems([]);
       }
     } catch (error) {
       console.error('Error loading cart:', error);
+      setCartItems([]);
     }
   };
 
   const saveCart = async (items) => {
     try {
-      await AsyncStorage.setItem('customer_cart', JSON.stringify(items));
+      const cartKey = await getCartKey();
+      await AsyncStorage.setItem(cartKey, JSON.stringify(items));
     } catch (error) {
       console.error('Error saving cart:', error);
     }
@@ -87,7 +117,12 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = async () => {
     setCartItems([]);
-    await AsyncStorage.removeItem('customer_cart');
+    try {
+      const cartKey = await getCartKey();
+      await AsyncStorage.removeItem(cartKey);
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+    }
   };
 
   const getTotalItems = () => {
