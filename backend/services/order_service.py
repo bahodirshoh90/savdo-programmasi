@@ -121,10 +121,11 @@ class OrderService:
         db: Session,
         status: Optional[str] = None,
         seller_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[Order]:
-        """Get all orders"""
+        """Get all orders (can filter by status, seller_id, or customer_id)"""
         from sqlalchemy.orm import joinedload
         
         query = db.query(Order).options(
@@ -136,13 +137,16 @@ class OrderService:
             query = query.filter(Order.status == OrderStatus(status))
         if seller_id:
             query = query.filter(Order.seller_id == seller_id)
+        if customer_id:
+            query = query.filter(Order.customer_id == customer_id)
         return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def get_orders_count(
         db: Session,
         status: Optional[str] = None,
-        seller_id: Optional[int] = None
+        seller_id: Optional[int] = None,
+        customer_id: Optional[int] = None
     ) -> int:
         """Get total count of orders matching filters"""
         query = db.query(Order)
@@ -150,6 +154,8 @@ class OrderService:
             query = query.filter(Order.status == OrderStatus(status))
         if seller_id:
             query = query.filter(Order.seller_id == seller_id)
+        if customer_id:
+            query = query.filter(Order.customer_id == customer_id)
         return query.count()
     
     @staticmethod

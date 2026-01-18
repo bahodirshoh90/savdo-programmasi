@@ -1713,12 +1713,13 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
 def get_orders(
     status: Optional[str] = None,
     seller_id: Optional[int] = None,
+    customer_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Get all orders"""
-    orders = OrderService.get_orders(db, status=status, seller_id=seller_id, skip=skip, limit=limit)
+    """Get all orders (can filter by status, seller_id, or customer_id)"""
+    orders = OrderService.get_orders(db, status=status, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
     return [OrderService.order_to_response(order) for order in orders]
 
 
@@ -1726,10 +1727,11 @@ def get_orders(
 def get_orders_count(
     status: Optional[str] = None,
     seller_id: Optional[int] = None,
+    customer_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """Get total count of orders matching filters"""
-    count = OrderService.get_orders_count(db, status=status, seller_id=seller_id)
+    count = OrderService.get_orders_count(db, status=status, seller_id=seller_id, customer_id=customer_id)
     return {"count": count}
 
 
