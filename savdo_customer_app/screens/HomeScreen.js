@@ -8,11 +8,18 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import BannerCarousel from '../components/BannerCarousel';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { getTotalItems } = useCart();
+
+  const handleBannerPress = (banner) => {
+    // Handle banner click - can navigate to product or external URL
+    console.log('Banner pressed:', banner);
+    // You can add navigation logic here based on banner.link or banner.product_id
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -22,6 +29,12 @@ export default function HomeScreen() {
         </Text>
         <Text style={styles.subtitle}>Xush kelibsiz</Text>
       </View>
+
+      {/* Advertisement Banners */}
+      <BannerCarousel 
+        banners={[]} // Will be loaded from backend later
+        onBannerPress={handleBannerPress}
+      />
 
       <View style={styles.quickActions}>
         <TouchableOpacity

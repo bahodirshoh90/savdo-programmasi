@@ -99,6 +99,7 @@ export default function CartScreen({ navigation }) {
               console.error('[CART] Order creation error:', error);
               console.error('[CART] Error response:', error.response?.data);
               console.error('[CART] Error status:', error.response?.status);
+              console.error('[CART] Full error:', JSON.stringify(error, null, 2));
               
               let errorMessage = 'Buyurtma yaratishda xatolik';
               
@@ -113,6 +114,8 @@ export default function CartScreen({ navigation }) {
                 }
               } else if (error.message) {
                 errorMessage = error.message;
+              } else if (error.code === 'ECONNABORTED') {
+                errorMessage = 'Vaqt tugadi. Internetni tekshiring va qayta urinib ko\'ring.';
               }
               
               Alert.alert('Xatolik', errorMessage);
