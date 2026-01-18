@@ -1,13 +1,13 @@
 """
 Authentication Service
-Handles seller login, password hashing, and token generation
+Handles seller and customer login, password hashing, and token generation
 """
 import hashlib
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from models import Seller
+from models import Seller, Customer
 from auth import get_seller_permissions
 
 
@@ -79,6 +79,50 @@ class AuthService:
             "permissions": permissions,
             "role_id": seller.role_id,
             "role_name": seller.role.name if seller.role else None
+        }
+    
+    @staticmethod
+    def authenticate_customer(db: Session, username: str, password: str) -> Optional[Customer]:
+        """Authenticate customer by username and password"""
+        customer = db.query(Customer).filter(Customer.username == username).first()
+        
+        if not customer:
+            return None
+        
+        # Check if customer has password set
+        if not customer.password_hash:
+            return None
+        
+        # Verify password
+        if not AuthService.verify_password(password, customer.password_hash):
+            return None
+        
+        return customer
+    
+    @staticmethod
+    def login_customer(db: Session, username: str, password: str) -> Dict[str, Any]:
+        """Login customer and return token"""
+        customer = AuthService.authenticate_customer(db, username, password)
+        
+        if not customer:
+            return {
+                "success": False,
+                "message": "Noto'g'ri login yoki parol"
+            }
+        
+        # Generate token
+        token = AuthService.generate_token()
+        
+        return {
+            "success": True,
+            "customer_id": customer.id,
+            "customer_name": customer.name,
+            "token": token,
+            "user": {
+                "customer_id": customer.id,
+                "name": customer.name,
+                "phone": customer.phone,
+            }
         }
     
     @staticmethod

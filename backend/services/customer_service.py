@@ -13,7 +13,16 @@ class CustomerService:
     @staticmethod
     def create_customer(db: Session, customer: CustomerCreate) -> Customer:
         """Create a new customer"""
-        db_customer = Customer(**customer.dict())
+        from services.auth_service import AuthService
+        
+        customer_dict = customer.dict()
+        password = customer_dict.pop('password', None)
+        
+        # Hash password if provided
+        if password:
+            customer_dict['password_hash'] = AuthService.hash_password(password)
+        
+        db_customer = Customer(**customer_dict)
         db.add(db_customer)
         db.commit()
         db.refresh(db_customer)

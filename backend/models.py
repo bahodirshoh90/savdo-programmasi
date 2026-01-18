@@ -208,6 +208,10 @@ class Customer(Base):
     customer_type = Column(Enum(CustomerType), nullable=False, default=CustomerType.RETAIL)
     notes = Column(Text, nullable=True)
     
+    # Authentication fields
+    username = Column(String(100), nullable=True, unique=True, index=True)  # Login uchun username
+    password_hash = Column(String(255), nullable=True)  # Parol hash
+    
     # Debt management
     debt_balance = Column(Float, nullable=False, default=0.0)  # Joriy qarz balansi
     debt_limit = Column(Float, nullable=True)  # Qarz limiti (NULL = cheksiz)

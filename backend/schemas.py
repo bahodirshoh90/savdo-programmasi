@@ -78,7 +78,8 @@ class CustomerBase(BaseModel):
 
 
 class CustomerCreate(CustomerBase):
-    pass
+    username: Optional[str] = Field(None, min_length=3, max_length=100)  # Login uchun username
+    password: Optional[str] = Field(None, min_length=4)  # Parol (sign up uchun)
 
 
 class CustomerUpdate(BaseModel):

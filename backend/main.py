@@ -74,6 +74,18 @@ try:
         if 'image_url' not in sellers_columns:
             conn.execute(text("ALTER TABLE sellers ADD COLUMN image_url VARCHAR(500)"))
             conn.commit()
+        
+        # Migrate customers table to add username and password_hash columns if they don't exist
+        try:
+            customers_columns = [col['name'] for col in inspector.get_columns('customers')]
+            if 'username' not in customers_columns:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN username VARCHAR(100) UNIQUE"))
+                conn.commit()
+            if 'password_hash' not in customers_columns:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255)"))
+                conn.commit()
+        except Exception as e:
+            print(f"Warning: Could not migrate customers table: {e}")
 except Exception as e:
     print(f"Warning: Could not migrate database: {e}")
     # Continue anyway - the code will handle missing columns gracefully
@@ -1336,31 +1348,48 @@ def get_seller_sales_history(
 
 # ==================== AUTHENTICATION ====================
 
-@app.post("/api/auth/login", response_model=LoginResponse)
+@app.post("/api/auth/login")
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    """Login seller"""
-    result = AuthService.login(db, credentials.username, credentials.password)
+    """Login seller or customer (tries customer first, then seller)"""
+    # Try customer login first
+    customer_result = AuthService.login_customer(db, credentials.username, credentials.password)
     
-    # If login failed, return error response
-    if not result.get("success"):
-        return LoginResponse(
-            success=False,
-            seller_id=None,
-            seller_name=None,
-            token=None,
-            permissions=[],
-            message=result.get("message", "Noto'g'ri login yoki parol")
+    if customer_result.get("success"):
+        # Customer login successful
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "token": customer_result.get("token"),
+                "user": customer_result.get("user"),
+                "customer_id": customer_result.get("customer_id"),
+                "user_type": "customer"
+            }
         )
     
-    return LoginResponse(
-        success=result["success"],
-        seller_id=result.get("seller_id"),
-        seller_name=result.get("seller_name"),
-        token=result.get("token"),
-        permissions=result.get("permissions", []),
-        message=result.get("message"),
-        role_id=result.get("role_id"),
-        role_name=result.get("role_name")
+    # Try seller login if customer login failed
+    seller_result = AuthService.login(db, credentials.username, credentials.password)
+    
+    if seller_result.get("success"):
+        # Seller login successful
+        return LoginResponse(
+            success=seller_result["success"],
+            seller_id=seller_result.get("seller_id"),
+            seller_name=seller_result.get("seller_name"),
+            token=seller_result.get("token"),
+            permissions=seller_result.get("permissions", []),
+            message=seller_result.get("message"),
+            role_id=seller_result.get("role_id"),
+            role_name=seller_result.get("role_name")
+        )
+    
+    # Both failed
+    return JSONResponse(
+        status_code=401,
+        content={
+            "success": False,
+            "detail": "Noto'g'ri login yoki parol"
+        }
     )
 
 

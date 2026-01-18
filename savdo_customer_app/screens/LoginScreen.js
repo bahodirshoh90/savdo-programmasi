@@ -30,6 +30,8 @@ export default function LoginScreen({ navigation }) {
   const [signupName, setSignupName] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
   const [signupAddress, setSignupAddress] = useState('');
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
 
   const handleLogin = async () => {
@@ -67,31 +69,87 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
+    if (!signupUsername.trim()) {
+      Alert.alert('Xatolik', 'Login nomini kiriting');
+      return;
+    }
+
+    if (!signupPassword.trim() || signupPassword.length < 4) {
+      Alert.alert('Xatolik', 'Parolni kiriting (kamida 4 ta belgi)');
+      return;
+    }
+
     setIsSigningUp(true);
     try {
       const result = await authSignup({
         name: signupName.trim(),
         phone: signupPhone.trim(),
         address: signupAddress.trim() || '',
+        username: signupUsername.trim(),
+        password: signupPassword,
       });
 
       if (result.success) {
-        Alert.alert(
-          'Muvaffaqiyatli',
-          result.message || 'Ro\'yxatdan o\'tdingiz! Endi admin login orqali kirishingiz mumkin.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setShowSignup(false);
-                // Reset form
-                setSignupName('');
-                setSignupPhone('');
-                setSignupAddress('');
+        // Auto-login after successful signup
+        try {
+          const loginResult = await authLogin(signupUsername.trim(), signupPassword);
+          
+          if (loginResult.success) {
+            login(loginResult.user);
+            // Reset form and close modal
+            setShowSignup(false);
+            setSignupName('');
+            setSignupPhone('');
+            setSignupAddress('');
+            setSignupUsername('');
+            setSignupPassword('');
+            // Navigation will be handled by App.js based on auth state
+          } else {
+            Alert.alert(
+              'Muvaffaqiyatli',
+              'Ro\'yxatdan o\'tdingiz! Endi login qilishingiz mumkin.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    setShowSignup(false);
+                    // Reset form
+                    setSignupName('');
+                    setSignupPhone('');
+                    setSignupAddress('');
+                    setSignupUsername('');
+                    setSignupPassword('');
+                    // Set username and password in login form
+                    setUsername(signupUsername.trim());
+                    setPassword('');
+                  },
+                },
+              ]
+            );
+          }
+        } catch (loginError) {
+          console.error('Auto-login error:', loginError);
+          Alert.alert(
+            'Muvaffaqiyatli',
+            'Ro\'yxatdan o\'tdingiz! Endi login qilishingiz mumkin.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setShowSignup(false);
+                  // Reset form
+                  setSignupName('');
+                  setSignupPhone('');
+                  setSignupAddress('');
+                  setSignupUsername('');
+                  setSignupPassword('');
+                  // Set username in login form
+                  setUsername(signupUsername.trim());
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        }
       } else {
         Alert.alert('Xatolik', result.error || 'Ro\'yxatdan o\'tishda xatolik');
       }
@@ -196,6 +254,25 @@ export default function LoginScreen({ navigation }) {
                   value={signupPhone}
                   onChangeText={setSignupPhone}
                   keyboardType="phone-pad"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Login nomi *"
+                  value={signupUsername}
+                  onChangeText={setSignupUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Parol * (kamida 4 ta belgi)"
+                  value={signupPassword}
+                  onChangeText={setSignupPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
 
                 <TextInput

@@ -54,8 +54,31 @@ export const login = async (username, password) => {
       password,
     });
 
-    const { token, user } = response;
+    // Check if it's a customer login
+    if (response.user_type === 'customer') {
+      const { token, user, customer_id } = response;
 
+      // Store token
+      await tokenStorage.setItem('customer_token', token);
+
+      // Store user data (customer info)
+      if (customer_id) {
+        await AsyncStorage.setItem('customer_id', customer_id.toString());
+      }
+      if (user) {
+        await AsyncStorage.setItem('customer_data', JSON.stringify(user));
+      }
+
+      return { 
+        success: true, 
+        user: user || { customer_id, ...user },
+        token 
+      };
+    }
+
+    // Handle seller login (if needed in future)
+    const { token, user } = response;
+    
     // Store token
     await tokenStorage.setItem('customer_token', token);
 
@@ -121,23 +144,22 @@ export const verifyToken = async () => {
  */
 export const signup = async (customerData) => {
   try {
-    // Create customer
+    // Create customer with username and password
     const customerResponse = await api.post(API_ENDPOINTS.CUSTOMERS.CREATE, {
       name: customerData.name,
       phone: customerData.phone,
       address: customerData.address || '',
+      username: customerData.username,
+      password: customerData.password,
       customer_type: 'retail', // Default to retail
     });
 
-    // After successful signup, try to login using phone or name
-    // For now, we'll just return the created customer
-    // The user will need to login separately or we can auto-login
     console.log('Customer created:', customerResponse);
 
     return {
       success: true,
       customer: customerResponse,
-      message: 'Ro\'yxatdan o\'tdingiz! Endi login qilishingiz mumkin.',
+      message: 'Ro\'yxatdan o\'tdingiz!',
     };
   } catch (error) {
     console.error('Signup error:', error);
