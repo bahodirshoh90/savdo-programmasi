@@ -1086,6 +1086,23 @@ async function handleProductImageUpload(event) {
     try {
         // Get auth headers including X-Seller-ID
         const headers = getAuthHeaders();
+        
+        // Debug: Check if seller ID exists
+        const sellerId = localStorage.getItem('admin_seller_id');
+        console.log('Image upload - Seller ID from localStorage:', sellerId);
+        console.log('Image upload - Headers:', headers);
+        
+        // Ensure X-Seller-ID is set (fallback to currentAdminUser.id)
+        if (!headers['X-Seller-ID'] && currentAdminUser && currentAdminUser.id) {
+            headers['X-Seller-ID'] = currentAdminUser.id.toString();
+            console.log('Image upload - Using currentAdminUser.id as X-Seller-ID:', currentAdminUser.id);
+        }
+        
+        // If still no seller ID, show error
+        if (!headers['X-Seller-ID']) {
+            throw new Error('Seller ID topilmadi. Iltimos, qayta login qiling.');
+        }
+        
         // Don't set Content-Type for FormData - browser will set it with boundary
         const response = await fetch(`${API_BASE}/products/upload-image`, {
             method: 'POST',
