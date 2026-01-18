@@ -16,6 +16,7 @@ import { useCart } from '../context/CartContext';
 import CartItem from '../components/CartItem';
 import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
@@ -40,6 +41,13 @@ export default function CartScreen({ navigation }) {
       return;
     }
 
+    // Check if customer ID is available
+    const customerId = await AsyncStorage.getItem('customer_id');
+    if (!customerId) {
+      Alert.alert('Xatolik', 'Mijoz ma\'lumotlari topilmadi. Iltimos, qayta login qiling.');
+      return;
+    }
+
     Alert.alert(
       'Buyurtma berish',
       `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`,
@@ -59,7 +67,9 @@ export default function CartScreen({ navigation }) {
                 items: orderItems,
               };
 
+              console.log('Creating order with data:', orderData);
               const result = await createOrder(orderData);
+              console.log('Order created:', result);
               
               Alert.alert(
                 'Muvaffaqiyatli',
@@ -69,7 +79,9 @@ export default function CartScreen({ navigation }) {
                     text: 'OK',
                     onPress: () => {
                       clearCart();
-                      navigation.navigate('Orders');
+                      if (navigation && navigation.navigate) {
+                        navigation.navigate('Orders');
+                      }
                     },
                   },
                 ]
