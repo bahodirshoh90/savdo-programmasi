@@ -5128,7 +5128,7 @@ async function loadBanners() {
     }
 }
 
-function showAddBannerModal() {
+async function showAddBannerModal() {
     document.getElementById('banner-id').value = '';
     document.getElementById('banner-modal-title').textContent = 'Yangi Banner';
     document.getElementById('banner-title').value = '';
@@ -5137,6 +5137,11 @@ function showAddBannerModal() {
     document.getElementById('banner-display-order').value = '0';
     document.getElementById('banner-is-active').checked = true;
     document.getElementById('banner-image-preview').innerHTML = '';
+    document.getElementById('banner-product-select').value = '';
+    
+    // Load products for dropdown
+    await loadProductsForBanner();
+    
     document.getElementById('banner-modal').style.display = 'block';
 }
 
@@ -5150,6 +5155,20 @@ async function editBanner(id) {
         document.getElementById('banner-link-url').value = banner.link_url || '';
         document.getElementById('banner-display-order').value = banner.display_order || 0;
         document.getElementById('banner-is-active').checked = banner.is_active !== false;
+        
+        // Load products and check if link_url matches a product
+        await loadProductsForBanner();
+        
+        // Try to match link_url to a product
+        if (banner.link_url) {
+            const products = await fetch(`${API_BASE}/products?limit=1000`).then(r => r.json());
+            const matchedProduct = products.find(p => `/product/${p.id}` === banner.link_url);
+            if (matchedProduct) {
+                document.getElementById('banner-product-select').value = matchedProduct.id;
+            }
+        } else {
+            document.getElementById('banner-product-select').value = '';
+        }
         
         // Show preview if image URL exists
         if (banner.image_url) {
@@ -5256,6 +5275,42 @@ async function saveBanner(event) {
     } catch (error) {
         console.error('Error saving banner:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+async function loadProductsForBanner() {
+    try {
+        const products = await fetch(`${API_BASE}/products?limit=1000`).then(r => r.json());
+        const select = document.getElementById('banner-product-select');
+        if (!select) return;
+        
+        // Clear existing options except the first one
+        select.innerHTML = '<option value="">Mahsulot tanlash...</option>';
+        
+        // Add products to dropdown
+        products.forEach(product => {
+            const option = document.createElement('option');
+            option.value = product.id;
+            option.textContent = product.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading products for banner:', error);
+    }
+}
+
+function handleBannerProductSelect(event) {
+    const productId = event.target.value;
+    const linkUrlInput = document.getElementById('banner-link-url');
+    
+    if (productId) {
+        // Auto-fill link URL with product URL
+        linkUrlInput.value = `/product/${productId}`;
+    } else {
+        // Clear if no product selected
+        if (linkUrlInput.value.startsWith('/product/')) {
+            linkUrlInput.value = '';
+        }
     }
 }
 

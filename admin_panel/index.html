@@ -1195,8 +1195,15 @@
                     <div id="banner-image-preview" style="margin-top: 0.5rem;"></div>
                 </div>
                 <div class="form-group">
+                    <label>Mahsulot tanlash (ixtiyoriy)</label>
+                    <select id="banner-product-select" onchange="handleBannerProductSelect(event)">
+                        <option value="">Mahsulot tanlash...</option>
+                    </select>
+                    <small style="color: var(--text-light);">Mahsulot tanlanganda avtomatik URL yaratiladi</small>
+                </div>
+                <div class="form-group">
                     <label>Link URL (ixtiyoriy)</label>
-                    <input type="text" id="banner-link-url" placeholder="https://example.com">
+                    <input type="text" id="banner-link-url" placeholder="https://example.com yoki /product/123">
                     <small style="color: var(--text-light);">Banner bosilganda ochiladigan havola</small>
                 </div>
                 <div class="form-group">

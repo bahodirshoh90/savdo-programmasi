@@ -58,6 +58,7 @@ class ProductResponse(ProductBase):
     last_sold_date: Optional[datetime] = None  # Oxirgi sotilgan sana
     days_since_last_sale: Optional[int] = None  # Oxirgi sotilganidan beri kunlar
     is_slow_moving: Optional[bool] = None  # Uzoq vaqt sotilmagan (30+ kun)
+    product_url: Optional[str] = None  # Mahsulot URL'i (customer app uchun)
     created_at: datetime
     updated_at: datetime
     

@@ -425,6 +425,7 @@ async def create_product(
         "last_sold_date": last_sold_date,
         "days_since_last_sale": days_since_last_sale,
         "is_slow_moving": is_slow_moving,
+        "product_url": f"/product/{created.id}",  # Customer app uchun URL
         "created_at": created.created_at or now,
         "updated_at": created.updated_at or now
     }
@@ -569,6 +570,7 @@ def get_products(
                 "wholesale_price": max(0.0, p.wholesale_price or 0.0),
                 "retail_price": max(0.0, p.retail_price or 0.0),
                 "regular_price": max(0.0, p.regular_price or 0.0),
+                "product_url": f"/product/{p.id}",  # Customer app uchun URL
                 "packages_in_stock": max(0, p.packages_in_stock or 0),
                 "pieces_in_stock": max(0, p.pieces_in_stock or 0),
                 "total_pieces": p.total_pieces,
@@ -734,6 +736,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         "location": product.location,
         "pieces_per_package": product.pieces_per_package,
         "cost_price": max(0.0, product.cost_price or 0.0),  # Ensure cost_price is >= 0
+        "product_url": f"/product/{product.id}",  # Customer app uchun URL
         "wholesale_price": max(0.0, product.wholesale_price or 0.0),
         "retail_price": max(0.0, product.retail_price or 0.0),
         "regular_price": max(0.0, product.regular_price or 0.0),
