@@ -53,22 +53,36 @@ export const createOrder = async (orderData) => {
     
     const sellerId = await AsyncStorage.getItem('default_seller_id') || '1'; // Default seller ID
 
+    // Ensure items are properly formatted
+    const items = (orderData.items || []).map(item => ({
+      product_id: parseInt(item.product_id, 10),
+      requested_quantity: parseInt(item.requested_quantity, 10),
+    })).filter(item => item.product_id > 0 && item.requested_quantity > 0);
+
+    if (items.length === 0) {
+      throw new Error('Buyurtma uchun mahsulot topilmadi.');
+    }
+
     const orderPayload = {
       customer_id: parseInt(customerId, 10),
       seller_id: parseInt(sellerId, 10),
-      items: orderData.items,
+      items: items,
       is_offline: false,
     };
 
-    console.log('Creating order with payload:', orderPayload);
+    console.log('[ORDERS] Creating order with payload:', JSON.stringify(orderPayload, null, 2));
+    console.log('[ORDERS] API endpoint:', API_ENDPOINTS.ORDERS.CREATE);
     
     const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
-    console.log('Order creation response:', response);
+    console.log('[ORDERS] Order creation response:', response);
     
     return response;
   } catch (error) {
-    console.error('Error creating order:', error);
-    console.error('Error response:', error.response?.data);
+    console.error('[ORDERS] Error creating order:', error);
+    console.error('[ORDERS] Error message:', error.message);
+    console.error('[ORDERS] Error response:', error.response?.data);
+    console.error('[ORDERS] Error status:', error.response?.status);
+    console.error('[ORDERS] Error config:', error.config?.url);
     throw error;
   }
 };

@@ -31,8 +31,9 @@ export default function HomeScreen() {
       </View>
 
       {/* Advertisement Banners */}
+      {/* Banners will be loaded from backend later - for now show placeholder if needed */}
       <BannerCarousel 
-        banners={[]} // Will be loaded from backend later
+        banners={[]} 
         onBannerPress={handleBannerPress}
       />
 
