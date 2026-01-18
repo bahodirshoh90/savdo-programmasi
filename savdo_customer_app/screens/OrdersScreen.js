@@ -32,7 +32,10 @@ export default function OrdersScreen({ navigation }) {
       setOrders(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error('Error loading orders:', error);
-      Alert.alert('Xatolik', 'Buyurtmalarni yuklashda xatolik');
+      // Only show alert for non-Customer ID errors
+      if (error.message && !error.message.includes('Customer ID not found')) {
+        Alert.alert('Xatolik', 'Buyurtmalarni yuklashda xatolik');
+      }
       setOrders([]);
     } finally {
       setIsLoading(false);

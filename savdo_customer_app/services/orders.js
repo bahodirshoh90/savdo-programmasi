@@ -12,7 +12,8 @@ export const getOrders = async (status = null, skip = 0, limit = 100) => {
   try {
     const customerId = await AsyncStorage.getItem('customer_id');
     if (!customerId) {
-      throw new Error('Customer ID not found');
+      console.warn('Customer ID not found - returning empty orders list');
+      return []; // Return empty array instead of throwing error
     }
 
     let url = `${API_ENDPOINTS.ORDERS.LIST}?customer_id=${customerId}&skip=${skip}&limit=${limit}`;
@@ -22,7 +23,8 @@ export const getOrders = async (status = null, skip = 0, limit = 100) => {
     return Array.isArray(response) ? response : (response?.orders || []);
   } catch (error) {
     console.error('Error getting orders:', error);
-    throw error;
+    // Return empty array on error instead of throwing
+    return [];
   }
 };
 
