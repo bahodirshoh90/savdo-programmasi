@@ -678,7 +678,10 @@ async function loadProducts() {
             
             // Fix image URL to use absolute path
             let imageUrl = product.image_url;
-            if (imageUrl) {
+            // Fix: Remove 'undefined' or 'null' strings and empty values
+            if (!imageUrl || imageUrl === 'undefined' || imageUrl === 'null' || imageUrl.trim() === '') {
+                imageUrl = null;
+            } else {
                 if (imageUrl.startsWith('/uploads')) {
                     // Already correct path - add protocol and host for absolute URL
                     imageUrl = window.location.origin + imageUrl;
