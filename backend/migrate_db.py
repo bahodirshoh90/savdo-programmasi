@@ -129,6 +129,27 @@ def migrate_database():
         else:
             print("✓ debt_due_date already exists in customers")
         
+        # Check and add username and password_hash to customers table
+        if 'username' not in customer_columns:
+            print("Adding username column to customers table...")
+            cursor.execute("ALTER TABLE customers ADD COLUMN username VARCHAR(100)")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_username ON customers(username)")
+            print("✓ Added username to customers")
+        else:
+            print("✓ username already exists in customers")
+        
+        if 'password_hash' not in customer_columns:
+            print("Adding password_hash column to customers table...")
+            cursor.execute("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255)")
+            print("✓ Added password_hash to customers")
+        else:
+            print("✓ password_hash already exists in customers")
+            print("Adding debt_due_date column to customers table...")
+            cursor.execute("ALTER TABLE customers ADD COLUMN debt_due_date DATETIME")
+            print("✓ Added debt_due_date to customers")
+        else:
+            print("✓ debt_due_date already exists in customers")
+        
         # Check and create debt_history table
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='debt_history'")
         if not cursor.fetchone():
