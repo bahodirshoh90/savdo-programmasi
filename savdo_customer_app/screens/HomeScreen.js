@@ -18,7 +18,7 @@ export default function HomeScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          Salom, {user?.name || user?.username || 'Mijoz'}! 👋
+          Salom, {user?.name || 'Mijoz'}! 👋
         </Text>
         <Text style={styles.subtitle}>Xush kelibsiz</Text>
       </View>

@@ -48,6 +48,13 @@ export default function CartScreen({ navigation }) {
       return;
     }
 
+    // Validate cart items
+    const invalidItems = cartItems.filter(item => !item.product || !item.product.id || !item.quantity || item.quantity <= 0);
+    if (invalidItems.length > 0) {
+      Alert.alert('Xatolik', 'Savatchada noto\'g\'ri mahsulotlar mavjud. Iltimos, savatni tekshiring.');
+      return;
+    }
+
     Alert.alert(
       'Buyurtma berish',
       `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`,
@@ -67,13 +74,15 @@ export default function CartScreen({ navigation }) {
                 items: orderItems,
               };
 
-              console.log('Creating order with data:', orderData);
+              console.log('[CART] Creating order with data:', JSON.stringify(orderData, null, 2));
+              console.log('[CART] Customer ID:', customerId);
+              
               const result = await createOrder(orderData);
-              console.log('Order created:', result);
+              console.log('[CART] Order created successfully:', result);
               
               Alert.alert(
                 'Muvaffaqiyatli',
-                'Buyurtma muvaffaqiyatli yaratildi!',
+                `Buyurtma muvaffaqiyatli yaratildi!\n\nBuyurtma raqami: #${result.id || 'N/A'}`,
                 [
                   {
                     text: 'OK',
@@ -87,8 +96,25 @@ export default function CartScreen({ navigation }) {
                 ]
               );
             } catch (error) {
-              console.error('Order creation error:', error);
-              const errorMessage = error.response?.data?.detail || error.message || 'Buyurtma yaratishda xatolik';
+              console.error('[CART] Order creation error:', error);
+              console.error('[CART] Error response:', error.response?.data);
+              console.error('[CART] Error status:', error.response?.status);
+              
+              let errorMessage = 'Buyurtma yaratishda xatolik';
+              
+              if (error.response?.data) {
+                const detail = error.response.data.detail || error.response.data.message || error.response.data.error;
+                if (typeof detail === 'string') {
+                  errorMessage = detail;
+                } else if (Array.isArray(detail)) {
+                  errorMessage = detail.map(d => d.msg || d.message).join(', ');
+                } else {
+                  errorMessage = JSON.stringify(detail);
+                }
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
               Alert.alert('Xatolik', errorMessage);
             } finally {
               setIsSubmitting(false);

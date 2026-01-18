@@ -1,7 +1,7 @@
 /**
  * Profile Screen for Customer App
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import Colors from '../constants/colors';
 import api from '../services/api';
@@ -23,15 +24,18 @@ export default function ProfileScreen({ navigation }) {
   const [customerData, setCustomerData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     address: '',
   });
 
-  useEffect(() => {
-    loadCustomerData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadCustomerData();
+    }, [])
+  );
 
   const loadCustomerData = async () => {
     try {
@@ -53,17 +57,30 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleSave = async () => {
+    if (!formData.name.trim()) {
+      Alert.alert('Xatolik', 'Ismni kiriting');
+      return;
+    }
+
+    setIsSaving(true);
     try {
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
         Alert.alert('Xatolik', 'Mijoz ma\'lumotlari topilmadi. Iltimos, qayta login qiling.');
+        setIsSaving(false);
         return;
       }
 
       console.log('Updating customer with ID:', customerId);
       console.log('Form data:', formData);
       
-      const response = await api.put(API_ENDPOINTS.CUSTOMERS.UPDATE(customerId), formData);
+      const updateData = {
+        name: formData.name.trim(),
+        phone: formData.phone.trim() || null,
+        address: formData.address.trim() || null,
+      };
+      
+      const response = await api.put(API_ENDPOINTS.CUSTOMERS.UPDATE(customerId), updateData);
       console.log('Update response:', response);
       
       Alert.alert('Muvaffaqiyatli', 'Ma\'lumotlar yangilandi');
@@ -73,6 +90,8 @@ export default function ProfileScreen({ navigation }) {
       console.error('Error updating customer:', error);
       const errorMessage = error.response?.data?.detail || error.message || 'Ma\'lumotlarni yangilashda xatolik';
       Alert.alert('Xatolik', errorMessage);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -170,8 +189,16 @@ export default function ProfileScreen({ navigation }) {
             >
               <Text style={styles.cancelButtonText}>Bekor qilish</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Saqlash</Text>
+            <TouchableOpacity 
+              style={[styles.button, styles.saveButton, isSaving && styles.saveButtonDisabled]} 
+              onPress={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color={Colors.surface} />
+              ) : (
+                <Text style={styles.saveButtonText}>Saqlash</Text>
+              )}
             </TouchableOpacity>
           </View>
         ) : (
@@ -283,6 +310,9 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   cancelButton: {
     backgroundColor: Colors.border,

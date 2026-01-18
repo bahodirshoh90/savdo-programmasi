@@ -56,22 +56,27 @@ export const login = async (username, password) => {
 
     // Check if it's a customer login
     if (response.user_type === 'customer') {
-      const { token, user, customer_id } = response;
+      const { token, user, customer_id, customer_name } = response;
 
       // Store token
       await tokenStorage.setItem('customer_token', token);
 
-      // Store user data (customer info)
+      // Prepare user data
+      const userData = user || {
+        customer_id: customer_id,
+        name: customer_name || user?.name,
+        phone: user?.phone,
+      };
+
+      // Store user data
       if (customer_id) {
         await AsyncStorage.setItem('customer_id', customer_id.toString());
       }
-      if (user) {
-        await AsyncStorage.setItem('customer_data', JSON.stringify(user));
-      }
+      await AsyncStorage.setItem('customer_data', JSON.stringify(userData));
 
       return { 
         success: true, 
-        user: user || { customer_id, ...user },
+        user: userData,
         token 
       };
     }

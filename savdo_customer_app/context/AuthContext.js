@@ -64,7 +64,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = (userData) => {
-    setUser(userData);
+    // Ensure user data has required fields
+    const normalizedUser = {
+      customer_id: userData?.customer_id || userData?.id,
+      name: userData?.name || userData?.customer_name,
+      phone: userData?.phone,
+      ...userData,
+    };
+    setUser(normalizedUser);
     setIsAuthenticated(true);
   };
 
