@@ -1628,9 +1628,11 @@ async function loadCustomers() {
             const row = document.createElement('tr');
             const debtBalance = customer.debt_balance || 0;
             const debtClass = debtBalance > 0 ? 'badge-danger' : 'badge-success';
+            const usernameDisplay = customer.username ? `<span style="color: #10b981; font-weight: 500;">${escapeHtml(customer.username)}</span>` : '<span style="color: #f59e0b;">Login yo\'q</span>';
             row.innerHTML = `
                 <td>${customer.id}</td>
                 <td>${customer.name}</td>
+                <td>${usernameDisplay}</td>
                 <td>${customer.phone || '-'}</td>
                 <td>${customer.address || '-'}</td>
                 <td><span class="badge ${customer.customer_type === 'wholesale' ? 'badge-success' : customer.customer_type === 'retail' ? 'badge-info' : 'badge-warning'}">${customer.customer_type === 'wholesale' ? 'Ulgurji' : customer.customer_type === 'retail' ? 'Dona' : 'Oddiy'}</span></td>

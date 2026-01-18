@@ -75,6 +75,7 @@ class CustomerBase(BaseModel):
     notes: Optional[str] = None
     debt_limit: Optional[float] = Field(None, ge=0)  # Qarz limiti
     debt_due_date: Optional[datetime] = None  # Qarz muddati
+    username: Optional[str] = Field(None, max_length=100)  # Login uchun username
 
 
 class CustomerCreate(CustomerBase):
