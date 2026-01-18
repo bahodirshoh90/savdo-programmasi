@@ -96,11 +96,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await authLogout();
+      // Clear auth state first
       setUser(null);
       setIsAuthenticated(false);
+      
+      // Then clear storage
+      await authLogout();
+      
+      // Force navigation update by re-checking auth
+      await checkAuth();
     } catch (error) {
       console.error('Logout error:', error);
+      // Still clear state even if logout fails
+      setUser(null);
+      setIsAuthenticated(false);
     }
   };
 

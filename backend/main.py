@@ -855,6 +855,7 @@ def get_customers(
                     "address": customer.address,
                     "customer_type": customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type),
                     "notes": customer.notes,
+                    "username": customer.username,  # Include username field
                     "debt_balance": customer.debt_balance if customer.debt_balance is not None else 0.0,
                     "debt_limit": customer.debt_limit,
                     "debt_due_date": customer.debt_due_date,
