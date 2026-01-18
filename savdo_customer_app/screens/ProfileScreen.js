@@ -106,7 +106,11 @@ export default function ProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            // Navigation will be handled by App.js
+            // Navigation will be handled by App.js based on isAuthenticated state
+            // Force navigation reset if needed
+            if (navigation && navigation.navigate) {
+              navigation.navigate('Login');
+            }
           },
         },
       ]
