@@ -1850,7 +1850,8 @@ async def process_order_payment(
     if not order:
         raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
     
-    if order.status not in ["pending", "processing"]:
+    from models import OrderStatus
+    if order.status not in [OrderStatus.PENDING, OrderStatus.PROCESSING]:
         raise HTTPException(status_code=400, detail="Faqat 'pending' yoki 'processing' holatdagi buyurtmalar uchun to'lov qabul qilinadi")
     
     # Get seller info for audit
