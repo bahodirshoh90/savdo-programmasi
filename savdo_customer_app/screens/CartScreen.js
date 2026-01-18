@@ -36,6 +36,9 @@ export default function CartScreen({ navigation }) {
   };
 
   const handleCheckout = async () => {
+    console.log('[CART] handleCheckout called');
+    console.log('[CART] Cart items:', cartItems.length);
+    
     if (cartItems.length === 0) {
       Alert.alert('Xatolik', 'Savatcha bo\'sh');
       return;
@@ -43,6 +46,8 @@ export default function CartScreen({ navigation }) {
 
     // Check if customer ID is available
     const customerId = await AsyncStorage.getItem('customer_id');
+    console.log('[CART] Customer ID from storage:', customerId);
+    
     if (!customerId) {
       Alert.alert('Xatolik', 'Mijoz ma\'lumotlari topilmadi. Iltimos, qayta login qiling.');
       return;
@@ -55,14 +60,16 @@ export default function CartScreen({ navigation }) {
       return;
     }
 
+    console.log('[CART] Showing confirmation alert');
     Alert.alert(
       'Buyurtma berish',
       `Jami: ${getTotalAmount().toLocaleString('uz-UZ')} so'm\n\nBuyurtmani tasdiqlaysizmi?`,
       [
-        { text: 'Bekor qilish', style: 'cancel' },
+        { text: 'Bekor qilish', style: 'cancel', onPress: () => console.log('[CART] Order cancelled by user') },
         {
           text: 'Tasdiqlash',
           onPress: async () => {
+            console.log('[CART] User confirmed order');
             setIsSubmitting(true);
             try {
               // Ensure items are in correct format for backend
