@@ -81,11 +81,19 @@ class CustomerService:
     @staticmethod
     def update_customer(db: Session, customer_id: int, customer: CustomerUpdate) -> Optional[Customer]:
         """Update a customer"""
+        from services.auth_service import AuthService
+        
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not db_customer:
             return None
         
         update_data = customer.dict(exclude_unset=True)
+        
+        # Handle password hashing separately
+        password = update_data.pop('password', None)
+        if password:
+            update_data['password_hash'] = AuthService.hash_password(password)
+        
         for field, value in update_data.items():
             setattr(db_customer, field, value)
         

@@ -90,6 +90,8 @@ class CustomerUpdate(BaseModel):
     notes: Optional[str] = None
     debt_limit: Optional[float] = Field(None, ge=0)  # Qarz limiti
     debt_due_date: Optional[datetime] = None  # Qarz muddati
+    username: Optional[str] = Field(None, min_length=3, max_length=100)  # Login uchun username
+    password: Optional[str] = Field(None, min_length=4)  # Parol (yangilash uchun)
 
 
 class CustomerResponse(CustomerBase):

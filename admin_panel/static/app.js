@@ -1890,6 +1890,8 @@ async function editCustomer(id) {
         document.getElementById('customer-type').value = customer.customer_type;
         document.getElementById('customer-notes').value = customer.notes || '';
         document.getElementById('customer-debt-limit').value = customer.debt_limit || '';
+        document.getElementById('customer-username').value = customer.username || '';
+        document.getElementById('customer-password').value = ''; // Parolni ko'rsatmaymiz xavfsizlik uchun
         if (customer.debt_due_date) {
             const date = new Date(customer.debt_due_date);
             document.getElementById('customer-debt-due-date').value = date.toISOString().split('T')[0];
@@ -1907,6 +1909,9 @@ async function saveCustomer(e) {
     const id = document.getElementById('customer-id').value;
     const debtLimit = document.getElementById('customer-debt-limit').value;
     const debtDueDate = document.getElementById('customer-debt-due-date').value;
+    const username = document.getElementById('customer-username').value.trim();
+    const password = document.getElementById('customer-password').value;
+    
     const data = {
         name: document.getElementById('customer-name').value,
         phone: document.getElementById('customer-phone').value,
@@ -1916,16 +1921,39 @@ async function saveCustomer(e) {
         debt_limit: debtLimit ? parseFloat(debtLimit) : null,
         debt_due_date: debtDueDate || null
     };
+    
+    // Yangi mijoz yaratishda username va password qo'shamiz
+    if (!id) {
+        if (username) {
+            data.username = username;
+        }
+        if (password) {
+            data.password = password;
+        }
+    } else {
+        // Tahrirlashda username va password qo'shamiz (password faqat agar to'ldirilsa)
+        if (username) {
+            data.username = username;
+        }
+        if (password) {
+            data.password = password;
+        }
+    }
 
     try {
         const url = id ? `${API_BASE}/customers/${id}` : `${API_BASE}/customers`;
         const method = id ? 'PUT' : 'POST';
         
-        await fetch(url, {
+        const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || errorData.message || 'Xatolik yuz berdi');
+        }
 
         closeModal('customer-modal');
         loadCustomers();
