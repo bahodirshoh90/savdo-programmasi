@@ -29,11 +29,16 @@ class OrderService:
         # Verify seller and customer exist
         seller = db.query(Seller).filter(Seller.id == order.seller_id).first()
         if not seller:
-            raise ValueError("Seller not found")
+            # Try to get first active seller as fallback
+            fallback_seller = db.query(Seller).filter(Seller.is_active == True).first()
+            if not fallback_seller:
+                raise ValueError("Seller not found and no active sellers available")
+            order.seller_id = fallback_seller.id
+            seller = fallback_seller
         
         customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
         if not customer:
-            raise ValueError("Customer not found")
+            raise ValueError(f"Customer not found (ID: {order.customer_id})")
         
         # Create order
         db_order = Order(
