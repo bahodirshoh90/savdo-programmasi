@@ -56,7 +56,7 @@ const tokenStorage = {
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_CONFIG.BASE_URL,
-  timeout: API_CONFIG.TIMEOUT,
+  timeout: API_CONFIG.TIMEOUT * 2, // Increase timeout for order creation (60 seconds)
   headers: {
     'Content-Type': 'application/json',
   },
