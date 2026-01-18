@@ -776,7 +776,8 @@ async function loadProducts() {
             
             // Add image to the image cell separately to avoid quote escaping issues
             const imageCell = row.querySelector('.product-image-cell');
-            if (product.image_url && imageUrl) {
+            // Fix: Show image if imageUrl exists, even if product.image_url is null (for newly uploaded images)
+            if (imageUrl) {
                 const img = document.createElement('img');
                 img.src = imageUrl;
                 img.alt = product.name || '';
