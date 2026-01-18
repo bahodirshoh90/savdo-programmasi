@@ -37,7 +37,12 @@ export const AuthProvider = ({ children }) => {
             return;
           }
         } catch (error) {
-          console.warn('Could not verify token, using cached data:', error);
+          // If 401, token might be expired, but check cached data first
+          if (error.response?.status === 401) {
+            console.warn('Token verification failed (401), using cached data');
+          } else {
+            console.warn('Could not verify token, using cached data:', error);
+          }
         }
         
         // Fallback to cached data
@@ -46,6 +51,8 @@ export const AuthProvider = ({ children }) => {
           if (userData) {
             setUser(userData);
             setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
           }
         } catch (cacheError) {
           console.warn('Could not get cached user data:', cacheError);
@@ -56,8 +63,20 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Auth check error:', error);
-      setIsAuthenticated(false);
-      setUser(null);
+      // Still try cached data on error
+      try {
+        const userData = await getCurrentUser();
+        if (userData) {
+          setUser(userData);
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      } catch (cacheError) {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
     } finally {
       setIsLoading(false);
     }

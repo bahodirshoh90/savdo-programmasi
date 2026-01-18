@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     CustomerCreate, CustomerUpdate, CustomerResponse,
@@ -1394,29 +1394,46 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/api/auth/me")
-def get_current_seller(
+def get_current_user(
     seller: Optional[Seller] = Depends(get_seller_from_header),
+    x_customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
     db: Session = Depends(get_db)
 ):
-    """Get current logged-in seller info"""
-    if not seller:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    """Get current logged-in user info (seller or customer)"""
+    # Try customer first if X-Customer-ID header is present
+    if x_customer_id:
+        customer = db.query(Customer).filter(Customer.id == x_customer_id).first()
+        if customer:
+            return {
+                "id": customer.id,
+                "name": customer.name,
+                "username": customer.username,
+                "phone": customer.phone,
+                "address": customer.address,
+                "customer_type": customer.customer_type.value if customer.customer_type else None,
+                "debt_balance": customer.debt_balance or 0.0,
+                "user_type": "customer"
+            }
     
-    from auth import get_seller_permissions
-    permissions = get_seller_permissions(db, seller)
+    # Fallback to seller
+    if seller:
+        from auth import get_seller_permissions
+        permissions = get_seller_permissions(db, seller)
+        return {
+            "id": seller.id,
+            "name": seller.name,
+            "username": seller.username,
+            "phone": seller.phone,
+            "email": seller.email,
+            "image_url": seller.image_url,
+            "role_id": seller.role_id,
+            "role_name": seller.role.name if seller.role else None,
+            "permissions": permissions,
+            "is_active": seller.is_active,
+            "user_type": "seller"
+        }
     
-    return {
-        "id": seller.id,
-        "name": seller.name,
-        "username": seller.username,
-        "phone": seller.phone,
-        "email": seller.email,
-        "image_url": seller.image_url,
-        "role_id": seller.role_id,
-        "role_name": seller.role.name if seller.role else None,
-        "permissions": permissions,
-        "is_active": seller.is_active
-    }
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 # ==================== SELLERS ====================
