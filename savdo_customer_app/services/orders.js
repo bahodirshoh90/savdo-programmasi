@@ -3,6 +3,7 @@
  */
 import api, { apiCall } from './api';
 import { API_ENDPOINTS } from '../config/api';
+import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
