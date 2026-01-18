@@ -55,15 +55,24 @@ export default function ProfileScreen({ navigation }) {
   const handleSave = async () => {
     try {
       const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
+      if (!customerId) {
+        Alert.alert('Xatolik', 'Mijoz ma\'lumotlari topilmadi. Iltimos, qayta login qiling.');
+        return;
+      }
 
-      await api.put(API_ENDPOINTS.CUSTOMERS.UPDATE(customerId), formData);
+      console.log('Updating customer with ID:', customerId);
+      console.log('Form data:', formData);
+      
+      const response = await api.put(API_ENDPOINTS.CUSTOMERS.UPDATE(customerId), formData);
+      console.log('Update response:', response);
+      
       Alert.alert('Muvaffaqiyatli', 'Ma\'lumotlar yangilandi');
       setIsEditing(false);
       await loadCustomerData();
     } catch (error) {
       console.error('Error updating customer:', error);
-      Alert.alert('Xatolik', 'Ma\'lumotlarni yangilashda xatolik');
+      const errorMessage = error.response?.data?.detail || error.message || 'Ma\'lumotlarni yangilashda xatolik';
+      Alert.alert('Xatolik', errorMessage);
     }
   };
 

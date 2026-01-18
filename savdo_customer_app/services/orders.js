@@ -45,6 +45,10 @@ export const getOrder = async (orderId) => {
 export const createOrder = async (orderData) => {
   try {
     const customerId = await AsyncStorage.getItem('customer_id');
+    if (!customerId) {
+      throw new Error('Customer ID not found. Please login again.');
+    }
+    
     const sellerId = await AsyncStorage.getItem('default_seller_id') || '1'; // Default seller ID
 
     const orderPayload = {
@@ -54,10 +58,15 @@ export const createOrder = async (orderData) => {
       is_offline: false,
     };
 
+    console.log('Creating order with payload:', orderPayload);
+    
     const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
+    console.log('Order creation response:', response);
+    
     return response;
   } catch (error) {
     console.error('Error creating order:', error);
+    console.error('Error response:', error.response?.data);
     throw error;
   }
 };
