@@ -144,11 +144,6 @@ def migrate_database():
             print("✓ Added password_hash to customers")
         else:
             print("✓ password_hash already exists in customers")
-            print("Adding debt_due_date column to customers table...")
-            cursor.execute("ALTER TABLE customers ADD COLUMN debt_due_date DATETIME")
-            print("✓ Added debt_due_date to customers")
-        else:
-            print("✓ debt_due_date already exists in customers")
         
         # Check and create debt_history table
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='debt_history'")
