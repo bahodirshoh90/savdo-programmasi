@@ -95,15 +95,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    console.log('[AUTH CONTEXT] Logout called');
     try {
+      console.log('[AUTH CONTEXT] Step 1: Clearing storage...');
       // Clear storage first
       await authLogout();
+      console.log('[AUTH CONTEXT] Step 2: Storage cleared successfully');
     } catch (error) {
-      console.error('Logout error clearing storage:', error);
+      console.error('[AUTH CONTEXT] Error clearing storage:', error);
     } finally {
+      console.log('[AUTH CONTEXT] Step 3: Clearing authentication state...');
       // Always clear state, even if storage clearing fails
       setUser(null);
       setIsAuthenticated(false);
+      console.log('[AUTH CONTEXT] Step 4: Authentication state cleared, isAuthenticated is now false');
     }
   };
 
