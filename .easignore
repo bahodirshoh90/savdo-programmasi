@@ -5,11 +5,14 @@ dist/
 backend/
 admin_panel/
 seller_panel/
+desktop_app/
+mobile_app/
+savdo_mobile_app_new/
 uploads/
-# Ignore everything except mobile_app
+scripts/
+# Ignore everything except savdo_customer_app
 /*
-!/mobile_app
-mobile_app/node_modules/
-mobile_app/.expo/
-mobile_app/dist/
-mobile_app/build/
+!/savdo_customer_app
+/savdo_customer_app/node_modules
+/savdo_customer_app/.expo
+/savdo_customer_app/dist
