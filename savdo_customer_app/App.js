@@ -58,6 +58,34 @@ function CartIconWithBadge({ color, size }) {
   );
 }
 
+// Products Stack Navigator (includes ProductsScreen and ProductDetailScreen)
+function ProductsStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: Colors.primary,
+        },
+        headerTintColor: Colors.surface,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    >
+      <Stack.Screen
+        name="ProductsList"
+        component={ProductsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+        options={{ title: 'Mahsulot detallari' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -83,7 +111,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Products"
-        component={ProductsScreen}
+        component={ProductsStack}
         options={{
           tabBarLabel: 'Mahsulotlar',
           tabBarIcon: ({ color, size }) => (
@@ -161,11 +189,6 @@ function AppNavigator() {
               name="MainTabs"
               component={MainTabs}
               options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ProductDetail"
-              component={ProductDetailScreen}
-              options={{ title: 'Mahsulot detallari' }}
             />
             <Stack.Screen
               name="OrderDetail"

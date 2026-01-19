@@ -14,6 +14,29 @@ class CustomerService:
     def create_customer(db: Session, customer: CustomerCreate) -> Customer:
         """Create a new customer"""
         from services.auth_service import AuthService
+        from fastapi import HTTPException
+        
+        # Check for duplicate username
+        if customer.username:
+            existing_username = db.query(Customer).filter(
+                Customer.username == customer.username
+            ).first()
+            if existing_username:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bu foydalanuvchi nomi allaqachon mavjud: {customer.username}"
+                )
+        
+        # Check for duplicate phone
+        if customer.phone:
+            existing_phone = db.query(Customer).filter(
+                Customer.phone == customer.phone
+            ).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bu telefon raqam allaqachon mavjud: {customer.phone}"
+                )
         
         customer_dict = customer.dict()
         password = customer_dict.pop('password', None)
@@ -82,12 +105,37 @@ class CustomerService:
     def update_customer(db: Session, customer_id: int, customer: CustomerUpdate) -> Optional[Customer]:
         """Update a customer"""
         from services.auth_service import AuthService
+        from fastapi import HTTPException
         
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not db_customer:
             return None
         
         update_data = customer.dict(exclude_unset=True)
+        
+        # Check for duplicate username (exclude current customer)
+        if 'username' in update_data and update_data['username']:
+            existing_username = db.query(Customer).filter(
+                Customer.username == update_data['username'],
+                Customer.id != customer_id
+            ).first()
+            if existing_username:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bu foydalanuvchi nomi allaqachon mavjud: {update_data['username']}"
+                )
+        
+        # Check for duplicate phone (exclude current customer)
+        if 'phone' in update_data and update_data['phone']:
+            existing_phone = db.query(Customer).filter(
+                Customer.phone == update_data['phone'],
+                Customer.id != customer_id
+            ).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bu telefon raqam allaqachon mavjud: {update_data['phone']}"
+                )
         
         # Handle password hashing separately
         password = update_data.pop('password', None)

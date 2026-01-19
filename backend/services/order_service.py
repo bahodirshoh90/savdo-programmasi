@@ -71,11 +71,22 @@ class OrderService:
             raise ValueError(f"Customer not found (ID: {order.customer_id})")
         
         # Create order
+        # Set payment method - default to CASH if not provided or invalid
+        from models import PaymentMethod
+        payment_method = PaymentMethod.CASH
+        if order.payment_method:
+            try:
+                payment_method = PaymentMethod(order.payment_method)
+            except ValueError:
+                # If invalid, use CASH as default
+                payment_method = PaymentMethod.CASH
+        
         db_order = Order(
             seller_id=order.seller_id,
             customer_id=order.customer_id,
             status=OrderStatus.PENDING,
             total_amount=0,
+            payment_method=payment_method,
             is_offline=order.is_offline
         )
         db.add(db_order)

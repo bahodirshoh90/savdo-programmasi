@@ -18,10 +18,12 @@ import CartItem from '../components/CartItem';
 import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [paymentMethod, setPaymentMethod] = React.useState('cash'); // 'cash', 'card', 'debt'
 
   const getImageUrl = (product) => {
     if (!product?.image_url) return null;
@@ -80,6 +82,7 @@ export default function CartScreen({ navigation }) {
 
     const orderData = {
       items: orderItems,
+      payment_method: paymentMethod, // 'cash', 'card', 'debt' (olinadigan)
     };
 
     console.log('[CART] Step 3: Order data prepared:', JSON.stringify(orderData, null, 2));
@@ -238,6 +241,26 @@ export default function CartScreen({ navigation }) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* Payment Method Selection */}
+        <View style={styles.paymentMethodContainer}>
+          <Text style={styles.paymentMethodLabel}>To'lov usuli:</Text>
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={paymentMethod}
+              onValueChange={(value) => {
+                console.log('[CART] Payment method changed to:', value);
+                setPaymentMethod(value);
+              }}
+              style={styles.picker}
+              dropdownIconColor={Colors.primary}
+            >
+              <Picker.Item label="Naqd" value="cash" />
+              <Picker.Item label="Plastik karta" value="card" />
+              <Picker.Item label="Olinadigan (qarz)" value="debt" />
+            </Picker>
+          </View>
+        </View>
+
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Jami:</Text>
           <Text style={styles.totalAmount}>
@@ -299,6 +322,29 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+  },
+  paymentMethodContainer: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  paymentMethodLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textDark,
+    marginBottom: 8,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.background,
+  },
+  picker: {
+    height: 50,
+    color: Colors.textDark,
   },
   totalContainer: {
     flexDirection: 'row',

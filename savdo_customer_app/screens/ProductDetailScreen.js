@@ -16,13 +16,29 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import API_CONFIG from '../config/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId } = route.params;
-  const { addToCart } = useCart();
+  const { addToCart, cartItems } = useCart();
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Get current cart quantity for this product
+  const getCartQuantity = () => {
+    const item = cartItems.find(item => item.product.id === productId);
+    return item ? item.quantity : 0;
+  };
+  
+  const [cartQuantity, setCartQuantity] = useState(0);
+  
+  // Update cart quantity when cartItems change
+  useFocusEffect(
+    React.useCallback(() => {
+      setCartQuantity(getCartQuantity());
+    }, [cartItems, productId])
+  );
 
   useEffect(() => {
     loadProduct();
@@ -50,10 +66,12 @@ export default function ProductDetailScreen({ route, navigation }) {
       return;
     }
 
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product, 1);
-    }
-    Alert.alert('Muvaffaqiyatli', 'Savatchaga qo\'shildi');
+    addToCart(product, quantity);
+    Alert.alert('Muvaffaqiyatli', `${quantity} dona savatchaga qo'shildi`);
+    // Update cart quantity after adding
+    setTimeout(() => {
+      setCartQuantity(getCartQuantity());
+    }, 100);
   };
 
   const getImageUrl = () => {
@@ -135,6 +153,15 @@ export default function ProductDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Cart Quantity Indicator */}
+        {cartQuantity > 0 && (
+          <View style={styles.cartQuantityContainer}>
+            <Text style={styles.cartQuantityText}>
+              Savatchada: {cartQuantity} dona
+            </Text>
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
@@ -265,5 +292,17 @@ const styles = StyleSheet.create({
   },
   addButtonTextDisabled: {
     color: Colors.textLight,
+  },
+  cartQuantityContainer: {
+    backgroundColor: Colors.primary + '20',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  cartQuantityText: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -32,11 +32,7 @@ export default function ProductCard({ product, onPress, onAdd, quantity = 0, sty
   const imageUrl = getImageUrl();
 
   return (
-    <TouchableOpacity
-      style={[styles.card, isInCart && styles.cardInCart, isOutOfStock && styles.cardOutOfStock, style]}
-      onPress={() => onPress && onPress(product)}
-      activeOpacity={0.7}
-    >
+    <View style={[styles.card, isInCart && styles.cardInCart, isOutOfStock && styles.cardOutOfStock, style]}>
       {isInCart && (
         <View style={styles.quantityBadge}>
           <Text style={styles.quantityBadgeText}>{quantity}</Text>
@@ -49,13 +45,18 @@ export default function ProductCard({ product, onPress, onAdd, quantity = 0, sty
         </View>
       )}
 
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
-      ) : (
-        <View style={styles.imagePlaceholder}>
-          <Text style={styles.imagePlaceholderText}>📦</Text>
-        </View>
-      )}
+      <TouchableOpacity
+        onPress={() => onPress && onPress(product)}
+        activeOpacity={0.7}
+      >
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderText}>📦</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.content}>
         <Text style={styles.name} numberOfLines={2}>
@@ -72,19 +73,41 @@ export default function ProductCard({ product, onPress, onAdd, quantity = 0, sty
           </Text>
         )}
 
-        {onAdd && !onPress && (
-          <TouchableOpacity
-            style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
-            onPress={() => !isOutOfStock && onAdd(product)}
-            disabled={isOutOfStock}
-          >
-            <Text style={[styles.addButtonText, isOutOfStock && styles.addButtonTextDisabled]}>
-              {isOutOfStock ? 'Yo\'q' : 'Savatchaga'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {/* Quantity Controls and Add Button */}
+        <View style={styles.actionsContainer}>
+          {isInCart ? (
+            <View style={styles.quantityControls}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => onAdd && onAdd(product, -1)}
+              >
+                <Text style={styles.quantityButtonText}>-</Text>
+              </TouchableOpacity>
+              <Text style={styles.quantityText}>{quantity}</Text>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => onAdd && onAdd(product, 1)}
+                disabled={isOutOfStock}
+              >
+                <Text style={styles.quantityButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            onAdd && (
+              <TouchableOpacity
+                style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
+                onPress={() => !isOutOfStock && onAdd(product, 1)}
+                disabled={isOutOfStock}
+              >
+                <Text style={[styles.addButtonText, isOutOfStock && styles.addButtonTextDisabled]}>
+                  {isOutOfStock ? 'Yo\'q' : 'Savatchaga'}
+                </Text>
+              </TouchableOpacity>
+            )
+          )}
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -193,5 +216,34 @@ const styles = StyleSheet.create({
   },
   addButtonTextDisabled: {
     color: Colors.textLight,
+  },
+  actionsContainer: {
+    marginTop: 8,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    color: Colors.surface,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textDark,
+    minWidth: 30,
+    textAlign: 'center',
   },
 });

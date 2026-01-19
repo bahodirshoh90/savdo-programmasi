@@ -653,7 +653,7 @@ async function loadProducts() {
 
         if (products.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="15" style="text-align: center; padding: 2rem; color: var(--text-light);">Mahsulotlar topilmadi</td>`;
+            row.innerHTML = `<td colspan="16" style="text-align: center; padding: 2rem; color: var(--text-light);">Mahsulotlar topilmadi</td>`;
             tbody.appendChild(row);
             return;
         }
@@ -704,6 +704,7 @@ async function loadProducts() {
                 <td>${product.id}</td>
                 <td class="product-image-cell"></td>
                 <td>${escapeHtml(product.name)}</td>
+                <td>${escapeHtml(product.item_number || '-')}</td>
                 <td>${escapeHtml(product.barcode || '-')}</td>
                 <td>${product.pieces_per_package}</td>
                 <td>${formatMoney(product.wholesale_price)}</td>
@@ -1036,6 +1037,7 @@ function showAddProductModal() {
     document.getElementById('product-modal-title').textContent = 'Yangi Mahsulot';
     document.getElementById('product-form').reset();
     document.getElementById('product-id').value = '';
+    document.getElementById('product-item-number').value = '';
     document.getElementById('product-barcode').value = '';
     document.getElementById('product-image-url').value = '';
     document.getElementById('product-total-pieces-input').value = '0';
@@ -1049,6 +1051,7 @@ async function editProduct(id) {
         document.getElementById('product-modal-title').textContent = 'Mahsulotni Tahrirlash';
         document.getElementById('product-id').value = product.id;
         document.getElementById('product-name').value = product.name;
+        document.getElementById('product-item-number').value = product.item_number || '';
         document.getElementById('product-barcode').value = product.barcode || '';
         document.getElementById('product-brand').value = product.brand || '';
         document.getElementById('product-supplier').value = product.supplier || '';
@@ -1235,6 +1238,7 @@ async function saveProduct(e) {
     // Optional fields - include even if null/empty for update
     if (id) {
         // For update, include all fields explicitly
+        data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
@@ -1243,6 +1247,9 @@ async function saveProduct(e) {
         data.received_date = receivedDate ? new Date(receivedDate).toISOString() : null;
     } else {
         // For create, only include if not empty
+        const itemNumberValue = document.getElementById('product-item-number').value.trim();
+        if (itemNumberValue) data.item_number = itemNumberValue;
+        
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
@@ -2131,6 +2138,7 @@ function clearOrderFilters() {
 }
 
 async function updateOrderStatus(id, status) {
+    console.log(`[updateOrderStatus] Updating order ${id} to status: ${status}`);
     try {
         const response = await fetch(`${API_BASE}/orders/${id}/status?status=${encodeURIComponent(status)}`, { 
             method: 'PUT',
@@ -2146,6 +2154,15 @@ async function updateOrderStatus(id, status) {
         }
         
         showToast('Buyurtma holati yangilandi');
+        
+        // If status changed to 'completed' and filter excludes it, update filter
+        if (status === 'completed') {
+            const statusFilter = document.getElementById('order-status-filter');
+            if (statusFilter && (statusFilter.value === 'pending' || statusFilter.value === 'processing')) {
+                statusFilter.value = 'all';
+            }
+        }
+        
         loadOrders();
     } catch (error) {
         alert('Xatolik: ' + error.message);
@@ -2295,6 +2312,15 @@ async function processOrderPayment(e) {
         const result = await response.json();
         alert(result.message || 'To\'lov muvaffaqiyatli amalga oshirildi');
         closeModal('order-payment-modal');
+        
+        // Check current status filter - if it only shows pending/processing, 
+        // change it to show all or include completed orders
+        const statusFilter = document.getElementById('order-status-filter');
+        if (statusFilter && (statusFilter.value === 'pending' || statusFilter.value === 'processing')) {
+            // Change filter to 'all' to show all orders including completed ones
+            statusFilter.value = 'all';
+        }
+        
         loadOrders();
         loadDashboard();
     } catch (error) {

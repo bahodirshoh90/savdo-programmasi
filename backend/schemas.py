@@ -11,6 +11,7 @@ from models import CustomerType, OrderStatus, PaymentMethod
 
 class ProductBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
     supplier: Optional[str] = Field(None, max_length=200)
@@ -33,6 +34,7 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+    item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
     supplier: Optional[str] = Field(None, max_length=200)
@@ -297,6 +299,7 @@ class OrderCreate(BaseModel):
     customer_id: int
     items: List[OrderItemCreate] = Field(..., min_items=1)
     is_offline: bool = Field(default=False)
+    payment_method: Optional[str] = Field(default="cash")  # cash, card, debt (olinadigan)
 
 
 class OrderItemResponse(BaseModel):

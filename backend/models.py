@@ -29,6 +29,7 @@ class PaymentMethod(enum.Enum):
     CASH = "cash"  # Naqd
     CARD = "card"  # Plastik karta
     BANK_TRANSFER = "bank_transfer"  # Hisob raqam
+    DEBT = "debt"  # Olinadigan (qarz)
 
 
 # Association table for Role-Permission many-to-many relationship
@@ -81,6 +82,7 @@ class Product(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False, index=True)
+    item_number = Column(String(100), nullable=True, index=True)  # Mahsulot kodi/nomeri
     barcode = Column(String(100), nullable=True, unique=True)
     
     # Brend va yetkazib beruvchi

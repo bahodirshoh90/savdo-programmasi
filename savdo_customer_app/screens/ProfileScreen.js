@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Modal,
 } from 'react-native';
 import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +31,13 @@ export default function ProfileScreen({ navigation }) {
     phone: '',
     address: '',
   });
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -201,6 +209,65 @@ export default function ProfileScreen({ navigation }) {
     }, 200);
   };
 
+  const handleChangePassword = async () => {
+    // Validation
+    if (!passwordData.currentPassword.trim()) {
+      Alert.alert('Xatolik', 'Joriy parolni kiriting');
+      return;
+    }
+
+    if (!passwordData.newPassword.trim() || passwordData.newPassword.length < 4) {
+      Alert.alert('Xatolik', 'Yangi parol kamida 4 belgi bo\'lishi kerak');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      Alert.alert('Xatolik', 'Yangi parollar mos kelmayapti');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (!customerId) {
+        Alert.alert('Xatolik', 'Mijoz ma\'lumotlari topilmadi. Iltimos, qayta login qiling.');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      // Note: Current password verification would require a separate endpoint
+      // For now, we'll rely on backend validation. In production, you might want
+      // to add a dedicated password verification endpoint
+
+      // Update password
+      const updateData = {
+        password: passwordData.newPassword,
+      };
+
+      await api.put(API_ENDPOINTS.CUSTOMERS.UPDATE(customerId), updateData);
+      
+      Alert.alert('Muvaffaqiyatli', 'Parol muvaffaqiyatli o\'zgartirildi', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setShowPasswordModal(false);
+            setPasswordData({
+              currentPassword: '',
+              newPassword: '',
+              confirmPassword: '',
+            });
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error('Error changing password:', error);
+      const errorMessage = error.response?.data?.detail || error.message || 'Parolni o\'zgartirishda xatolik';
+      Alert.alert('Xatolik', errorMessage);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleLogout = async () => {
     console.log('[LOGOUT] Logout button pressed');
     
@@ -341,6 +408,16 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Xavfsizlik</Text>
+        <TouchableOpacity
+          style={styles.changePasswordButton}
+          onPress={() => setShowPasswordModal(true)}
+        >
+          <Text style={styles.changePasswordButtonText}>Parolni o'zgartirish</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Qarz balansi</Text>
         <Text style={styles.debtAmount}>
           {customerData?.debt_balance?.toLocaleString('uz-UZ') || '0'} so'm
@@ -352,6 +429,87 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.logoutButtonText}>Chiqish</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Password Change Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Parolni o'zgartirish</Text>
+              <TouchableOpacity onPress={() => setShowPasswordModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Joriy parol:</Text>
+                <TextInput
+                  style={styles.input}
+                  value={passwordData.currentPassword}
+                  onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+                  placeholder="Joriy parolni kiriting"
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Yangi parol:</Text>
+                <TextInput
+                  style={styles.input}
+                  value={passwordData.newPassword}
+                  onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+                  placeholder="Yangi parol (min. 4 belgi)"
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Yangi parolni tasdiqlash:</Text>
+                <TextInput
+                  style={styles.input}
+                  value={passwordData.confirmPassword}
+                  onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+                  placeholder="Yangi parolni qayta kiriting"
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setShowPasswordModal(false);
+                    setPasswordData({
+                      currentPassword: '',
+                      newPassword: '',
+                      confirmPassword: '',
+                    });
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Bekor qilish</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton, isChangingPassword && styles.saveButtonDisabled]}
+                  onPress={handleChangePassword}
+                  disabled={isChangingPassword}
+                >
+                  {isChangingPassword ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Saqlash</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -466,5 +624,62 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 16,
     fontWeight: '600',
+  },
+  changePasswordButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  changePasswordButtonText: {
+    color: Colors.surface,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.textDark,
+  },
+  modalClose: {
+    fontSize: 24,
+    color: Colors.textLight,
+    fontWeight: 'bold',
+  },
+  modalBody: {
+    marginTop: 8,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
   },
 });

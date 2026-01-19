@@ -17,6 +17,7 @@ import { Picker } from '@react-native-picker/picker';
 import Colors from '../constants/colors';
 import { getOrders } from '../services/orders';
 import OrderCard from '../components/OrderCard';
+import websocketService from '../services/websocket';
 
 export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
@@ -46,6 +47,67 @@ export default function OrdersScreen({ navigation }) {
       setIsRefreshing(false);
     }
   };
+
+  // WebSocket connection and notifications
+  useEffect(() => {
+    // Connect to WebSocket when component mounts
+    websocketService.connect();
+
+    // Listen for order status updates
+    const unsubscribeStatusUpdate = websocketService.on('order_status_update', (message) => {
+      console.log('[ORDERS SCREEN] Order status update received:', message);
+      
+      const { data } = message;
+      if (data && data.order_id) {
+        // Show notification to user
+        const statusNames = {
+          pending: 'Kutilmoqda',
+          processing: 'Jarayonda',
+          completed: 'Bajarildi',
+          cancelled: 'Bekor qilindi',
+          returned: 'Qaytarildi'
+        };
+        
+        const statusName = data.status_name || statusNames[data.status] || data.status;
+        Alert.alert(
+          'Buyurtma holati o\'zgardi',
+          `Buyurtma #${data.order_id} holati: ${statusName}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Reload orders to show updated status
+                loadOrders();
+              }
+            }
+          ]
+        );
+      }
+    });
+
+    // Listen for connection events
+    const unsubscribeConnected = websocketService.on('connected', () => {
+      console.log('[ORDERS SCREEN] WebSocket connected');
+    });
+
+    const unsubscribeDisconnected = websocketService.on('disconnected', () => {
+      console.log('[ORDERS SCREEN] WebSocket disconnected');
+    });
+
+    const unsubscribeError = websocketService.on('error', (error) => {
+      console.error('[ORDERS SCREEN] WebSocket error:', error);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeStatusUpdate();
+      unsubscribeConnected();
+      unsubscribeDisconnected();
+      unsubscribeError();
+      // Note: We don't disconnect WebSocket here as it might be used by other screens
+      // The WebSocket will disconnect when the app closes or user logs out
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,6 +148,7 @@ export default function OrdersScreen({ navigation }) {
               <Picker.Item label="Jarayonda" value="processing" />
               <Picker.Item label="Bajarildi" value="completed" />
               <Picker.Item label="Bekor qilindi" value="cancelled" />
+              <Picker.Item label="Qaytarilgan" value="returned" />
             </Picker>
           </View>
         </View>

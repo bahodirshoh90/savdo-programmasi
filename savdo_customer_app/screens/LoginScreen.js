@@ -18,6 +18,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { login as authLogin, signup as authSignup } from '../services/auth';
 import Colors from '../constants/colors';
+import api from '../services/api';
+import { Picker } from '@react-native-picker/picker';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -34,6 +36,19 @@ export default function LoginScreen({ navigation }) {
   const [signupUsername, setSignupUsername] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
+  
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotUsername, setForgotUsername] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  
+  // Help request state
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [helpMessage, setHelpMessage] = useState('');
+  const [helpIssueType, setHelpIssueType] = useState('login');
+  const [isSendingHelp, setIsSendingHelp] = useState(false);
 
   const handleLogin = async () => {
     // Clear previous error
@@ -198,6 +213,98 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  const handleSendHelp = async () => {
+    if (!helpMessage.trim()) {
+      Alert.alert('Xatolik', 'Muammoingizni yozib yuboring');
+      return;
+    }
+
+    setIsSendingHelp(true);
+    try {
+      const response = await api.post('/help-request', {
+        username: username.trim() || 'Noma\'lum',
+        phone: '',
+        message: helpMessage.trim(),
+        issue_type: helpIssueType,
+      });
+
+      if (response.success) {
+        Alert.alert(
+          'Muvaffaqiyatli',
+          response.message || 'Yordam so\'rovi yuborildi. Admin tez orada siz bilan bog\'lanadi.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setShowHelpModal(false);
+                setHelpMessage('');
+                setHelpIssueType('login');
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Send help error:', error);
+      const errorMessage = error.response?.data?.detail || error.message || 'Yordam so\'rovini yuborishda xatolik';
+      Alert.alert('Xatolik', errorMessage);
+    } finally {
+      setIsSendingHelp(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!forgotUsername.trim()) {
+      Alert.alert('Xatolik', 'Foydalanuvchi nomi yoki telefon raqamni kiriting');
+      return;
+    }
+
+    if (!forgotNewPassword.trim() || forgotNewPassword.length < 4) {
+      Alert.alert('Xatolik', 'Yangi parol kamida 4 belgi bo\'lishi kerak');
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      Alert.alert('Xatolik', 'Parollar mos kelmayapti');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      const response = await api.post('/auth/reset-password', {
+        username_or_phone: forgotUsername.trim(),
+        new_password: forgotNewPassword,
+      });
+
+      if (response.success) {
+        Alert.alert(
+          'Muvaffaqiyatli',
+          'Parol muvaffaqiyatli o\'zgartirildi. Endi yangi parol bilan login qiling.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setShowForgotPassword(false);
+                setForgotUsername('');
+                setForgotNewPassword('');
+                setForgotConfirmPassword('');
+                // Set username in login form
+                setUsername(forgotUsername.trim());
+                setPassword('');
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Reset password error:', error);
+      const errorMessage = error.response?.data?.detail || error.message || 'Parolni tiklashda xatolik';
+      Alert.alert('Xatolik', errorMessage);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -245,6 +352,13 @@ export default function LoginScreen({ navigation }) {
           ) : null}
 
           <TouchableOpacity
+            onPress={() => setShowForgotPassword(true)}
+            style={styles.forgotPasswordLink}
+          >
+            <Text style={styles.forgotPasswordText}>Parolni unutdingizmi?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
             onPress={handleLogin}
             disabled={isLoading}
@@ -262,6 +376,15 @@ export default function LoginScreen({ navigation }) {
           >
             <Text style={styles.signupLinkText}>
               Ro'yxatdan o'tmaganmisiz? Ro'yxatdan o'tish
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.helpLink}
+            onPress={() => setShowHelpModal(true)}
+          >
+            <Text style={styles.helpLinkText}>
+              💬 Yordam kerakmi? Admin bilan bog'laning
             </Text>
           </TouchableOpacity>
         </View>
@@ -344,6 +467,168 @@ export default function LoginScreen({ navigation }) {
                     <ActivityIndicator color={Colors.surface} />
                   ) : (
                     <Text style={styles.signupButtonText}>Ro'yxatdan o'tish</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={showForgotPassword}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowForgotPassword(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Parolni tiklash</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowForgotPassword(false);
+                    setForgotUsername('');
+                    setForgotNewPassword('');
+                    setForgotConfirmPassword('');
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.signupForm}>
+                <Text style={styles.infoText}>
+                  Foydalanuvchi nomi yoki telefon raqamingizni kiriting va yangi parol o'rnating.
+                </Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Foydalanuvchi nomi yoki telefon *"
+                  value={forgotUsername}
+                  onChangeText={setForgotUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="default"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Yangi parol * (kamida 4 ta belgi)"
+                  value={forgotNewPassword}
+                  onChangeText={setForgotNewPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Yangi parolni tasdiqlash *"
+                  value={forgotConfirmPassword}
+                  onChangeText={setForgotConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                <TouchableOpacity
+                  style={[styles.signupButton, isResettingPassword && styles.signupButtonDisabled]}
+                  onPress={handleResetPassword}
+                  disabled={isResettingPassword}
+                >
+                  {isResettingPassword ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.signupButtonText}>Parolni tiklash</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Help Request Modal */}
+      <Modal
+        visible={showHelpModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowHelpModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Yordam so'rash</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowHelpModal(false);
+                    setHelpMessage('');
+                    setHelpIssueType('login');
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.signupForm}>
+                <Text style={styles.infoText}>
+                  Muammoingizni yozib yuboring va admin tez orada siz bilan bog'lanadi.
+                </Text>
+
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Muammo turi:</Text>
+                  <View style={styles.pickerWrapper}>
+                    <Picker
+                      selectedValue={helpIssueType}
+                      onValueChange={(value) => setHelpIssueType(value)}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Login muammosi" value="login" />
+                      <Picker.Item label="Parol muammosi" value="password" />
+                      <Picker.Item label="Boshqa muammo" value="other" />
+                    </Picker>
+                  </View>
+                </View>
+
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Muammoingizni batafsil yozing..."
+                  value={helpMessage}
+                  onChangeText={setHelpMessage}
+                  multiline
+                  numberOfLines={5}
+                  textAlignVertical="top"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username (ixtiyoriy)"
+                  value={username}
+                  editable={false}
+                  placeholderTextColor={Colors.textLight}
+                />
+
+                <TouchableOpacity
+                  style={[styles.signupButton, isSendingHelp && styles.signupButtonDisabled]}
+                  onPress={handleSendHelp}
+                  disabled={isSendingHelp}
+                >
+                  {isSendingHelp ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.signupButtonText}>Yuborish</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -488,5 +773,52 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 16,
     fontWeight: '600',
+  },
+  forgotPasswordLink: {
+    marginTop: 8,
+    alignItems: 'flex-end',
+  },
+  forgotPasswordText: {
+    color: Colors.primary,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  infoText: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  helpLink: {
+    marginTop: 12,
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: Colors.borderLight,
+    borderRadius: 8,
+  },
+  helpLinkText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  field: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textDark,
+    marginBottom: 8,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.background,
+  },
+  picker: {
+    height: 50,
+    color: Colors.textDark,
   },
 });

@@ -12,13 +12,15 @@ export const getProducts = async (
   skip = 0,
   limit = 100,
   brand = '',
-  supplier = ''
+  supplier = '',
+  sort = ''
 ) => {
   try {
     let url = `${API_ENDPOINTS.PRODUCTS.LIST}?skip=${skip}&limit=${limit}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (brand) url += `&brand=${encodeURIComponent(brand)}`;
     if (supplier) url += `&supplier=${encodeURIComponent(supplier)}`;
+    if (sort) url += `&sort=${encodeURIComponent(sort)}`;
 
     const response = await api.get(url);
     return Array.isArray(response) ? response : (response?.products || []);

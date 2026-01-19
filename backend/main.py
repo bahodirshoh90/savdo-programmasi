@@ -6,7 +6,7 @@ import os
 # Add services directory to path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'services'))
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Header, Request, Query
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Header, Request, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -98,6 +98,16 @@ try:
         except Exception as e:
             print(f"Warning: Error migrating banners table: {e}")
             print(f"Warning: Could not migrate customers table: {e}")
+        
+        # Migrate products table to add item_number column if it doesn't exist
+        try:
+            products_columns = [col['name'] for col in inspector.get_columns('products')]
+            if 'item_number' not in products_columns:
+                conn.execute(text("ALTER TABLE products ADD COLUMN item_number VARCHAR(100)"))
+                conn.commit()
+                print("✓ Added item_number column to products table")
+        except Exception as e:
+            print(f"Warning: Error migrating products table: {e}")
 except Exception as e:
     print(f"Warning: Could not migrate database: {e}")
     # Continue anyway - the code will handle missing columns gracefully
@@ -1409,6 +1419,103 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/help-request")
+async def create_help_request(
+    request_data: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create a help request from customer app (sent to admin)"""
+    from models import Settings
+    import json
+    from datetime import datetime
+    
+    customer_username = request_data.get('username', 'Noma\'lum')
+    customer_phone = request_data.get('phone', 'Noma\'lum')
+    message = request_data.get('message', '')
+    issue_type = request_data.get('issue_type', 'other')  # login, password, other
+    
+    if not message.strip():
+        raise HTTPException(status_code=400, detail="Xabar matnini kiriting")
+    
+    # Format help request message
+    help_message = f"""
+=== YORDAM SO'ROVI ===
+Vaqt: {get_uzbekistan_now().strftime('%Y-%m-%d %H:%M:%S')}
+Mijoz username: {customer_username}
+Telefon: {customer_phone}
+Muammo turi: {issue_type}
+Xabar: {message}
+"""
+    
+    # Try to send via WebSocket to admin panel
+    try:
+        await manager.broadcast({
+            "type": "help_request",
+            "data": {
+                "username": customer_username,
+                "phone": customer_phone,
+                "message": message,
+                "issue_type": issue_type,
+                "timestamp": get_uzbekistan_now().isoformat()
+            }
+        })
+    except Exception as e:
+        print(f"Error broadcasting help request: {e}")
+        # Continue even if WebSocket fails
+    
+    # Log to console/file for now (can be extended to save in database)
+    print("=" * 50)
+    print(help_message)
+    print("=" * 50)
+    
+    return {
+        "success": True,
+        "message": "Yordam so'rovi yuborildi. Admin tez orada siz bilan bog'lanadi."
+    }
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(
+    request: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Reset customer password by username or phone"""
+    from models import Customer
+    from services.auth_service import AuthService
+    
+    username_or_phone = request.get('username_or_phone', '').strip() if isinstance(request, dict) else ''
+    new_password = request.get('new_password', '').strip() if isinstance(request, dict) else ''
+    
+    if not username_or_phone:
+        raise HTTPException(status_code=400, detail="Foydalanuvchi nomi yoki telefon raqamni kiriting")
+    
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Yangi parol kamida 4 belgi bo'lishi kerak")
+    
+    # Find customer by username or phone
+    customer = db.query(Customer).filter(
+        (Customer.username == username_or_phone) | 
+        (Customer.phone == username_or_phone)
+    ).first()
+    
+    if not customer:
+        raise HTTPException(
+            status_code=404,
+            detail="Bu foydalanuvchi nomi yoki telefon raqam bilan mijoz topilmadi"
+        )
+    
+    # Update password
+    customer.password_hash = AuthService.hash_password(new_password)
+    db.commit()
+    db.refresh(customer)
+    
+    return {
+        "success": True,
+        "message": "Parol muvaffaqiyatli o'zgartirildi",
+        "customer_id": customer.id
+    }
+
+
 @app.get("/api/auth/me")
 def get_current_user(
     seller: Optional[Seller] = Depends(get_seller_from_header),
@@ -1893,11 +2000,41 @@ async def update_order_status(
     
     order_response = OrderService.order_to_response(order)
     
-    # Notify via WebSocket
+    # Status name mapping for user-friendly messages
+    status_names = {
+        "pending": "Kutilmoqda",
+        "processing": "Jarayonda",
+        "completed": "Bajarildi",
+        "cancelled": "Bekor qilindi",
+        "returned": "Qaytarildi"
+    }
+    
+    # Notify admin panel via WebSocket (broadcast)
     await manager.broadcast({
         "type": "order_status_update",
-        "data": {"order_id": order_id, "status": status}
+        "data": {
+            "order_id": order_id,
+            "status": status,
+            "status_name": status_names.get(status, status),
+            "customer_id": order.customer_id
+        }
     })
+    
+    # Notify specific customer via WebSocket (personal notification)
+    if order.customer_id:
+        try:
+            await manager.send_to_customer(order.customer_id, {
+                "type": "order_status_update",
+                "data": {
+                    "order_id": order_id,
+                    "status": status,
+                    "status_name": status_names.get(status, status),
+                    "message": f"Buyurtma #{order_id} holati o'zgardi: {status_names.get(status, status)}"
+                }
+            })
+            print(f"[Order Status Update] Notification sent to customer {order.customer_id} for order {order_id}")
+        except Exception as e:
+            print(f"[Order Status Update] Error sending notification to customer {order.customer_id}: {e}")
     
     return order_response
 
@@ -2277,14 +2414,32 @@ async def sync_offline_orders(orders: List[OrderCreate], db: Session = Depends(g
 # ==================== WEBSOCKET ====================
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time updates"""
-    await manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket, customer_id: Optional[int] = None):
+    """WebSocket endpoint for real-time updates
+    Supports customer_id query parameter for personal notifications
+    Example: ws://host/ws?customer_id=123
+    """
+    # Try to get customer_id from query parameters
+    if customer_id is None:
+        try:
+            query_params = dict(websocket.query_params)
+            if 'customer_id' in query_params:
+                customer_id = int(query_params['customer_id'])
+        except (ValueError, KeyError):
+            customer_id = None
+    
+    await manager.connect(websocket, customer_id=customer_id)
     try:
         while True:
             data = await websocket.receive_text()
-            # Echo back or process message
-            await websocket.send_text(f"Message received: {data}")
+            # Echo back or process message (ping/pong for keepalive)
+            try:
+                message = json.loads(data)
+                if message.get('type') == 'ping':
+                    await websocket.send_text(json.dumps({'type': 'pong'}))
+            except json.JSONDecodeError:
+                # If not JSON, just echo back
+                await websocket.send_text(f"Message received: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

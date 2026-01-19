@@ -33,6 +33,11 @@ Thumbs.db
 .git/
 .gitignore
 
+# Icon files (temporarily ignore to fix build error)
+assets/icon.png
+assets/*.ico
+assets/*.icon
+
 # Other project files
 ../admin_panel/
 ../backend/
