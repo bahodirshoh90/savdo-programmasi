@@ -1999,8 +1999,9 @@ async function loadOrders() {
         
         let url = `${API_BASE}/orders`;
         const params = [];
-        // Only add status if it's not empty (empty means "all")
-        if (status && status.trim() !== '') {
+        // Only add status if it's not empty (empty string or "all" means "all")
+        // Empty string from select means "all", so don't add status parameter
+        if (status && status.trim() !== '' && status !== 'all') {
             params.push(`status=${status}`);
         }
         if (startDate) params.push(`start_date=${startDate}`);

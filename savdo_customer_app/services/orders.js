@@ -18,7 +18,10 @@ export const getOrders = async (status = null, skip = 0, limit = 100) => {
     }
 
     let url = `${API_ENDPOINTS.ORDERS.LIST}?customer_id=${customerId}&skip=${skip}&limit=${limit}`;
-    if (status) url += `&status=${status}`;
+    // Only add status if it's provided and not 'all'
+    if (status && status !== 'all') {
+      url += `&status=${status}`;
+    }
 
     const response = await api.get(url);
     return Array.isArray(response) ? response : (response?.orders || []);

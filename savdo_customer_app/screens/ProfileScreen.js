@@ -113,13 +113,32 @@ export default function ProfileScreen({ navigation }) {
             } finally {
               // Always navigate to login screen, even if logout fails
               if (navigation) {
-                // Use reset to clear navigation stack and go to login
-                navigation.getParent()?.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-                // Also try direct navigation as fallback
-                navigation.navigate('Login');
+                // Navigate up to the root Stack navigator and reset to Login
+                // Profile is in Tab -> Tab is in Stack, so we need to go up 2 levels
+                const rootNavigation = navigation.getParent()?.getParent();
+                if (rootNavigation) {
+                  rootNavigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  });
+                } else {
+                  // Fallback: try to navigate directly
+                  try {
+                    navigation.getParent()?.reset({
+                      index: 0,
+                      routes: [{ name: 'Login' }],
+                    });
+                  } catch (e) {
+                    console.error('Navigation error:', e);
+                    // Last resort: use CommonActions
+                    navigation.dispatch(
+                      CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                      })
+                    );
+                  }
+                }
               }
             }
           },
