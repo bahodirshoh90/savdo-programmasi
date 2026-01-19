@@ -1877,6 +1877,8 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
     """Create a new order (from mobile app)"""
     try:
         print(f"[CREATE ORDER] Received order request: customer_id={order.customer_id}, seller_id={order.seller_id}, items={len(order.items)}")
+        print(f"[CREATE ORDER] Payment method: {order.payment_method}")
+        print(f"[CREATE ORDER] Order data: {order.dict()}")
         
         # Check customer debt limit before creating order
         from models import Customer
@@ -1884,12 +1886,16 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         if not customer:
             raise HTTPException(status_code=404, detail=f"Customer not found (ID: {order.customer_id})")
         
-        if customer:
+        # Check debt limit only if payment method is debt
+        if order.payment_method and order.payment_method.lower() == 'debt':
+            print(f"[CREATE ORDER] Payment method is debt, checking debt limit...")
             # Calculate approximate order total (rough estimate)
             total = sum(item.requested_quantity * 1000 for item in order.items)
             can_take, error = DebtService.check_debt_limit(db, order.customer_id, additional_debt=total)
             if not can_take:
+                print(f"[CREATE ORDER] Debt limit check failed: {error}")
                 raise HTTPException(status_code=400, detail=error)
+            print(f"[CREATE ORDER] Debt limit check passed")
         
         print(f"[CREATE ORDER] Creating order via OrderService...")
         order_result = OrderService.create_order(db, order)

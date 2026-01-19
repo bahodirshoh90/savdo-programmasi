@@ -76,9 +76,17 @@ class OrderService:
         payment_method = PaymentMethod.CASH
         if order.payment_method:
             try:
-                payment_method = PaymentMethod(order.payment_method)
-            except ValueError:
+                # Try to get the payment method by value (e.g., "cash", "card", "debt")
+                payment_method_str = str(order.payment_method).lower().strip()
+                print(f"[ORDER SERVICE] Converting payment_method: '{payment_method_str}'")
+                
+                # Try to find matching enum by value
+                payment_method = PaymentMethod(payment_method_str)
+                print(f"[ORDER SERVICE] Payment method converted successfully: {payment_method}")
+            except ValueError as e:
                 # If invalid, use CASH as default
+                print(f"[ORDER SERVICE] Invalid payment_method '{order.payment_method}', using CASH as default. Error: {e}")
+                print(f"[ORDER SERVICE] Available payment methods: {[pm.value for pm in PaymentMethod]}")
                 payment_method = PaymentMethod.CASH
         
         db_order = Order(
