@@ -97,6 +97,8 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     console.log('[AUTH CONTEXT] Logout called');
     let storageCleared = false;
+    let errorOccurred = null;
+    
     try {
       console.log('[AUTH CONTEXT] Step 1: Clearing storage...');
       // Clear storage first
@@ -104,16 +106,16 @@ export const AuthProvider = ({ children }) => {
       if (logoutResult && logoutResult.success === false) {
         const errorMsg = logoutResult.error || 'Storage tozalashda xatolik';
         console.error('[AUTH CONTEXT] Logout function returned error:', errorMsg);
-        throw new Error(errorMsg);
+        errorOccurred = new Error(errorMsg);
+      } else {
+        storageCleared = true;
+        console.log('[AUTH CONTEXT] Step 2: Storage cleared successfully');
       }
-      storageCleared = true;
-      console.log('[AUTH CONTEXT] Step 2: Storage cleared successfully');
     } catch (error) {
       console.error('[AUTH CONTEXT] Error clearing storage:', error);
       console.error('[AUTH CONTEXT] Error message:', error.message);
       console.error('[AUTH CONTEXT] Error stack:', error.stack);
-      // Re-throw error so it can be caught in ProfileScreen
-      throw error;
+      errorOccurred = error;
     } finally {
       console.log('[AUTH CONTEXT] Step 3: Clearing authentication state...');
       // Always clear state, even if storage clearing fails
@@ -124,6 +126,11 @@ export const AuthProvider = ({ children }) => {
       if (!storageCleared) {
         console.warn('[AUTH CONTEXT] Warning: State cleared but storage clearing may have failed');
       }
+    }
+    
+    // Throw error after state is cleared if there was an error
+    if (errorOccurred) {
+      throw errorOccurred;
     }
   };
 
