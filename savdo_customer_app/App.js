@@ -6,7 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, StyleSheet, Platform } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import screens
@@ -21,7 +21,7 @@ import ProfileScreen from './screens/ProfileScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { CartProvider } from './context/CartContext';
+import { CartProvider, useCart } from './context/CartContext';
 import Colors from './constants/colors';
 
 const Stack = createStackNavigator();
@@ -63,11 +63,39 @@ function MainTabs() {
       <Tab.Screen
         name="Cart"
         component={CartScreen}
-        options={{
-          tabBarLabel: 'Savatcha',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart" size={size} color={color} />
-          ),
+        options={({ route }) => {
+          // Get cart items count from CartContext
+          const CartBadge = () => {
+            const { getTotalItems } = require('./context/CartContext').useCart();
+            const count = getTotalItems();
+            return count > 0 ? (
+              <View style={{
+                position: 'absolute',
+                right: -6,
+                top: -6,
+                backgroundColor: '#ff3b30',
+                borderRadius: 10,
+                width: 20,
+                height: 20,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+                  {count > 99 ? '99+' : count}
+                </Text>
+              </View>
+            ) : null;
+          };
+          
+          return {
+            tabBarLabel: 'Savatcha',
+            tabBarIcon: ({ color, size }) => (
+              <View style={{ position: 'relative' }}>
+                <Ionicons name="cart" size={size} color={color} />
+                <CartBadge />
+              </View>
+            ),
+          };
         }}
       />
       <Tab.Screen

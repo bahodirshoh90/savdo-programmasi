@@ -106,23 +106,20 @@ export default function ProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Logout first
               await logout();
-              // Use navigation reset to go back to login screen
-              if (navigation) {
-                // Navigate to login by resetting the navigation stack
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-              }
             } catch (error) {
               console.error('Logout error:', error);
-              // Still try to navigate even if logout fails
+            } finally {
+              // Always navigate to login screen, even if logout fails
               if (navigation) {
-                navigation.reset({
+                // Use reset to clear navigation stack and go to login
+                navigation.getParent()?.reset({
                   index: 0,
                   routes: [{ name: 'Login' }],
                 });
+                // Also try direct navigation as fallback
+                navigation.navigate('Login');
               }
             }
           },

@@ -1999,7 +1999,10 @@ async function loadOrders() {
         
         let url = `${API_BASE}/orders`;
         const params = [];
-        if (status) params.push(`status=${status}`);
+        // Only add status if it's not empty (empty means "all")
+        if (status && status.trim() !== '') {
+            params.push(`status=${status}`);
+        }
         if (startDate) params.push(`start_date=${startDate}`);
         if (endDate) params.push(`end_date=${endDate}`);
         if (customerId) params.push(`customer_id=${customerId}`);

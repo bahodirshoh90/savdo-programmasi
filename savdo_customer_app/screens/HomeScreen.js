@@ -43,11 +43,16 @@ export default function HomeScreen() {
         
         // If image_url doesn't start with http, make it absolute
         if (imageUrl && !imageUrl.startsWith('http')) {
-          // Remove leading slash if present to avoid double slashes
-          if (imageUrl.startsWith('/')) {
-            imageUrl = imageUrl.substring(1);
+          // Static files are served from root, not /api
+          // Remove /api from BASE_URL for static file URLs
+          const baseUrl = API_CONFIG.BASE_URL.replace('/api', '').replace(/\/$/, '');
+          
+          // Ensure imageUrl starts with /
+          if (!imageUrl.startsWith('/')) {
+            imageUrl = '/' + imageUrl;
           }
-          imageUrl = `${API_CONFIG.BASE_URL.replace(/\/$/, '')}/${imageUrl}`;
+          
+          imageUrl = `${baseUrl}${imageUrl}`;
         }
         
         return {
