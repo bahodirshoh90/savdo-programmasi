@@ -25,13 +25,17 @@ export default function OrdersScreen({ navigation }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadOrders = async () => {
+    console.log('[ORDERS SCREEN] Loading orders with filter:', statusFilter);
     setIsLoading(true);
     try {
       const status = statusFilter === 'all' ? null : statusFilter;
+      console.log('[ORDERS SCREEN] Calling getOrders with status:', status);
       const result = await getOrders(status);
+      console.log('[ORDERS SCREEN] Orders received:', result);
+      console.log('[ORDERS SCREEN] Orders count:', Array.isArray(result) ? result.length : 0);
       setOrders(Array.isArray(result) ? result : []);
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error('[ORDERS SCREEN] Error loading orders:', error);
       // Only show alert for non-Customer ID errors
       if (error.message && !error.message.includes('Customer ID not found')) {
         Alert.alert('Xatolik', 'Buyurtmalarni yuklashda xatolik');
@@ -60,21 +64,31 @@ export default function OrdersScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Status Filter */}
+      {/* Status Filter - Modern Design */}
       <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>Status:</Text>
-        <Picker
-          selectedValue={statusFilter}
-          onValueChange={setStatusFilter}
-          style={styles.picker}
-          dropdownIconColor={Colors.primary}
-        >
-          <Picker.Item label="Barchasi" value="all" />
-          <Picker.Item label="Kutilmoqda" value="pending" />
-          <Picker.Item label="Jarayonda" value="processing" />
-          <Picker.Item label="Bajarildi" value="completed" />
-          <Picker.Item label="Bekor qilindi" value="cancelled" />
-        </Picker>
+        <View style={styles.filterCard}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterLabel}>Holatni tanlang</Text>
+          </View>
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={statusFilter}
+              onValueChange={(value) => {
+                console.log('[ORDERS SCREEN] Filter changed to:', value);
+                setStatusFilter(value);
+              }}
+              style={styles.picker}
+              dropdownIconColor={Colors.primary}
+              itemStyle={styles.pickerItem}
+            >
+              <Picker.Item label="Barchasi" value="all" />
+              <Picker.Item label="Kutilmoqda" value="pending" />
+              <Picker.Item label="Jarayonda" value="processing" />
+              <Picker.Item label="Bajarildi" value="completed" />
+              <Picker.Item label="Bekor qilindi" value="cancelled" />
+            </Picker>
+          </View>
+        </View>
       </View>
 
       {isLoading && orders.length === 0 ? (
@@ -114,19 +128,45 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     padding: 16,
+    backgroundColor: Colors.background,
+  },
+  filterCard: {
     backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterHeader: {
+    marginBottom: 12,
   },
   filterLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.textDark,
-    marginBottom: 8,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  pickerWrapper: {
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.primary + '30',
+    overflow: 'hidden',
   },
   picker: {
-    backgroundColor: Colors.borderLight,
-    borderRadius: 8,
+    backgroundColor: 'transparent',
+    height: 50,
+  },
+  pickerItem: {
+    fontSize: 15,
+    color: Colors.textDark,
   },
   listContent: {
     padding: 16,

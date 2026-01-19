@@ -96,34 +96,70 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleLogout = async () => {
+    console.log('[LOGOUT] Logout button pressed');
     Alert.alert(
       'Chiqish',
       'Tizimdan chiqmoqchimisiz?',
       [
-        { text: 'Bekor qilish', style: 'cancel' },
+        { 
+          text: 'Bekor qilish', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('[LOGOUT] Logout cancelled by user');
+          }
+        },
         {
           text: 'Chiqish',
           style: 'destructive',
           onPress: async () => {
+            console.log('[LOGOUT] User confirmed logout');
             try {
+              console.log('[LOGOUT] Step 1: Calling logout function...');
               // Logout first
               await logout();
+              console.log('[LOGOUT] Step 2: Logout function completed successfully');
             } catch (error) {
-              console.error('Logout error:', error);
+              console.error('[LOGOUT] Step 2: Logout error:', error);
+              console.error('[LOGOUT] Error details:', {
+                message: error.message,
+                stack: error.stack,
+              });
             } finally {
+              console.log('[LOGOUT] Step 3: Starting navigation...');
               // Always navigate to login screen, even if logout fails
               // Use a timeout to ensure logout completes before navigation
               setTimeout(() => {
+                console.log('[LOGOUT] Step 4: Inside setTimeout, checking navigation...');
                 if (navigation) {
+                  console.log('[LOGOUT] Navigation object exists:', !!navigation);
+                  console.log('[LOGOUT] Navigation methods:', {
+                    hasReset: typeof navigation.reset === 'function',
+                    hasNavigate: typeof navigation.navigate === 'function',
+                    hasDispatch: typeof navigation.dispatch === 'function',
+                    hasGetParent: typeof navigation.getParent === 'function',
+                  });
+                  
                   try {
+                    console.log('[LOGOUT] Step 5: Trying to get parent navigators...');
+                    const parent1 = navigation.getParent?.();
+                    console.log('[LOGOUT] First parent:', !!parent1);
+                    const parent2 = parent1?.getParent?.();
+                    console.log('[LOGOUT] Second parent:', !!parent2);
+                    
                     // Try to get root navigator (Stack navigator)
-                    const rootNav = navigation.getParent()?.getParent() || navigation.getParent() || navigation;
+                    const rootNav = parent2 || parent1 || navigation;
+                    console.log('[LOGOUT] Root navigator:', !!rootNav);
+                    console.log('[LOGOUT] Root navigator has reset:', typeof rootNav?.reset === 'function');
+                    
                     if (rootNav && rootNav.reset) {
+                      console.log('[LOGOUT] Step 6: Using rootNav.reset()...');
                       rootNav.reset({
                         index: 0,
                         routes: [{ name: 'Login' }],
                       });
+                      console.log('[LOGOUT] Step 7: reset() called successfully');
                     } else {
+                      console.log('[LOGOUT] Step 6: rootNav.reset not available, using CommonActions...');
                       // Use CommonActions as fallback
                       navigation.dispatch(
                         CommonActions.reset({
@@ -131,16 +167,29 @@ export default function ProfileScreen({ navigation }) {
                           routes: [{ name: 'Login' }],
                         })
                       );
+                      console.log('[LOGOUT] Step 7: CommonActions.reset() called');
                     }
                   } catch (e) {
-                    console.error('Navigation error:', e);
+                    console.error('[LOGOUT] Step 6: Navigation error:', e);
+                    console.error('[LOGOUT] Error details:', {
+                      message: e.message,
+                      stack: e.stack,
+                    });
                     // Last resort: try to navigate to Login directly
                     try {
+                      console.log('[LOGOUT] Step 7: Trying direct navigation...');
                       navigation.navigate('Login');
+                      console.log('[LOGOUT] Direct navigation called');
                     } catch (e2) {
-                      console.error('Direct navigation also failed:', e2);
+                      console.error('[LOGOUT] Step 7: Direct navigation also failed:', e2);
+                      console.error('[LOGOUT] Final error details:', {
+                        message: e2.message,
+                        stack: e2.stack,
+                      });
                     }
                   }
+                } else {
+                  console.error('[LOGOUT] Step 4: Navigation object is null or undefined');
                 }
               }, 100);
             }

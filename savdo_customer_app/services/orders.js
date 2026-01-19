@@ -12,21 +12,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const getOrders = async (status = null, skip = 0, limit = 100) => {
   try {
     const customerId = await AsyncStorage.getItem('customer_id');
+    console.log('[ORDERS] Getting orders with:', { customerId, status, skip, limit });
+    
     if (!customerId) {
-      console.warn('Customer ID not found - returning empty orders list');
+      console.warn('[ORDERS] Customer ID not found - returning empty orders list');
       return []; // Return empty array instead of throwing error
     }
 
     let url = `${API_ENDPOINTS.ORDERS.LIST}?customer_id=${customerId}&skip=${skip}&limit=${limit}`;
     // Only add status if it's provided and not 'all'
-    if (status && status !== 'all') {
+    if (status && status !== 'all' && status !== null) {
       url += `&status=${status}`;
     }
 
+    console.log('[ORDERS] Request URL:', url);
     const response = await api.get(url);
-    return Array.isArray(response) ? response : (response?.orders || []);
+    console.log('[ORDERS] Response received:', response);
+    console.log('[ORDERS] Response type:', typeof response);
+    console.log('[ORDERS] Is array:', Array.isArray(response));
+    console.log('[ORDERS] Response length:', Array.isArray(response) ? response.length : 'N/A');
+    
+    const orders = Array.isArray(response) ? response : (response?.orders || []);
+    console.log('[ORDERS] Final orders array length:', orders.length);
+    return orders;
   } catch (error) {
-    console.error('Error getting orders:', error);
+    console.error('[ORDERS] Error getting orders:', error);
+    console.error('[ORDERS] Error message:', error.message);
+    console.error('[ORDERS] Error response:', error.response?.data);
+    console.error('[ORDERS] Error status:', error.response?.status);
     // Return empty array on error instead of throwing
     return [];
   }
