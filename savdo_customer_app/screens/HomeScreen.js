@@ -12,7 +12,7 @@ import BannerCarousel from '../components/BannerCarousel';
 import api from '../services/api';
 import API_CONFIG from '../config/api';
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { getTotalItems } = useCart();
