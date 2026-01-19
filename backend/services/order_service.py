@@ -394,6 +394,11 @@ class OrderService:
         if hasattr(status_value, 'value'):
             status_value = status_value.value
         
+        # Handle payment_method enum conversion
+        payment_method_value = None
+        if hasattr(order, 'payment_method') and order.payment_method:
+            payment_method_value = order.payment_method.value if hasattr(order.payment_method, 'value') else str(order.payment_method)
+        
         return {
             "id": order.id,
             "seller_id": order.seller_id,
@@ -402,6 +407,7 @@ class OrderService:
             "seller_name": seller_name,
             "status": status_value,
             "total_amount": order.total_amount,
+            "payment_method": payment_method_value,
             "items": items_data,
             "is_offline": order.is_offline,
             "synced_at": order.synced_at,

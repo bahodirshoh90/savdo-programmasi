@@ -325,6 +325,9 @@ class Order(Base):
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
     total_amount = Column(Float, nullable=False, default=0.0)
     
+    # Payment method (specified by customer when creating order)
+    payment_method = Column(Enum(PaymentMethod), nullable=False, default=PaymentMethod.CASH)
+    
     # Offline support
     is_offline = Column(Boolean, nullable=False, default=False)
     synced_at = Column(DateTime(timezone=True), nullable=True)

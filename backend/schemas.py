@@ -325,6 +325,7 @@ class OrderResponse(BaseModel):
     seller_name: str
     status: OrderStatus
     total_amount: float
+    payment_method: Optional[str] = None  # Payment method (cash, card, debt, bank_transfer)
     items: List[OrderItemResponse]
     is_offline: bool
     synced_at: Optional[datetime] = None

@@ -124,21 +124,43 @@ export default function CartScreen({ navigation }) {
       
       let errorMessage = 'Buyurtma yaratishda xatolik';
       
-      if (error.response?.data) {
-        const detail = error.response.data.detail || error.response.data.message || error.response.data.error;
-        if (typeof detail === 'string') {
-          errorMessage = detail;
-        } else if (Array.isArray(detail)) {
-          errorMessage = detail.map(d => d.msg || d.message).join(', ');
-        } else {
-          errorMessage = JSON.stringify(detail);
+      // Try to extract error message from response
+      if (error.response) {
+        const responseData = error.response.data;
+        console.log('[CART] Response data:', responseData);
+        
+        if (responseData) {
+          // FastAPI returns errors in {detail: "message"} format
+          if (responseData.detail) {
+            errorMessage = typeof responseData.detail === 'string' 
+              ? responseData.detail 
+              : JSON.stringify(responseData.detail);
+          } else if (responseData.message) {
+            errorMessage = typeof responseData.message === 'string'
+              ? responseData.message
+              : JSON.stringify(responseData.message);
+          } else if (responseData.error) {
+            errorMessage = typeof responseData.error === 'string'
+              ? responseData.error
+              : JSON.stringify(responseData.error);
+          } else if (Array.isArray(responseData)) {
+            errorMessage = responseData.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
+          } else if (typeof responseData === 'object') {
+            // Try to stringify the whole object
+            errorMessage = JSON.stringify(responseData);
+          } else if (typeof responseData === 'string') {
+            errorMessage = responseData;
+          }
         }
       } else if (error.message) {
         errorMessage = error.message;
       } else if (error.code === 'ECONNABORTED') {
         errorMessage = 'Vaqt tugadi. Internetni tekshiring va qayta urinib ko\'ring.';
+      } else if (error.code === 'ERR_NETWORK') {
+        errorMessage = 'Internet aloqasi yo\'q. Internetni tekshiring va qayta urinib ko\'ring.';
       }
       
+      console.log('[CART] Final error message:', errorMessage);
       Alert.alert('Xatolik', errorMessage);
     } finally {
     setIsSubmitting(false);

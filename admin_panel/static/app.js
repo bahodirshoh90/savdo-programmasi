@@ -60,6 +60,7 @@ function checkAuth() {
 
 async function verifyAdminAuth() {
     try {
+        console.log('[ADMIN] Verifying admin auth...');
         const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${currentAdminToken}`,
@@ -69,33 +70,44 @@ async function verifyAdminAuth() {
         
         if (response.ok) {
             const user = await response.json();
+            console.log('[ADMIN] User data received:', user);
             // Check if user has admin permissions (has admin role or specific permissions)
             const hasAdminAccess = user.role_name?.toLowerCase().includes('admin') || 
                                   user.permissions?.includes('admin.settings') ||
                                   user.permissions?.includes('admin.sellers');
             
+            console.log('[ADMIN] Has admin access:', hasAdminAccess);
+            
             if (hasAdminAccess) {
                 currentAdminUser = user;
+                console.log('[ADMIN] Showing admin panel...');
                 showAdminPanel();
                 // Ensure navigation and dashboard are loaded
-                if (typeof setupNavigation === 'function') {
-                    setupNavigation();
-                }
-                if (typeof loadDashboard === 'function') {
-                    loadDashboard();
-                }
-                if (typeof setupWebSocket === 'function') {
-                    setupWebSocket();
-                }
+                setTimeout(() => {
+                    if (typeof setupNavigation === 'function') {
+                        console.log('[ADMIN] Setting up navigation...');
+                        setupNavigation();
+                    }
+                    if (typeof loadDashboard === 'function') {
+                        console.log('[ADMIN] Loading dashboard...');
+                        loadDashboard();
+                    }
+                    if (typeof setupWebSocket === 'function') {
+                        console.log('[ADMIN] Setting up WebSocket...');
+                        setupWebSocket();
+                    }
+                }, 100);
             } else {
                 alert('Sizda admin panelga kirish uchun ruxsat yo\'q. Faqat admin rolli foydalanuvchilar kirishi mumkin.');
                 logout();
             }
         } else {
+            console.error('[ADMIN] Auth verification failed:', response.status, response.statusText);
             logout();
         }
     } catch (error) {
-        console.error('Auth verification error:', error);
+        console.error('[ADMIN] Auth verification error:', error);
+        alert('Autentifikatsiya tekshiruvi xatosi: ' + error.message);
         logout();
     }
 }
@@ -159,12 +171,22 @@ async function handleLogin(e) {
 
 function showAdminPanel() {
     try {
-        document.getElementById('login-page').style.display = 'none';
+        console.log('[ADMIN] showAdminPanel called');
+        const loginPage = document.getElementById('login-page');
+        if (loginPage) {
+            loginPage.style.display = 'none';
+            console.log('[ADMIN] Login page hidden');
+        } else {
+            console.warn('[ADMIN] Login page element not found');
+        }
+        
         const adminPanel = document.getElementById('admin-panel');
         if (adminPanel) {
             adminPanel.style.display = 'flex';
+            console.log('[ADMIN] Admin panel displayed');
         } else {
             console.error('[ADMIN] Admin panel element not found!');
+            alert('Admin panel element topilmadi. Sahifani yangilang.');
             return;
         }
         
@@ -172,20 +194,30 @@ function showAdminPanel() {
         const adminNameEl = document.getElementById('admin-user-name');
         if (adminNameEl && currentAdminUser) {
             adminNameEl.textContent = currentAdminUser.name || 'Admin';
+            console.log('[ADMIN] Admin name updated:', currentAdminUser.name);
         }
         
         // Ensure navigation is set up
         if (typeof setupNavigation === 'function') {
+            console.log('[ADMIN] Setting up navigation...');
             setupNavigation();
+        } else {
+            console.warn('[ADMIN] setupNavigation function not found');
         }
         
         // Show dashboard by default
         if (typeof showPage === 'function') {
+            console.log('[ADMIN] Showing dashboard page...');
             showPage('dashboard');
+        } else {
+            console.warn('[ADMIN] showPage function not found');
         }
+        
+        console.log('[ADMIN] Admin panel shown successfully');
     } catch (error) {
         console.error('[ADMIN] Error showing admin panel:', error);
-        alert('Admin panelni yuklashda xatolik yuz berdi. Sahifani yangilang.');
+        console.error('[ADMIN] Error stack:', error.stack);
+        alert('Admin panelni yuklashda xatolik yuz berdi: ' + error.message + '. Sahifani yangilang.');
     }
 }
 
