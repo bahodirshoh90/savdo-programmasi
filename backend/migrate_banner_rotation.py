@@ -5,16 +5,19 @@ Migration script to add rotation_interval column to banners table
 import sqlite3
 import os
 import sys
+from pathlib import Path
 
-# Get database path
-db_path = os.path.join(os.path.dirname(__file__), 'database.db')
+# Get database path (same as database.py)
+BASE_DIR = Path(__file__).resolve().parent
+db_path = BASE_DIR / "inventory.db"
 
-if not os.path.exists(db_path):
+if not db_path.exists():
     print(f"Database file not found: {db_path}")
+    print(f"Please make sure inventory.db exists in the backend directory.")
     sys.exit(1)
 
 try:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
     
     # Check if column already exists
