@@ -1780,14 +1780,26 @@ def get_orders(
         for order in orders:
             try:
                 order_response_dict = OrderService.order_to_response(order)
-                # Convert string status to OrderStatus enum for Pydantic validation
+                # Ensure status is a valid OrderStatus enum value
                 from models import OrderStatus
-                if isinstance(order_response_dict.get('status'), str):
-                    try:
-                        order_response_dict['status'] = OrderStatus(order_response_dict['status'])
-                    except (ValueError, KeyError):
-                        # If status is invalid, use PENDING as default
-                        order_response_dict['status'] = OrderStatus.PENDING
+                status_str = order_response_dict.get('status', 'pending')
+                if isinstance(status_str, str):
+                    # Try to find matching enum by value
+                    status_enum = None
+                    for status in OrderStatus:
+                        if status.value == status_str:
+                            status_enum = status
+                            break
+                    if status_enum is None:
+                        # Default to PENDING if not found
+                        status_enum = OrderStatus.PENDING
+                    order_response_dict['status'] = status_enum
+                elif isinstance(status_str, OrderStatus):
+                    # Already an enum, keep it
+                    order_response_dict['status'] = status_str
+                else:
+                    # Fallback to PENDING
+                    order_response_dict['status'] = OrderStatus.PENDING
                 result.append(OrderResponse.model_validate(order_response_dict))
             except Exception as e:
                 print(f"Error converting order {order.id if order else 'unknown'} to response: {e}")
