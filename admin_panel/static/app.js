@@ -77,6 +77,16 @@ async function verifyAdminAuth() {
             if (hasAdminAccess) {
                 currentAdminUser = user;
                 showAdminPanel();
+                // Ensure navigation and dashboard are loaded
+                if (typeof setupNavigation === 'function') {
+                    setupNavigation();
+                }
+                if (typeof loadDashboard === 'function') {
+                    loadDashboard();
+                }
+                if (typeof setupWebSocket === 'function') {
+                    setupWebSocket();
+                }
             } else {
                 alert('Sizda admin panelga kirish uchun ruxsat yo\'q. Faqat admin rolli foydalanuvchilar kirishi mumkin.');
                 logout();
@@ -93,11 +103,6 @@ async function verifyAdminAuth() {
 function showLogin() {
     document.getElementById('login-page').style.display = 'flex';
     document.getElementById('admin-panel').style.display = 'none';
-}
-
-function showAdminPanel() {
-    document.getElementById('login-page').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'flex';
 }
 
 async function handleLogin(e) {
@@ -153,13 +158,34 @@ async function handleLogin(e) {
 }
 
 function showAdminPanel() {
-    document.getElementById('login-page').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'flex';
-    
-    // Update admin name in sidebar
-    const adminNameEl = document.getElementById('admin-user-name');
-    if (adminNameEl && currentAdminUser) {
-        adminNameEl.textContent = currentAdminUser.name || 'Admin';
+    try {
+        document.getElementById('login-page').style.display = 'none';
+        const adminPanel = document.getElementById('admin-panel');
+        if (adminPanel) {
+            adminPanel.style.display = 'flex';
+        } else {
+            console.error('[ADMIN] Admin panel element not found!');
+            return;
+        }
+        
+        // Update admin name in sidebar
+        const adminNameEl = document.getElementById('admin-user-name');
+        if (adminNameEl && currentAdminUser) {
+            adminNameEl.textContent = currentAdminUser.name || 'Admin';
+        }
+        
+        // Ensure navigation is set up
+        if (typeof setupNavigation === 'function') {
+            setupNavigation();
+        }
+        
+        // Show dashboard by default
+        if (typeof showPage === 'function') {
+            showPage('dashboard');
+        }
+    } catch (error) {
+        console.error('[ADMIN] Error showing admin panel:', error);
+        alert('Admin panelni yuklashda xatolik yuz berdi. Sahifani yangilang.');
     }
 }
 
