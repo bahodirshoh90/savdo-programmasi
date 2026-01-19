@@ -112,34 +112,37 @@ export default function ProfileScreen({ navigation }) {
               console.error('Logout error:', error);
             } finally {
               // Always navigate to login screen, even if logout fails
-              if (navigation) {
-                // Navigate up to the root Stack navigator and reset to Login
-                // Profile is in Tab -> Tab is in Stack, so we need to go up 2 levels
-                const rootNavigation = navigation.getParent()?.getParent();
-                if (rootNavigation) {
-                  rootNavigation.reset({
-                    index: 0,
-                    routes: [{ name: 'Login' }],
-                  });
-                } else {
-                  // Fallback: try to navigate directly
+              // Use a timeout to ensure logout completes before navigation
+              setTimeout(() => {
+                if (navigation) {
                   try {
-                    navigation.getParent()?.reset({
-                      index: 0,
-                      routes: [{ name: 'Login' }],
-                    });
-                  } catch (e) {
-                    console.error('Navigation error:', e);
-                    // Last resort: use CommonActions
-                    navigation.dispatch(
-                      CommonActions.reset({
+                    // Try to get root navigator (Stack navigator)
+                    const rootNav = navigation.getParent()?.getParent() || navigation.getParent() || navigation;
+                    if (rootNav && rootNav.reset) {
+                      rootNav.reset({
                         index: 0,
                         routes: [{ name: 'Login' }],
-                      })
-                    );
+                      });
+                    } else {
+                      // Use CommonActions as fallback
+                      navigation.dispatch(
+                        CommonActions.reset({
+                          index: 0,
+                          routes: [{ name: 'Login' }],
+                        })
+                      );
+                    }
+                  } catch (e) {
+                    console.error('Navigation error:', e);
+                    // Last resort: try to navigate to Login directly
+                    try {
+                      navigation.navigate('Login');
+                    } catch (e2) {
+                      console.error('Direct navigation also failed:', e2);
+                    }
                   }
                 }
-              }
+              }, 100);
             }
           },
         },

@@ -2877,12 +2877,39 @@ async function loadAdminOrders() {
         if (token) headers['Authorization'] = `Bearer ${token}`;
         if (sellerId) headers['X-Seller-ID'] = sellerId;
         
-        const response = await fetch(`${API_BASE}/orders?limit=100`, { headers });
-        if (!response.ok) throw new Error('Failed to load orders');
+        // Build URL with optional filters
+        let url = `${API_BASE}/orders?limit=100`;
+        const statusFilter = document.getElementById('admin-order-status-filter')?.value || '';
+        const startDate = document.getElementById('admin-order-start-date')?.value;
+        const endDate = document.getElementById('admin-order-end-date')?.value;
+        
+        const params = [];
+        // Only add status if it's not empty (empty means "all")
+        if (statusFilter && statusFilter.trim() !== '' && statusFilter !== 'all') {
+            params.push(`status=${encodeURIComponent(statusFilter)}`);
+        }
+        if (startDate && startDate.trim() !== '') {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate && endDate.trim() !== '') {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+        if (params.length > 0) {
+            url += '&' + params.join('&');
+        }
+        
+        console.log('Loading admin orders from:', url);
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            console.error('Admin orders API error:', response.status, errorText);
+            throw new Error(`Failed to load orders: ${response.status}`);
+        }
         
         const orders = await response.json();
+        console.log('Admin orders loaded:', orders ? orders.length : 0, 'orders');
         
-        if (orders.length === 0) {
+        if (!orders || orders.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center">Buyurtmalar topilmadi</td></tr>';
             return;
         }

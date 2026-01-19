@@ -2030,8 +2030,16 @@ async function loadOrders() {
         const orders = await response.json();
         
         console.log('Orders loaded:', orders ? orders.length : 0);
+        console.log('Orders data:', orders);
         
-        if (!orders || orders.length === 0) {
+        // Check if orders is actually an array
+        if (!Array.isArray(orders)) {
+            console.error('Orders is not an array:', typeof orders, orders);
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Xatolik: Serverdan noto\'g\'ri javob olindi</td></tr>';
+            return;
+        }
+        
+        if (orders.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" class="text-center">Buyurtmalar topilmadi</td></tr>';
             return;
         }
