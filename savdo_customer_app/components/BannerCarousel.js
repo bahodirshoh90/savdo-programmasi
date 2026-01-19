@@ -99,7 +99,17 @@ export default function BannerCarousel({ banners = [], onBannerPress, rotationIn
               style={styles.bannerImage}
               resizeMode="cover"
               onError={(error) => {
-                console.warn('Banner image failed to load:', banner.image_url, error);
+                console.warn('Banner image failed to load:', {
+                  bannerId: banner.id,
+                  imageUrl: banner.image_url,
+                  error: error.nativeEvent?.error || error
+                });
+              }}
+              onLoad={() => {
+                console.log('Banner image loaded successfully:', {
+                  bannerId: banner.id,
+                  imageUrl: banner.image_url
+                });
               }}
             />
           </TouchableOpacity>

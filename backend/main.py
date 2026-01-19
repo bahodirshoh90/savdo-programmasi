@@ -1826,6 +1826,7 @@ def get_orders(
         
         if not result:
             # If no orders could be converted, return empty list instead of error
+            print("Warning: No orders could be converted to response format")
             return []
         
         return result
@@ -1834,6 +1835,7 @@ def get_orders(
         import traceback
         traceback.print_exc()
         # Return empty list instead of raising error to prevent 500
+        # Log the error for debugging but don't crash the endpoint
         return []
 
 
