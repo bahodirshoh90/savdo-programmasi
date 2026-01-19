@@ -2002,14 +2002,24 @@ async function loadOrders() {
         // Only add status if it's not empty (empty string or "all" means "all")
         // Empty string from select means "all", so don't add status parameter
         if (status && status.trim() !== '' && status !== 'all') {
-            params.push(`status=${status}`);
+            params.push(`status=${encodeURIComponent(status)}`);
         }
-        if (startDate) params.push(`start_date=${startDate}`);
-        if (endDate) params.push(`end_date=${endDate}`);
-        if (customerId) params.push(`customer_id=${customerId}`);
-        if (params.length > 0) url += '?' + params.join('&');
+        if (startDate && startDate.trim() !== '') {
+            params.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate && endDate.trim() !== '') {
+            params.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+        if (customerId) {
+            params.push(`customer_id=${customerId}`);
+        }
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
         
         console.log('Loading orders from:', url);
+        console.log('Status filter value:', status);
+        console.log('Status filter type:', typeof status);
         
         const response = await fetch(url);
         

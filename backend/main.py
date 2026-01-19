@@ -1786,7 +1786,9 @@ def get_orders(
 ):
     """Get all orders (can filter by status, seller_id, or customer_id)"""
     try:
-        orders = OrderService.get_orders(db, status=status, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
+        # Convert empty string to None for status filter
+        status_filter = status if status and status.strip() else None
+        orders = OrderService.get_orders(db, status=status_filter, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
         result = []
         for order in orders:
             try:
