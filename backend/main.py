@@ -86,6 +86,17 @@ try:
                 conn.execute(text("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255)"))
                 conn.commit()
         except Exception as e:
+            print(f"Warning: Error migrating customers table: {e}")
+        
+        # Migrate banners table to add rotation_interval column if it doesn't exist
+        try:
+            banners_columns = [col['name'] for col in inspector.get_columns('banners')]
+            if 'rotation_interval' not in banners_columns:
+                conn.execute(text("ALTER TABLE banners ADD COLUMN rotation_interval INTEGER NOT NULL DEFAULT 3000"))
+                conn.commit()
+                print("✓ Added rotation_interval column to banners table")
+        except Exception as e:
+            print(f"Warning: Error migrating banners table: {e}")
             print(f"Warning: Could not migrate customers table: {e}")
 except Exception as e:
     print(f"Warning: Could not migrate database: {e}")
