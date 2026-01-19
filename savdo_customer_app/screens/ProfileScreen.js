@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import Colors from '../constants/colors';
 import api from '../services/api';
