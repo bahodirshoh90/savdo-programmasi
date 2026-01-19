@@ -160,12 +160,21 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Get allowed origins from environment variable or use defaults
 import os
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
 if allowed_origins_env:
     # Parse comma-separated list from environment
     allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
-else:
-    # Default: production domain + localhost for development
+elif is_production:
+    # Production: only specific origins
     allowed_origins = [
+        "https://uztoysavdo.uz",
+        "https://www.uztoysavdo.uz",
+    ]
+else:
+    # Development: allow all localhost origins
+    allowed_origins = [
+        "*",  # Allow all origins in development for easier testing
         "https://uztoysavdo.uz",
         "http://localhost:3000",
         "http://localhost:8000",
@@ -178,13 +187,25 @@ else:
         "ionic://localhost",
     ]
 
+# For development, use wildcard but still need to handle credentials properly
+if "*" in allowed_origins and not is_production:
+    # Use regex pattern or list of common development origins
+    allowed_origins = [
+        "https://uztoysavdo.uz",
+        "https://www.uztoysavdo.uz",
+        r"http://localhost:\d+",  # All localhost ports
+        r"http://127\.0\.0\.1:\d+",  # All 127.0.0.1 ports
+        "capacitor://localhost",
+        "ionic://localhost",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=allowed_origins if not is_production and "*" not in str(allowed_origins) else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Seller-ID", "Authorization", "Content-Type"],
+    expose_headers=["X-Seller-ID", "Authorization", "Content-Type", "X-Customer-ID"],
 )
 
 # WebSocket manager
