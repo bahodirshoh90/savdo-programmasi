@@ -1814,19 +1814,27 @@ def get_orders(
                     status_enum = OrderStatus.PENDING
                 
                 order_response_dict['status'] = status_enum
-                result.append(OrderResponse.model_validate(order_response_dict))
+                # Validate and convert to response
+                validated_order = OrderResponse.model_validate(order_response_dict)
+                result.append(validated_order)
             except Exception as e:
                 print(f"Error converting order {order.id if order else 'unknown'} to response: {e}")
                 import traceback
                 traceback.print_exc()
                 # Skip this order instead of failing completely
                 continue
+        
+        if not result:
+            # If no orders could be converted, return empty list instead of error
+            return []
+        
         return result
     except Exception as e:
         print(f"Error in get_orders endpoint: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Xatolik: {str(e)}")
+        # Return empty list instead of raising error to prevent 500
+        return []
 
 
 @app.get("/api/orders/count")

@@ -98,7 +98,9 @@ export default function BannerCarousel({ banners = [], onBannerPress, rotationIn
               source={{ uri: banner.image_url || banner.image }}
               style={styles.bannerImage}
               resizeMode="cover"
-              defaultSource={require('../assets/icon.png')}
+              onError={(error) => {
+                console.warn('Banner image failed to load:', banner.image_url, error);
+              }}
             />
           </TouchableOpacity>
         ))}

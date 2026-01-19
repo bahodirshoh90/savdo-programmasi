@@ -26,15 +26,37 @@ export default function HomeScreen() {
     try {
       const response = await api.get('/banners?is_active=true');
       const activeBanners = Array.isArray(response) ? response : [];
+      console.log('Loaded banners:', activeBanners.length, activeBanners);
+      
+      if (activeBanners.length === 0) {
+        console.log('No active banners found');
+        setBanners([]);
+        return;
+      }
+      
       // Sort by display_order
       activeBanners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      
       // Convert relative URLs to absolute URLs if needed
-      const bannersWithUrls = activeBanners.map(banner => ({
-        ...banner,
-        image_url: banner.image_url?.startsWith('http') 
-          ? banner.image_url 
-          : `${API_CONFIG.BASE_URL}${banner.image_url}`
-      }));
+      const bannersWithUrls = activeBanners.map(banner => {
+        let imageUrl = banner.image_url;
+        
+        // If image_url doesn't start with http, make it absolute
+        if (imageUrl && !imageUrl.startsWith('http')) {
+          // Remove leading slash if present to avoid double slashes
+          if (imageUrl.startsWith('/')) {
+            imageUrl = imageUrl.substring(1);
+          }
+          imageUrl = `${API_CONFIG.BASE_URL.replace(/\/$/, '')}/${imageUrl}`;
+        }
+        
+        return {
+          ...banner,
+          image_url: imageUrl
+        };
+      });
+      
+      console.log('Processed banners with URLs:', bannersWithUrls);
       setBanners(bannersWithUrls);
     } catch (error) {
       console.error('Error loading banners:', error);
