@@ -83,109 +83,109 @@ class OrderService:
                 raise ValueError(error_msg)
             
             print(f"[ORDER SERVICE] Customer found: {customer.name} (ID: {customer.id})")
-        
-        # Create order
-        # Set payment method - default to CASH if not provided or invalid
-        from models import PaymentMethod
-        payment_method = PaymentMethod.CASH
-        if order.payment_method:
-            try:
-                # Try to get the payment method by value (e.g., "cash", "card", "debt")
-                payment_method_str = str(order.payment_method).lower().strip()
-                print(f"[ORDER SERVICE] Converting payment_method: '{payment_method_str}'")
+            
+            # Create order
+            # Set payment method - default to CASH if not provided or invalid
+            from models import PaymentMethod
+            payment_method = PaymentMethod.CASH
+            if order.payment_method:
+                try:
+                    # Try to get the payment method by value (e.g., "cash", "card", "debt")
+                    payment_method_str = str(order.payment_method).lower().strip()
+                    print(f"[ORDER SERVICE] Converting payment_method: '{payment_method_str}'")
+                    
+                    # Try to find matching enum by value
+                    payment_method = PaymentMethod(payment_method_str)
+                    print(f"[ORDER SERVICE] Payment method converted successfully: {payment_method}")
+                except ValueError as e:
+                    # If invalid, use CASH as default
+                    print(f"[ORDER SERVICE] Invalid payment_method '{order.payment_method}', using CASH as default. Error: {e}")
+                    print(f"[ORDER SERVICE] Available payment methods: {[pm.value for pm in PaymentMethod]}")
+                    payment_method = PaymentMethod.CASH
+            
+            db_order = Order(
+                seller_id=order.seller_id,
+                customer_id=order.customer_id,
+                status=OrderStatus.PENDING,
+                total_amount=0,
+                payment_method=payment_method,
+                is_offline=order.is_offline
+            )
+            db.add(db_order)
+            db.flush()
+            
+            total_amount = 0
+            
+            # Process each item
+            for item in order.items:
+                # Calculate breakdown
+                calculation = CalculationService.calculate_sale(
+                    db, item.product_id, item.requested_quantity, order.customer_id
+                )
                 
-                # Try to find matching enum by value
-                payment_method = PaymentMethod(payment_method_str)
-                print(f"[ORDER SERVICE] Payment method converted successfully: {payment_method}")
-            except ValueError as e:
-                # If invalid, use CASH as default
-                print(f"[ORDER SERVICE] Invalid payment_method '{order.payment_method}', using CASH as default. Error: {e}")
-                print(f"[ORDER SERVICE] Available payment methods: {[pm.value for pm in PaymentMethod]}")
-                payment_method = PaymentMethod.CASH
-        
-        db_order = Order(
-            seller_id=order.seller_id,
-            customer_id=order.customer_id,
-            status=OrderStatus.PENDING,
-            total_amount=0,
-            payment_method=payment_method,
-            is_offline=order.is_offline
-        )
-        db.add(db_order)
-        db.flush()
-        
-        total_amount = 0
-        
-        # Process each item
-        for item in order.items:
-            # Calculate breakdown
-            calculation = CalculationService.calculate_sale(
-                db, item.product_id, item.requested_quantity, order.customer_id
-            )
+                if "error" in calculation:
+                    db.rollback()
+                    raise ValueError(f"Product {item.product_id}: {calculation['error']}")
+                
+                # Deduct inventory with audit logging
+                success = CalculationService.deduct_inventory(
+                    db,
+                    item.product_id,
+                    calculation["packages_to_sell"],
+                    calculation["pieces_to_sell"],
+                    user_id=order.seller_id,
+                    user_name=seller.name,
+                    user_type="seller",
+                    action="order_created",
+                    reason=f"Buyurtma #${db_order.id}",
+                    reference_id=db_order.id,
+                    reference_type="order"
+                )
+                
+                if not success:
+                    db.rollback()
+                    raise ValueError(f"Not enough stock for product {item.product_id}")
+                
+                # Create order item
+                order_item = OrderItem(
+                    order_id=db_order.id,
+                    product_id=item.product_id,
+                    requested_quantity=item.requested_quantity,
+                    packages_sold=calculation["packages_to_sell"],
+                    pieces_sold=calculation["pieces_to_sell"],
+                    package_price=calculation["package_price"],
+                    piece_price=calculation["piece_price"],
+                    subtotal=calculation["subtotal"]
+                )
+                db.add(order_item)
+                
+                # Record inventory transaction
+                InventoryService.record_transaction(
+                    db,
+                    item.product_id,
+                    "sale",
+                    -calculation["packages_to_sell"],
+                    -calculation["pieces_to_sell"],
+                    db_order.id,
+                    "order"
+                )
+                
+                total_amount += calculation["subtotal"]
+                print(f"[ORDER SERVICE] Processed item {item.product_id}: {calculation['packages_to_sell']} packages, {calculation['pieces_to_sell']} pieces, subtotal={calculation['subtotal']}")
             
-            if "error" in calculation:
-                db.rollback()
-                raise ValueError(f"Product {item.product_id}: {calculation['error']}")
+            # Update order total
+            db_order.total_amount = total_amount
             
-            # Deduct inventory with audit logging
-            success = CalculationService.deduct_inventory(
-                db,
-                item.product_id,
-                calculation["packages_to_sell"],
-                calculation["pieces_to_sell"],
-                user_id=order.seller_id,
-                user_name=seller.name,
-                user_type="seller",
-                action="order_created",
-                reason=f"Buyurtma #${db_order.id}",
-                reference_id=db_order.id,
-                reference_type="order"
-            )
+            # Mark as synced if not offline
+            if not order.is_offline:
+                db_order.synced_at = datetime.utcnow()
             
-            if not success:
-                db.rollback()
-                raise ValueError(f"Not enough stock for product {item.product_id}")
+            db.commit()
+            db.refresh(db_order)
             
-            # Create order item
-            order_item = OrderItem(
-                order_id=db_order.id,
-                product_id=item.product_id,
-                requested_quantity=item.requested_quantity,
-                packages_sold=calculation["packages_to_sell"],
-                pieces_sold=calculation["pieces_to_sell"],
-                package_price=calculation["package_price"],
-                piece_price=calculation["piece_price"],
-                subtotal=calculation["subtotal"]
-            )
-            db.add(order_item)
+            print(f"[ORDER SERVICE] Order created successfully: order_id={db_order.id}, total={total_amount}")
+            return db_order
             
-            # Record inventory transaction
-            InventoryService.record_transaction(
-                db,
-                item.product_id,
-                "sale",
-                -calculation["packages_to_sell"],
-                -calculation["pieces_to_sell"],
-                db_order.id,
-                "order"
-            )
-            
-            total_amount += calculation["subtotal"]
-            print(f"[ORDER SERVICE] Processed item {item.product_id}: {calculation['packages_to_sell']} packages, {calculation['pieces_to_sell']} pieces, subtotal={calculation['subtotal']}")
-        
-        # Update order total
-        db_order.total_amount = total_amount
-        
-        # Mark as synced if not offline
-        if not order.is_offline:
-            db_order.synced_at = datetime.utcnow()
-        
-        db.commit()
-        db.refresh(db_order)
-        
-        print(f"[ORDER SERVICE] Order created successfully: order_id={db_order.id}, total={total_amount}")
-        return db_order
-        
         except ValueError as ve:
             db.rollback()
             error_msg = str(ve)
