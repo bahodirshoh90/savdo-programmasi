@@ -54,7 +54,13 @@ export const login = async (username, password) => {
       password,
     });
 
-    // Check if it's a customer login
+    console.log('[AUTH] Login response:', { 
+      hasUserType: !!response.user_type, 
+      userType: response.user_type,
+      hasToken: !!response.token 
+    });
+
+    // ONLY allow customer login - reject seller/admin logins
     if (response.user_type === 'customer') {
       const { token, user, customer_id, customer_name } = response;
 
@@ -81,19 +87,13 @@ export const login = async (username, password) => {
       };
     }
 
-    // Handle seller login (if needed in future)
-    const { token, user } = response;
-    
-    // Store token
-    await tokenStorage.setItem('customer_token', token);
-
-    // Store user data (customer info)
-    if (user && user.customer_id) {
-      await AsyncStorage.setItem('customer_id', user.customer_id.toString());
-      await AsyncStorage.setItem('customer_data', JSON.stringify(user));
-    }
-
-    return { success: true, user, token };
+    // If user_type is not 'customer', it means it's a seller/admin login
+    // Reject it with appropriate error message
+    console.warn('[AUTH] Login attempt with non-customer account:', response.user_type || 'seller/admin');
+    return { 
+      success: false, 
+      error: 'Bu login faqat mijozlar uchun. Siz sotuvchi yoki admin hisobidan foydalanmoqchisiz. Iltimos, mijozlar ro\'yxatida bo\'lgan login va parolni kiriting.' 
+    };
   } catch (error) {
     console.error('Login error:', error);
     console.error('Login error response:', error.response?.data);
