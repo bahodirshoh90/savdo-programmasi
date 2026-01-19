@@ -16,15 +16,23 @@ import Colors from '../constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_HEIGHT = 200;
-const ROTATION_INTERVAL = 2000; // 2 seconds
+const DEFAULT_ROTATION_INTERVAL = 3000; // 3 seconds default
 
-export default function BannerCarousel({ banners = [], onBannerPress }) {
+export default function BannerCarousel({ banners = [], onBannerPress, rotationInterval }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef(null);
   const intervalRef = useRef(null);
 
+  // Use rotation_interval from first banner or prop, or default
+  const interval = rotationInterval || (banners.length > 0 && banners[0].rotation_interval) || DEFAULT_ROTATION_INTERVAL;
+
   useEffect(() => {
     if (banners.length <= 1) return;
+
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
 
     // Auto-rotate banners
     intervalRef.current = setInterval(() => {
@@ -41,14 +49,14 @@ export default function BannerCarousel({ banners = [], onBannerPress }) {
         
         return nextIndex;
       });
-    }, ROTATION_INTERVAL);
+    }, interval);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [banners.length]);
+  }, [banners.length, interval]);
 
   const handleScroll = (event) => {
     const offsetX = event.nativeEvent.contentOffset.x;

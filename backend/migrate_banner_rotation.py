@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""
+Migration script to add rotation_interval column to banners table
+"""
+import sqlite3
+import os
+import sys
+
+# Get database path
+db_path = os.path.join(os.path.dirname(__file__), 'database.db')
+
+if not os.path.exists(db_path):
+    print(f"Database file not found: {db_path}")
+    sys.exit(1)
+
+try:
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check if column already exists
+    cursor.execute("PRAGMA table_info(banners)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'rotation_interval' not in columns:
+        print("Adding rotation_interval column to banners table...")
+        cursor.execute("""
+            ALTER TABLE banners 
+            ADD COLUMN rotation_interval INTEGER NOT NULL DEFAULT 3000
+        """)
+        conn.commit()
+        print("✓ rotation_interval column added successfully!")
+    else:
+        print("✓ rotation_interval column already exists")
+    
+    conn.close()
+    print("Migration completed successfully!")
+    
+except Exception as e:
+    print(f"Error during migration: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)

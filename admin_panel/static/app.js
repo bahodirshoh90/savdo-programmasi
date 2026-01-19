@@ -5135,6 +5135,7 @@ async function showAddBannerModal() {
     document.getElementById('banner-image-url').value = '';
     document.getElementById('banner-link-url').value = '';
     document.getElementById('banner-display-order').value = '0';
+    document.getElementById('banner-rotation-interval').value = '3000';
     document.getElementById('banner-is-active').checked = true;
     document.getElementById('banner-image-preview').innerHTML = '';
     document.getElementById('banner-product-select').value = '';
@@ -5154,6 +5155,7 @@ async function editBanner(id) {
         document.getElementById('banner-image-url').value = banner.image_url || '';
         document.getElementById('banner-link-url').value = banner.link_url || '';
         document.getElementById('banner-display-order').value = banner.display_order || 0;
+        document.getElementById('banner-rotation-interval').value = banner.rotation_interval || 3000;
         document.getElementById('banner-is-active').checked = banner.is_active !== false;
         
         // Load products and check if link_url matches a product
@@ -5208,6 +5210,7 @@ async function saveBanner(event) {
         let imageUrl = document.getElementById('banner-image-url').value.trim();
         const linkUrl = document.getElementById('banner-link-url').value.trim();
         const displayOrder = parseInt(document.getElementById('banner-display-order').value) || 0;
+        const rotationInterval = parseInt(document.getElementById('banner-rotation-interval').value) || 3000;
         const isActive = document.getElementById('banner-is-active').checked;
         
         // Handle image file upload if selected
@@ -5243,6 +5246,7 @@ async function saveBanner(event) {
             image_url: imageUrl,
             link_url: linkUrl || null,
             display_order: displayOrder,
+            rotation_interval: rotationInterval,
             is_active: isActive
         };
         

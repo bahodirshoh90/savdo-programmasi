@@ -1782,24 +1782,27 @@ def get_orders(
                 order_response_dict = OrderService.order_to_response(order)
                 # Ensure status is a valid OrderStatus enum value
                 from models import OrderStatus
-                status_str = order_response_dict.get('status', 'pending')
-                if isinstance(status_str, str):
+                status_value = order_response_dict.get('status', 'pending')
+                
+                # Convert to enum if needed
+                status_enum = None
+                if isinstance(status_value, str):
                     # Try to find matching enum by value
-                    status_enum = None
                     for status in OrderStatus:
-                        if status.value == status_str:
+                        if status.value == status_value:
                             status_enum = status
                             break
                     if status_enum is None:
                         # Default to PENDING if not found
                         status_enum = OrderStatus.PENDING
-                    order_response_dict['status'] = status_enum
-                elif isinstance(status_str, OrderStatus):
-                    # Already an enum, keep it
-                    order_response_dict['status'] = status_str
+                elif isinstance(status_value, OrderStatus):
+                    # Already an enum, use it
+                    status_enum = status_value
                 else:
                     # Fallback to PENDING
-                    order_response_dict['status'] = OrderStatus.PENDING
+                    status_enum = OrderStatus.PENDING
+                
+                order_response_dict['status'] = status_enum
                 result.append(OrderResponse.model_validate(order_response_dict))
             except Exception as e:
                 print(f"Error converting order {order.id if order else 'unknown'} to response: {e}")

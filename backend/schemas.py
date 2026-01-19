@@ -392,6 +392,7 @@ class BannerBase(BaseModel):
     link_url: Optional[str] = Field(None, max_length=500)
     is_active: bool = Field(default=True)
     display_order: int = Field(default=0, ge=0)
+    rotation_interval: int = Field(default=3000, ge=1000, le=30000)  # Almashish vaqti (millisekundlarda, 1-30 soniya)
 
 
 class BannerCreate(BannerBase):
@@ -406,6 +407,7 @@ class BannerUpdate(BaseModel):
     link_url: Optional[str] = Field(None, max_length=500)
     is_active: Optional[bool] = None
     display_order: Optional[int] = Field(None, ge=0)
+    rotation_interval: Optional[int] = Field(None, ge=1000, le=30000)  # Almashish vaqti (millisekundlarda)
 
 
 class BannerResponse(BannerBase):

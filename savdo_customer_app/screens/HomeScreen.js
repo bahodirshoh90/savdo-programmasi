@@ -71,6 +71,7 @@ export default function HomeScreen() {
         <BannerCarousel 
           banners={banners} 
           onBannerPress={handleBannerPress}
+          rotationInterval={banners.length > 0 ? banners[0].rotation_interval : undefined}
         />
       )}
 

@@ -1,0 +1,11 @@
+{
+  "customer_id": 1,
+  "seller_id": 1,
+  "items": [
+    {
+      "product_id": 1,
+      "requested_quantity": 1
+    }
+  ],
+  "is_offline": false
+}

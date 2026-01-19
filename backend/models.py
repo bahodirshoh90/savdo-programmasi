@@ -501,6 +501,7 @@ class Banner(Base):
     link_url = Column(String(500), nullable=True)  # Link URL (ixtiyoriy)
     is_active = Column(Boolean, nullable=False, default=True)  # Faollik holati
     display_order = Column(Integer, nullable=False, default=0)  # Ko'rsatish tartibi
+    rotation_interval = Column(Integer, nullable=False, default=3000)  # Almashish vaqti (millisekundlarda, default 3 soniya)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
