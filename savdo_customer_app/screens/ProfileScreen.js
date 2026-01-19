@@ -139,22 +139,37 @@ export default function ProfileScreen({ navigation }) {
     
     async function performLogout() {
       console.log('[LOGOUT] Step 1: Starting logout process...');
+      let logoutSuccess = false;
+      let errorMessage = null;
+      
       try {
         console.log('[LOGOUT] Step 2: Calling logout function from AuthContext...');
         // Logout first - this will set isAuthenticated to false
         await logout();
-        console.log('[LOGOUT] Step 3: Logout function completed, isAuthenticated should be false now');
+        logoutSuccess = true;
+        console.log('[LOGOUT] Step 3: Logout function completed successfully');
       } catch (error) {
+        logoutSuccess = false;
+        errorMessage = error.message || 'Noma\'lum xatolik';
         console.error('[LOGOUT] Step 3: Logout error:', error);
         console.error('[LOGOUT] Error details:', {
           message: error.message,
           stack: error.stack,
         });
+        
+        // Show error to user
+        if (isWeb) {
+          alert(`Chiqishda xatolik: ${errorMessage}`);
+        } else {
+          Alert.alert('Xatolik', `Chiqishda xatolik: ${errorMessage}`);
+        }
       }
       
       // Navigation should happen automatically when isAuthenticated changes
       // But we'll also try manual navigation as backup
       console.log('[LOGOUT] Step 4: Attempting navigation reset...');
+      let navigationSuccess = false;
+      
       setTimeout(() => {
         try {
           if (navigation) {
@@ -171,6 +186,7 @@ export default function ProfileScreen({ navigation }) {
               }
             } catch (e) {
               console.log('[LOGOUT] Could not get parent, using current navigation');
+              console.error('[LOGOUT] Parent error:', e.message);
             }
             
             console.log('[LOGOUT] Step 6: Attempting reset with rootNav');
@@ -179,23 +195,47 @@ export default function ProfileScreen({ navigation }) {
                 index: 0,
                 routes: [{ name: 'Login' }],
               });
-              console.log('[LOGOUT] Step 7: Navigation reset completed');
+              navigationSuccess = true;
+              console.log('[LOGOUT] Step 7: Navigation reset completed successfully');
             } else {
               console.log('[LOGOUT] Step 6: reset not available, trying CommonActions');
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                })
-              );
-              console.log('[LOGOUT] Step 7: CommonActions.reset completed');
+              try {
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  })
+                );
+                navigationSuccess = true;
+                console.log('[LOGOUT] Step 7: CommonActions.reset completed successfully');
+              } catch (dispatchError) {
+                console.error('[LOGOUT] CommonActions.reset error:', dispatchError.message);
+                throw dispatchError;
+              }
             }
           } else {
-            console.error('[LOGOUT] Step 5: Navigation object is null');
+            const errorMsg = 'Navigation obyekti topilmadi';
+            console.error('[LOGOUT] Step 5:', errorMsg);
+            if (!isWeb) {
+              Alert.alert('Xatolik', errorMsg);
+            }
           }
         } catch (e) {
           console.error('[LOGOUT] Navigation error:', e);
           console.error('[LOGOUT] Error message:', e.message);
+          console.error('[LOGOUT] Error stack:', e.stack);
+          
+          // Show navigation error to user if logout was successful but navigation failed
+          if (logoutSuccess && !navigationSuccess) {
+            const navErrorMsg = `Chiqish muvaffaqiyatli, lekin sahifaga o'tishda xatolik: ${e.message || 'Noma\'lum xatolik'}`;
+            if (isWeb) {
+              alert(navErrorMsg);
+              // Force page reload as last resort
+              window.location.href = '/';
+            } else {
+              Alert.alert('Xatolik', navErrorMsg);
+            }
+          }
         }
       }, 200);
     }
