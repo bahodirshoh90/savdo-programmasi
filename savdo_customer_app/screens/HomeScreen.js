@@ -74,11 +74,37 @@ export default function HomeScreen() {
     // Handle banner click - can navigate to product or external URL
     console.log('Banner pressed:', banner);
     if (banner.link_url) {
-      // Open external URL if provided
+      // Check if it's a product URL (format: /product/{id})
+      const productUrlMatch = banner.link_url.match(/\/product\/(\d+)/);
+      if (productUrlMatch) {
+        const productId = parseInt(productUrlMatch[1], 10);
+        console.log('Navigating to product:', productId);
+        navigation.navigate('ProductDetail', { productId });
+        return;
+      }
+      
+      // Check if it's an external URL
       if (banner.link_url.startsWith('http')) {
         // In web: window.open, in native: Linking.openURL
         if (typeof window !== 'undefined' && window.open) {
           window.open(banner.link_url, '_blank');
+        } else {
+          // For native, use Linking
+          const { Linking } = require('react-native');
+          Linking.openURL(banner.link_url).catch(err => {
+            console.error('Failed to open URL:', err);
+          });
+        }
+        return;
+      }
+      
+      // If it's a relative URL starting with /product/, try to extract product ID
+      if (banner.link_url.startsWith('/product/')) {
+        const productId = parseInt(banner.link_url.split('/product/')[1], 10);
+        if (!isNaN(productId)) {
+          console.log('Navigating to product from relative URL:', productId);
+          navigation.navigate('ProductDetail', { productId });
+          return;
         }
       }
     }

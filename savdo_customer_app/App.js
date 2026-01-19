@@ -27,6 +27,37 @@ import Colors from './constants/colors';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Cart Icon with Badge Component
+function CartIconWithBadge({ color, size }) {
+  const { getTotalItems } = useCart();
+  const count = getTotalItems();
+  
+  return (
+    <View style={{ position: 'relative' }}>
+      <Ionicons name="cart" size={size} color={color} />
+      {count > 0 && (
+        <View style={{
+          position: 'absolute',
+          right: -6,
+          top: -6,
+          backgroundColor: '#ff3b30',
+          borderRadius: 10,
+          width: 20,
+          height: 20,
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderWidth: 2,
+          borderColor: 'white',
+        }}>
+          <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+            {count > 99 ? '99+' : count}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
