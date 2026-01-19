@@ -95,6 +95,112 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const performLogout = async () => {
+    console.log('[LOGOUT] Step 1: Starting logout process...');
+    let logoutSuccess = false;
+    let errorMessage = null;
+    
+    const Platform = require('react-native').Platform;
+    const isWeb = Platform.OS === 'web';
+    
+    try {
+      console.log('[LOGOUT] Step 2: Calling logout function from AuthContext...');
+      // Logout first - this will set isAuthenticated to false
+      await logout();
+      logoutSuccess = true;
+      console.log('[LOGOUT] Step 3: Logout function completed successfully');
+    } catch (error) {
+      logoutSuccess = false;
+      errorMessage = error.message || 'Noma\'lum xatolik';
+      console.error('[LOGOUT] Step 3: Logout error:', error);
+      console.error('[LOGOUT] Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+      
+      // Show error to user
+      if (isWeb) {
+        alert(`Chiqishda xatolik: ${errorMessage}`);
+      } else {
+        Alert.alert('Xatolik', `Chiqishda xatolik: ${errorMessage}`);
+      }
+    }
+    
+    // Navigation should happen automatically when isAuthenticated changes
+    // But we'll also try manual navigation as backup
+    console.log('[LOGOUT] Step 4: Attempting navigation reset...');
+    let navigationSuccess = false;
+    
+    setTimeout(() => {
+      try {
+        if (navigation) {
+          console.log('[LOGOUT] Step 5: Navigation object available');
+          // Try to get root navigator
+          let rootNav = navigation;
+          try {
+            const parent1 = navigation.getParent?.();
+            console.log('[LOGOUT] First parent exists:', !!parent1);
+            if (parent1) {
+              const parent2 = parent1.getParent?.();
+              console.log('[LOGOUT] Second parent exists:', !!parent2);
+              rootNav = parent2 || parent1 || navigation;
+            }
+          } catch (e) {
+            console.log('[LOGOUT] Could not get parent, using current navigation');
+            console.error('[LOGOUT] Parent error:', e.message);
+          }
+          
+          console.log('[LOGOUT] Step 6: Attempting reset with rootNav');
+          if (rootNav && typeof rootNav.reset === 'function') {
+            rootNav.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+            navigationSuccess = true;
+            console.log('[LOGOUT] Step 7: Navigation reset completed successfully');
+          } else {
+            console.log('[LOGOUT] Step 6: reset not available, trying CommonActions');
+            try {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                })
+              );
+              navigationSuccess = true;
+              console.log('[LOGOUT] Step 7: CommonActions.reset completed successfully');
+            } catch (dispatchError) {
+              console.error('[LOGOUT] CommonActions.reset error:', dispatchError.message);
+              throw dispatchError;
+            }
+          }
+        } else {
+          const errorMsg = 'Navigation obyekti topilmadi';
+          console.error('[LOGOUT] Step 5:', errorMsg);
+          if (!isWeb) {
+            Alert.alert('Xatolik', errorMsg);
+          }
+        }
+      } catch (e) {
+        console.error('[LOGOUT] Navigation error:', e);
+        console.error('[LOGOUT] Error message:', e.message);
+        console.error('[LOGOUT] Error stack:', e.stack);
+        
+        // Show navigation error to user if logout was successful but navigation failed
+        if (logoutSuccess && !navigationSuccess) {
+          const navErrorMsg = `Chiqish muvaffaqiyatli, lekin sahifaga o'tishda xatolik: ${e.message || 'Noma\'lum xatolik'}`;
+          if (isWeb) {
+            alert(navErrorMsg);
+            // Force page reload as last resort
+            window.location.href = '/';
+          } else {
+            Alert.alert('Xatolik', navErrorMsg);
+          }
+        }
+      }
+    }, 200);
+  };
+
   const handleLogout = async () => {
     console.log('[LOGOUT] Logout button pressed');
     
@@ -109,6 +215,8 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
       console.log('[LOGOUT] User confirmed logout (web)');
+      // For web, perform logout directly
+      performLogout();
     } else {
       Alert.alert(
         'Chiqish',
@@ -131,11 +239,7 @@ export default function ProfileScreen({ navigation }) {
           },
         ]
       );
-      return;
     }
-    
-    // For web, perform logout directly
-    performLogout();
   };
 
   if (isLoading) {
