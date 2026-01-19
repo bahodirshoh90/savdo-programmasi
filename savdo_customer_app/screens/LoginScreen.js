@@ -25,6 +25,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Signup form state
   const [signupName, setSignupName] = useState('');
@@ -35,8 +36,11 @@ export default function LoginScreen({ navigation }) {
   const [isSigningUp, setIsSigningUp] = useState(false);
 
   const handleLogin = async () => {
+    // Clear previous error
+    setErrorMessage('');
+    
     if (!username.trim() || !password.trim()) {
-      Alert.alert('Xatolik', 'Foydalanuvchi nomi va parolni kiriting');
+      setErrorMessage('Foydalanuvchi nomi va parolni kiriting');
       return;
     }
 
@@ -48,13 +52,14 @@ export default function LoginScreen({ navigation }) {
       
       if (result.success) {
         console.log('[LOGIN] Login successful, user:', result.user);
+        setErrorMessage(''); // Clear error on success
         login(result.user);
         // Navigation will be handled by App.js based on auth state
       } else {
-        // Show error message to user
-        const errorMessage = result.error || 'Noto\'g\'ri login yoki parol';
-        console.log('[LOGIN] Login failed, showing error:', errorMessage);
-        Alert.alert('Xatolik', errorMessage);
+        // Show error message on screen
+        const errorMsg = result.error || 'Noto\'g\'ri login yoki parol';
+        console.log('[LOGIN] Login failed, showing error:', errorMsg);
+        setErrorMessage(errorMsg);
       }
     } catch (error) {
       console.error('[LOGIN] Login exception:', error);
@@ -62,29 +67,29 @@ export default function LoginScreen({ navigation }) {
       console.error('[LOGIN] Error status:', error.response?.status);
       
       // Extract error message
-      let errorMessage = 'Noto\'g\'ri login yoki parol';
+      let errorMsg = 'Noto\'g\'ri login yoki parol';
       
       if (error.response?.data) {
         const data = error.response.data;
         if (typeof data === 'string') {
-          errorMessage = data;
+          errorMsg = data;
         } else if (data.detail) {
-          errorMessage = data.detail;
+          errorMsg = data.detail;
         } else if (data.error) {
-          errorMessage = data.error;
+          errorMsg = data.error;
         } else if (data.message) {
-          errorMessage = data.message;
+          errorMsg = data.message;
         }
       } else if (error.message) {
         if (error.message.includes('Network') || error.message.includes('timeout')) {
-          errorMessage = 'Internetga ulanib bo\'lmadi. Internetni tekshiring.';
+          errorMsg = 'Internetga ulanib bo\'lmadi. Internetni tekshiring.';
         } else {
-          errorMessage = error.message;
+          errorMsg = error.message;
         }
       }
       
-      console.log('[LOGIN] Showing error alert:', errorMessage);
-      Alert.alert('Xatolik', errorMessage);
+      console.log('[LOGIN] Showing error on screen:', errorMsg);
+      setErrorMessage(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -206,24 +211,38 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errorMessage && styles.inputError]}
             placeholder="Foydalanuvchi nomi yoki telefon"
             value={username}
-            onChangeText={setUsername}
+            onChangeText={(text) => {
+              setUsername(text);
+              // Clear error when user starts typing
+              if (errorMessage) setErrorMessage('');
+            }}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="default"
           />
 
           <TextInput
-            style={styles.input}
+            style={[styles.input, errorMessage && styles.inputError]}
             placeholder="Parol"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              // Clear error when user starts typing
+              if (errorMessage) setErrorMessage('');
+            }}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
           />
+
+          {errorMessage ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
