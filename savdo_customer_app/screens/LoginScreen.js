@@ -391,6 +391,24 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     color: Colors.textDark,
   },
+  inputError: {
+    borderColor: '#ff3b30',
+    borderWidth: 2,
+  },
+  errorContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#ffebee',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ff3b30',
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   loginButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
