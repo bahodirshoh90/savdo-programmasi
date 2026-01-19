@@ -162,41 +162,46 @@ import os
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
+# Always include production domain and common localhost ports
+base_origins = [
+    "https://uztoysavdo.uz",
+    "https://www.uztoysavdo.uz",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:8081",
+    "http://localhost:19006",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:19006",
+    "capacitor://localhost",
+    "ionic://localhost",
+]
+
 if allowed_origins_env:
     # Parse comma-separated list from environment
-    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    env_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    # Merge with base origins (avoid duplicates)
+    allowed_origins = list(set(base_origins + env_origins))
 elif is_production:
-    # Production: only specific origins
-    allowed_origins = [
-        "https://uztoysavdo.uz",
-        "https://www.uztoysavdo.uz",
-    ]
+    # Production: include production domain and localhost for development/testing
+    allowed_origins = base_origins
 else:
-    # Development: allow common localhost ports and production domain
-    allowed_origins = [
-        "https://uztoysavdo.uz",
-        "https://www.uztoysavdo.uz",
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:8081",
-        "http://localhost:19006",
-        "http://127.0.0.1:8081",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8000",
-        "http://127.0.0.1:19006",
-        "capacitor://localhost",
-        "ionic://localhost",
-    ]
+    # Development: allow all common origins
+    allowed_origins = base_origins
 
-# In development, allow all origins (wildcard) but disable credentials
-# In production, use specific origins with credentials
-allow_credentials = is_production
-
-# If in development and no specific origins set, allow all origins
-if not is_production and not allowed_origins_env:
-    # Use wildcard for development - easier for local testing
+# For development or when ALLOW_CORS_ALL is set, use wildcard
+allow_cors_all = os.getenv("ALLOW_CORS_ALL", "false").lower() == "true"
+if allow_cors_all or (not is_production and not allowed_origins_env):
+    # Use wildcard for easier development/testing
     allowed_origins = ["*"]
     allow_credentials = False  # Cannot use credentials with wildcard
+else:
+    allow_credentials = True
+
+print(f"[CORS] Allowed origins: {allowed_origins}")
+print(f"[CORS] Allow credentials: {allow_credentials}")
+print(f"[CORS] Is production: {is_production}")
 
 app.add_middleware(
     CORSMiddleware,
