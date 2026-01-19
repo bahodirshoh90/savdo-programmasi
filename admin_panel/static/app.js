@@ -5097,6 +5097,8 @@ async function loadBanners() {
         banners.forEach(banner => {
             const row = document.createElement('tr');
             const imageUrl = banner.image_url ? (banner.image_url.startsWith('http') ? banner.image_url : `${window.location.origin}${banner.image_url}`) : '';
+            const rotationInterval = banner.rotation_interval || 3000;
+            const rotationSeconds = (rotationInterval / 1000).toFixed(1);
             row.innerHTML = `
                 <td>${banner.id}</td>
                 <td>${escapeHtml(banner.title || '-')}</td>
@@ -5105,6 +5107,7 @@ async function loadBanners() {
                 </td>
                 <td>${banner.link_url ? `<a href="${escapeHtml(banner.link_url)}" target="_blank" style="color: #4f46e5;">${escapeHtml(banner.link_url)}</a>` : '-'}</td>
                 <td>${banner.display_order}</td>
+                <td>${rotationSeconds} s</td>
                 <td><span class="badge badge-${banner.is_active ? 'success' : 'danger'}">${banner.is_active ? 'Faol' : 'Nofaol'}</span></td>
                 <td>
                     <div class="action-buttons">
