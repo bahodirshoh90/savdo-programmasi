@@ -16,3 +16,4 @@ scripts/
 /savdo_customer_app/node_modules
 /savdo_customer_app/.expo
 /savdo_customer_app/dist
+/savdo_customer_app/build
