@@ -2878,6 +2878,7 @@ async function loadAdminOrders() {
         if (sellerId) headers['X-Seller-ID'] = sellerId;
         
         // Build URL with optional filters
+        // For admin view, don't filter by seller_id - show all orders
         let url = `${API_BASE}/orders?limit=100`;
         const statusFilter = document.getElementById('admin-order-status-filter')?.value || '';
         const startDate = document.getElementById('admin-order-start-date')?.value;
