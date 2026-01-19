@@ -1875,36 +1875,63 @@ def get_permissions_list():
 @app.post("/api/orders", response_model=OrderResponse)
 async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
     """Create a new order (from mobile app)"""
-    # Check customer debt limit before creating order
-    from models import Customer
-    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-    if customer:
-        # Calculate approximate order total (rough estimate)
-        total = sum(item.requested_quantity * 1000 for item in order.items)
-        can_take, error = DebtService.check_debt_limit(db, order.customer_id, additional_debt=total)
-        if not can_take:
-            raise HTTPException(status_code=400, detail=error)
-    
-    order_result = OrderService.create_order(db, order)
-    
-    # Reload with relations for WebSocket notification
-    from sqlalchemy.orm import joinedload
-    from models import OrderItem
-    
-    db.refresh(order_result)
-    order_with_relations = db.query(Order).options(
-        joinedload(Order.customer),
-        joinedload(Order.seller),
-        joinedload(Order.items).joinedload(OrderItem.product)
-    ).filter(Order.id == order_result.id).first()
-    
-    # Notify admin panel via WebSocket
-    await manager.broadcast({
-        "type": "new_order",
-        "data": OrderService.order_to_response(order_with_relations)
-    })
-    
-    return OrderService.order_to_response(order_with_relations)
+    try:
+        print(f"[CREATE ORDER] Received order request: customer_id={order.customer_id}, seller_id={order.seller_id}, items={len(order.items)}")
+        
+        # Check customer debt limit before creating order
+        from models import Customer
+        customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail=f"Customer not found (ID: {order.customer_id})")
+        
+        if customer:
+            # Calculate approximate order total (rough estimate)
+            total = sum(item.requested_quantity * 1000 for item in order.items)
+            can_take, error = DebtService.check_debt_limit(db, order.customer_id, additional_debt=total)
+            if not can_take:
+                raise HTTPException(status_code=400, detail=error)
+        
+        print(f"[CREATE ORDER] Creating order via OrderService...")
+        order_result = OrderService.create_order(db, order)
+        print(f"[CREATE ORDER] Order created successfully: order_id={order_result.id}")
+        
+        # Reload with relations for WebSocket notification
+        from sqlalchemy.orm import joinedload
+        from models import OrderItem
+        
+        db.refresh(order_result)
+        order_with_relations = db.query(Order).options(
+            joinedload(Order.customer),
+            joinedload(Order.seller),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).filter(Order.id == order_result.id).first()
+        
+        if not order_with_relations:
+            raise HTTPException(status_code=500, detail="Order created but could not be reloaded")
+        
+        print(f"[CREATE ORDER] Converting order to response...")
+        order_response = OrderService.order_to_response(order_with_relations)
+        print(f"[CREATE ORDER] Order response created successfully")
+        
+        # Notify admin panel via WebSocket
+        try:
+            await manager.broadcast({
+                "type": "new_order",
+                "data": order_response
+            })
+            print(f"[CREATE ORDER] WebSocket notification sent")
+        except Exception as ws_error:
+            print(f"[CREATE ORDER] WebSocket notification error: {ws_error}")
+            # Don't fail the request if WebSocket fails
+        
+        return order_response
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CREATE ORDER] Error creating order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error creating order: {str(e)}")
 
 
 @app.get("/api/orders", response_model=List[OrderResponse])
