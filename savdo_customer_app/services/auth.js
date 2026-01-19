@@ -96,27 +96,48 @@ export const login = async (username, password) => {
     return { success: true, user, token };
   } catch (error) {
     console.error('Login error:', error);
+    console.error('Login error response:', error.response?.data);
+    console.error('Login error status:', error.response?.status);
+    
     // Extract error message from response
-    let errorMessage = 'Login qilishda xatolik yuz berdi';
+    let errorMessage = 'Noto\'g\'ri login yoki parol';
     
     if (error.response?.data) {
       // Try different possible error message fields
-      errorMessage = error.response.data.detail || 
-                    error.response.data.error || 
-                    error.response.data.message ||
-                    (typeof error.response.data === 'string' ? error.response.data : errorMessage);
+      const data = error.response.data;
+      
+      if (typeof data === 'string') {
+        errorMessage = data;
+      } else if (data.detail) {
+        errorMessage = data.detail;
+      } else if (data.error) {
+        errorMessage = data.error;
+      } else if (data.message) {
+        errorMessage = data.message;
+      } else if (data.msg) {
+        errorMessage = data.msg;
+      }
     } else if (error.message) {
-      errorMessage = error.message;
+      // Check if it's a network error or other error
+      if (error.message.includes('Network') || error.message.includes('timeout')) {
+        errorMessage = 'Internetga ulanib bo\'lmadi. Internetni tekshiring.';
+      } else {
+        errorMessage = error.message;
+      }
     }
     
     // Translate common error messages
-    if (errorMessage.toLowerCase().includes('noto\'g\'ri') || 
-        errorMessage.toLowerCase().includes('invalid') ||
-        errorMessage.toLowerCase().includes('unauthorized') ||
-        errorMessage.toLowerCase().includes('401')) {
+    const lowerMessage = errorMessage.toLowerCase();
+    if (lowerMessage.includes('noto\'g\'ri') || 
+        lowerMessage.includes('invalid') ||
+        lowerMessage.includes('unauthorized') ||
+        lowerMessage.includes('401') ||
+        lowerMessage.includes('incorrect') ||
+        lowerMessage.includes('wrong')) {
       errorMessage = 'Noto\'g\'ri login yoki parol';
     }
     
+    console.log('Returning error message:', errorMessage);
     return { success: false, error: errorMessage };
   }
 };

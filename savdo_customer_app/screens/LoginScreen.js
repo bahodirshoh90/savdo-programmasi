@@ -42,22 +42,48 @@ export default function LoginScreen({ navigation }) {
 
     setIsLoading(true);
     try {
+      console.log('[LOGIN] Attempting login for username:', username.trim());
       const result = await authLogin(username.trim(), password);
+      console.log('[LOGIN] Login result:', { success: result.success, hasError: !!result.error });
       
       if (result.success) {
+        console.log('[LOGIN] Login successful, user:', result.user);
         login(result.user);
         // Navigation will be handled by App.js based on auth state
       } else {
         // Show error message to user
         const errorMessage = result.error || 'Noto\'g\'ri login yoki parol';
+        console.log('[LOGIN] Login failed, showing error:', errorMessage);
         Alert.alert('Xatolik', errorMessage);
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[LOGIN] Login exception:', error);
+      console.error('[LOGIN] Error response:', error.response?.data);
+      console.error('[LOGIN] Error status:', error.response?.status);
+      
       // Extract error message
-      const errorMessage = error.response?.data?.detail || 
-                          error.message || 
-                          'Noto\'g\'ri login yoki parol';
+      let errorMessage = 'Noto\'g\'ri login yoki parol';
+      
+      if (error.response?.data) {
+        const data = error.response.data;
+        if (typeof data === 'string') {
+          errorMessage = data;
+        } else if (data.detail) {
+          errorMessage = data.detail;
+        } else if (data.error) {
+          errorMessage = data.error;
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+      } else if (error.message) {
+        if (error.message.includes('Network') || error.message.includes('timeout')) {
+          errorMessage = 'Internetga ulanib bo\'lmadi. Internetni tekshiring.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      console.log('[LOGIN] Showing error alert:', errorMessage);
       Alert.alert('Xatolik', errorMessage);
     } finally {
       setIsLoading(false);
