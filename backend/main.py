@@ -2380,11 +2380,34 @@ app.mount("/uploads", StaticFiles(directory=uploads_base_dir), name="uploads")
 @app.get("/api/banners", response_model=List[BannerResponse])
 def get_banners(is_active: Optional[bool] = None, db: Session = Depends(get_db)):
     """Get all banners (optionally filtered by is_active)"""
-    query = db.query(Banner)
-    if is_active is not None:
-        query = query.filter(Banner.is_active == is_active)
-    banners = query.order_by(Banner.display_order.asc(), Banner.created_at.desc()).all()
-    return [BannerResponse.model_validate(banner) for banner in banners]
+    try:
+        query = db.query(Banner)
+        if is_active is not None:
+            query = query.filter(Banner.is_active == is_active)
+        banners = query.order_by(Banner.display_order.asc(), Banner.created_at.desc()).all()
+        
+        # Convert to response and ensure rotation_interval has a default value
+        result = []
+        for banner in banners:
+            banner_dict = {
+                "id": banner.id,
+                "title": banner.title,
+                "image_url": banner.image_url,
+                "link_url": banner.link_url,
+                "is_active": banner.is_active,
+                "display_order": banner.display_order,
+                "rotation_interval": getattr(banner, 'rotation_interval', 3000),  # Default 3000 if column doesn't exist yet
+                "created_at": banner.created_at,
+                "updated_at": banner.updated_at
+            }
+            result.append(BannerResponse.model_validate(banner_dict))
+        return result
+    except Exception as e:
+        print(f"Error loading banners: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return empty list instead of error
+        return []
 
 
 @app.get("/api/banners/{banner_id}", response_model=BannerResponse)
