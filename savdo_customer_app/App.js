@@ -63,39 +63,11 @@ function MainTabs() {
       <Tab.Screen
         name="Cart"
         component={CartScreen}
-        options={({ route }) => {
-          // Get cart items count from CartContext
-          const CartBadge = () => {
-            const { getTotalItems } = require('./context/CartContext').useCart();
-            const count = getTotalItems();
-            return count > 0 ? (
-              <View style={{
-                position: 'absolute',
-                right: -6,
-                top: -6,
-                backgroundColor: '#ff3b30',
-                borderRadius: 10,
-                width: 20,
-                height: 20,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-                <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                  {count > 99 ? '99+' : count}
-                </Text>
-              </View>
-            ) : null;
-          };
-          
-          return {
-            tabBarLabel: 'Savatcha',
-            tabBarIcon: ({ color, size }) => (
-              <View style={{ position: 'relative' }}>
-                <Ionicons name="cart" size={size} color={color} />
-                <CartBadge />
-              </View>
-            ),
-          };
+        options={{
+          tabBarLabel: 'Savatcha',
+          tabBarIcon: ({ color, size }) => (
+            <CartIconWithBadge color={color} size={size} />
+          ),
         }}
       />
       <Tab.Screen
