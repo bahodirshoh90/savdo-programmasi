@@ -172,10 +172,10 @@ elif is_production:
         "https://www.uztoysavdo.uz",
     ]
 else:
-    # Development: allow all localhost origins
+    # Development: allow common localhost ports and production domain
     allowed_origins = [
-        "*",  # Allow all origins in development for easier testing
         "https://uztoysavdo.uz",
+        "https://www.uztoysavdo.uz",
         "http://localhost:3000",
         "http://localhost:8000",
         "http://localhost:8081",
@@ -183,26 +183,25 @@ else:
         "http://127.0.0.1:8081",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8000",
+        "http://127.0.0.1:19006",
         "capacitor://localhost",
         "ionic://localhost",
     ]
 
-# For development, use wildcard but still need to handle credentials properly
-if "*" in allowed_origins and not is_production:
-    # Use regex pattern or list of common development origins
-    allowed_origins = [
-        "https://uztoysavdo.uz",
-        "https://www.uztoysavdo.uz",
-        r"http://localhost:\d+",  # All localhost ports
-        r"http://127\.0\.0\.1:\d+",  # All 127.0.0.1 ports
-        "capacitor://localhost",
-        "ionic://localhost",
-    ]
+# In development, allow all origins (wildcard) but disable credentials
+# In production, use specific origins with credentials
+allow_credentials = is_production
+
+# If in development and no specific origins set, allow all origins
+if not is_production and not allowed_origins_env:
+    # Use wildcard for development - easier for local testing
+    allowed_origins = ["*"]
+    allow_credentials = False  # Cannot use credentials with wildcard
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if not is_production and "*" not in str(allowed_origins) else ["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Seller-ID", "Authorization", "Content-Type", "X-Customer-ID"],
