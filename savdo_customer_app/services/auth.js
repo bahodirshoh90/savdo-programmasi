@@ -96,7 +96,27 @@ export const login = async (username, password) => {
     return { success: true, user, token };
   } catch (error) {
     console.error('Login error:', error);
-    const errorMessage = error.response?.data?.detail || error.message || 'Login failed';
+    // Extract error message from response
+    let errorMessage = 'Login qilishda xatolik yuz berdi';
+    
+    if (error.response?.data) {
+      // Try different possible error message fields
+      errorMessage = error.response.data.detail || 
+                    error.response.data.error || 
+                    error.response.data.message ||
+                    (typeof error.response.data === 'string' ? error.response.data : errorMessage);
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    // Translate common error messages
+    if (errorMessage.toLowerCase().includes('noto\'g\'ri') || 
+        errorMessage.toLowerCase().includes('invalid') ||
+        errorMessage.toLowerCase().includes('unauthorized') ||
+        errorMessage.toLowerCase().includes('401')) {
+      errorMessage = 'Noto\'g\'ri login yoki parol';
+    }
+    
     return { success: false, error: errorMessage };
   }
 };

@@ -48,11 +48,17 @@ export default function LoginScreen({ navigation }) {
         login(result.user);
         // Navigation will be handled by App.js based on auth state
       } else {
-        Alert.alert('Xatolik', result.error || 'Login failed');
+        // Show error message to user
+        const errorMessage = result.error || 'Noto\'g\'ri login yoki parol';
+        Alert.alert('Xatolik', errorMessage);
       }
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('Xatolik', 'Login qilishda xatolik yuz berdi');
+      // Extract error message
+      const errorMessage = error.response?.data?.detail || 
+                          error.message || 
+                          'Noto\'g\'ri login yoki parol';
+      Alert.alert('Xatolik', errorMessage);
     } finally {
       setIsLoading(false);
     }
