@@ -26,49 +26,63 @@ class OrderService:
         Create a new order (from mobile app)
         Similar to sale but with order status tracking
         """
-        # Verify seller and customer exist
-        # For orders from customer app, always use an admin seller
-        seller = None
-        # Try to find admin seller (seller with admin role or admin permissions)
-        admin_sellers = db.query(Seller).options(joinedload(Seller.role)).filter(
-            Seller.is_active == True
-        ).all()
-        
-        for s in admin_sellers:
-            # Check if seller has admin role
-            if s.role and s.role.name:
-                role_name_lower = s.role.name.lower()
-                if 'admin' in role_name_lower or 'direktor' in role_name_lower or 'director' in role_name_lower:
-                    seller = s
-                    order.seller_id = s.id
-                    break
+        try:
+            print(f"[ORDER SERVICE] Starting order creation: customer_id={order.customer_id}, seller_id={order.seller_id}, items={len(order.items)}")
             
-            # Check if seller has admin permissions
-            if s.role and s.role.permissions:
-                for perm in s.role.permissions:
-                    if 'admin' in perm.code.lower():
+            # Verify seller and customer exist
+            # For orders from customer app, always use an admin seller
+            seller = None
+            # Try to find admin seller (seller with admin role or admin permissions)
+            admin_sellers = db.query(Seller).options(joinedload(Seller.role)).filter(
+                Seller.is_active == True
+            ).all()
+            
+            print(f"[ORDER SERVICE] Found {len(admin_sellers)} active sellers")
+            
+            for s in admin_sellers:
+                # Check if seller has admin role
+                if s.role and s.role.name:
+                    role_name_lower = s.role.name.lower()
+                    if 'admin' in role_name_lower or 'direktor' in role_name_lower or 'director' in role_name_lower:
                         seller = s
                         order.seller_id = s.id
+                        print(f"[ORDER SERVICE] Found admin seller: {s.name} (ID: {s.id})")
                         break
-                if seller:
-                    break
-        
-        # If no admin seller found, use first active seller as fallback
-        if not seller:
-            fallback_seller = db.query(Seller).filter(Seller.is_active == True).first()
-            if not fallback_seller:
-                raise ValueError("Seller not found and no active sellers available")
-            order.seller_id = fallback_seller.id
-            seller = fallback_seller
-        
-        # If seller_id was provided, verify it exists (but still use admin seller for customer app orders)
-        if order.seller_id and order.seller_id != seller.id:
-            # Log that we're overriding the provided seller_id
-            pass  # We'll use the admin seller we found
-        
-        customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-        if not customer:
-            raise ValueError(f"Customer not found (ID: {order.customer_id})")
+                
+                # Check if seller has admin permissions
+                if s.role and s.role.permissions:
+                    for perm in s.role.permissions:
+                        if 'admin' in perm.code.lower():
+                            seller = s
+                            order.seller_id = s.id
+                            print(f"[ORDER SERVICE] Found admin seller by permission: {s.name} (ID: {s.id})")
+                            break
+                    if seller:
+                        break
+            
+            # If no admin seller found, use first active seller as fallback
+            if not seller:
+                fallback_seller = db.query(Seller).filter(Seller.is_active == True).first()
+                if not fallback_seller:
+                    error_msg = "Seller not found and no active sellers available"
+                    print(f"[ORDER SERVICE] ERROR: {error_msg}")
+                    raise ValueError(error_msg)
+                order.seller_id = fallback_seller.id
+                seller = fallback_seller
+                print(f"[ORDER SERVICE] Using fallback seller: {seller.name} (ID: {seller.id})")
+            
+            # If seller_id was provided, verify it exists (but still use admin seller for customer app orders)
+            if order.seller_id and order.seller_id != seller.id:
+                # Log that we're overriding the provided seller_id
+                print(f"[ORDER SERVICE] Overriding provided seller_id {order.seller_id} with admin seller {seller.id}")
+            
+            customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+            if not customer:
+                error_msg = f"Customer not found (ID: {order.customer_id})"
+                print(f"[ORDER SERVICE] ERROR: {error_msg}")
+                raise ValueError(error_msg)
+            
+            print(f"[ORDER SERVICE] Customer found: {customer.name} (ID: {customer.id})")
         
         # Create order
         # Set payment method - default to CASH if not provided or invalid
@@ -157,6 +171,7 @@ class OrderService:
             )
             
             total_amount += calculation["subtotal"]
+            print(f"[ORDER SERVICE] Processed item {item.product_id}: {calculation['packages_to_sell']} packages, {calculation['pieces_to_sell']} pieces, subtotal={calculation['subtotal']}")
         
         # Update order total
         db_order.total_amount = total_amount
@@ -168,7 +183,22 @@ class OrderService:
         db.commit()
         db.refresh(db_order)
         
+        print(f"[ORDER SERVICE] Order created successfully: order_id={db_order.id}, total={total_amount}")
         return db_order
+        
+        except ValueError as ve:
+            db.rollback()
+            error_msg = str(ve)
+            print(f"[ORDER SERVICE] ValueError: {error_msg}")
+            # Re-raise as ValueError - will be caught by main.py and converted to HTTPException
+            raise ValueError(error_msg)
+        except Exception as e:
+            db.rollback()
+            error_msg = f"Error creating order: {str(e)}"
+            print(f"[ORDER SERVICE] Unexpected error: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            raise ValueError(error_msg)
     
     @staticmethod
     def get_orders(

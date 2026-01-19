@@ -1933,11 +1933,17 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         return order_response
     except HTTPException:
         raise
+    except ValueError as ve:
+        # Convert ValueError to HTTPException with 400 status
+        error_msg = str(ve)
+        print(f"[CREATE ORDER] ValueError converted to HTTPException: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
         print(f"[CREATE ORDER] Error creating order: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error creating order: {str(e)}")
+        error_msg = f"Error creating order: {str(e)}"
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @app.get("/api/orders", response_model=List[OrderResponse])
