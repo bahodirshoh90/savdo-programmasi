@@ -272,12 +272,20 @@ class OrderService:
     @staticmethod
     def update_status(db: Session, order_id: int, status: str) -> Optional[Order]:
         """Update order status. If cancelled or returned, restore inventory."""
+        print(f"[ORDER_SERVICE.update_status] Updating order {order_id} to status: {status}")
         db_order = db.query(Order).filter(Order.id == order_id).first()
         if not db_order:
+            print(f"[ORDER_SERVICE.update_status] Order {order_id} not found")
             return None
         
         old_status = db_order.status
-        new_status = OrderStatus(status)
+        print(f"[ORDER_SERVICE.update_status] Order {order_id} current status: {old_status}")
+        try:
+            new_status = OrderStatus(status)
+            print(f"[ORDER_SERVICE.update_status] New status enum: {new_status}")
+        except ValueError as e:
+            print(f"[ORDER_SERVICE.update_status] Invalid status '{status}': {e}")
+            raise ValueError(f"Invalid order status: {status}")
         
         # If order was completed/processing and now cancelled/returned, restore inventory
         if old_status in [OrderStatus.COMPLETED, OrderStatus.PROCESSING] and new_status in [OrderStatus.CANCELLED, OrderStatus.RETURNED]:
@@ -377,8 +385,19 @@ class OrderService:
                 traceback.print_exc()
         
         db_order.status = new_status
+        print(f"[ORDER_SERVICE.update_status] Setting order {order_id} status to {new_status}")
         db.commit()
+        print(f"[ORDER_SERVICE.update_status] Committed status change for order {order_id}")
         db.refresh(db_order)
+        print(f"[ORDER_SERVICE.update_status] Refreshed order {order_id}, current status: {db_order.status}")
+        
+        # Verify the status was saved correctly
+        verify_order = db.query(Order).filter(Order.id == order_id).first()
+        if verify_order:
+            print(f"[ORDER_SERVICE.update_status] Verification: Order {order_id} status in DB: {verify_order.status}")
+        else:
+            print(f"[ORDER_SERVICE.update_status] WARNING: Order {order_id} not found after update!")
+        
         return db_order
     
     @staticmethod

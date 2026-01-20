@@ -2157,11 +2157,15 @@ async def update_order_status(
     if not status:
         raise HTTPException(status_code=400, detail="status field is required")
     
+    print(f"[UPDATE_ORDER_STATUS] Updating order {order_id} to status: {status}")
     order = OrderService.update_status(db, order_id, status)
     if not order:
+        print(f"[UPDATE_ORDER_STATUS] Order {order_id} not found")
         raise HTTPException(status_code=404, detail="Order not found")
     
+    print(f"[UPDATE_ORDER_STATUS] Order {order_id} updated successfully, new status: {order.status}")
     order_response = OrderService.order_to_response(order)
+    print(f"[UPDATE_ORDER_STATUS] Order response prepared, status in response: {order_response.get('status')}")
     
     # Status name mapping for user-friendly messages
     status_names = {
