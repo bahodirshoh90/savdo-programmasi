@@ -2089,26 +2089,17 @@ def get_orders(
         for order in orders:
             try:
                 order_response_dict = OrderService.order_to_response(order)
-                # Convert status string to OrderStatus enum for Pydantic validation
-                from models import OrderStatus
-                status_value = order_response_dict.get('status', 'pending')
                 
-                # Convert string to enum if needed
-                if isinstance(status_value, str):
-                    try:
-                        # Try to convert string to enum
-                        status_enum = OrderStatus(status_value)
-                        order_response_dict['status'] = status_enum
-                    except ValueError:
-                        # Invalid status string, default to PENDING
-                        print(f"Warning: Invalid order status '{status_value}', defaulting to PENDING")
-                        order_response_dict['status'] = OrderStatus.PENDING
-                elif isinstance(status_value, OrderStatus):
-                    # Already an enum, use it
-                    order_response_dict['status'] = status_value
+                # Ensure status is always a simple lowercase string for API response
+                raw_status = order_response_dict.get('status', None)
+                if raw_status is not None:
+                    if hasattr(raw_status, "value"):
+                        # Enum -> use its value
+                        order_response_dict["status"] = str(raw_status.value).lower()
+                    else:
+                        order_response_dict["status"] = str(raw_status).lower()
                 else:
-                    # Fallback
-                    order_response_dict['status'] = OrderStatus.PENDING
+                    order_response_dict["status"] = "pending"
                 
                 # Validate and convert to response
                 validated_order = OrderResponse.model_validate(order_response_dict)

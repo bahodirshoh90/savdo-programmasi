@@ -323,7 +323,8 @@ class OrderResponse(BaseModel):
     customer_id: Optional[int] = None
     customer_name: str
     seller_name: str
-    status: OrderStatus
+    # Use plain string for status in API responses to avoid Enum/DB case issues
+    status: str
     total_amount: float
     payment_method: Optional[str] = None  # Payment method (cash, card, debt, bank_transfer)
     items: List[OrderItemResponse]
