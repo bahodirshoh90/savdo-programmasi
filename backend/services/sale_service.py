@@ -719,7 +719,16 @@ class SaleService:
             try:
                 # Handle different date formats
                 start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
-                start = datetime.fromisoformat(start_str)
+                # If no timezone info, assume UTC and convert
+                if '+' not in start_str and 'Z' not in start_str and start_str[-1] != 'Z':
+                    # Naive datetime, assume it's UTC
+                    start = datetime.fromisoformat(start_str)
+                    if start.tzinfo is None:
+                        from utils import UZBEKISTAN_TZ
+                        # Assume input is in Uzbekistan timezone
+                        start = start.replace(tzinfo=UZBEKISTAN_TZ)
+                else:
+                    start = datetime.fromisoformat(start_str)
                 query = query.filter(Sale.created_at >= start)
             except (ValueError, AttributeError) as e:
                 print(f"Warning: Invalid start_date format '{start_date}' in get_statistics: {e}")
@@ -728,7 +737,16 @@ class SaleService:
             try:
                 # Handle different date formats
                 end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
-                end = datetime.fromisoformat(end_str)
+                # If no timezone info, assume UTC and convert
+                if '+' not in end_str and 'Z' not in end_str and end_str[-1] != 'Z':
+                    # Naive datetime, assume it's UTC
+                    end = datetime.fromisoformat(end_str)
+                    if end.tzinfo is None:
+                        from utils import UZBEKISTAN_TZ
+                        # Assume input is in Uzbekistan timezone
+                        end = end.replace(tzinfo=UZBEKISTAN_TZ)
+                else:
+                    end = datetime.fromisoformat(end_str)
                 query = query.filter(Sale.created_at <= end)
             except (ValueError, AttributeError) as e:
                 print(f"Warning: Invalid end_date format '{end_date}' in get_statistics: {e}")

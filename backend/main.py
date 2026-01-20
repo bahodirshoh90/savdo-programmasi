@@ -2275,14 +2275,26 @@ def get_statistics(
     if not start_date or not end_date:
         now = get_uzbekistan_now()
         if period == "daily":
+            # Kunlik: Bugungi kun (00:00:00 dan hozirgacha)
+            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end_date = now.isoformat()
-            start_date = (now - timedelta(days=1)).isoformat()
+            start_date = start_of_day.isoformat()
         elif period == "monthly":
+            # Oylik: Hozirgi oy boshidan hozirgacha
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             end_date = now.isoformat()
-            start_date = (now - timedelta(days=30)).isoformat()
+            start_date = start_of_month.isoformat()
         elif period == "yearly":
+            # Yillik: Hozirgi yil boshidan hozirgacha
+            start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             end_date = now.isoformat()
-            start_date = (now - timedelta(days=365)).isoformat()
+            start_date = start_of_year.isoformat()
+        else:
+            # Default: Oxirgi 30 kun (agar period belgilanmagan bo'lsa)
+            if not start_date:
+                start_date = (now - timedelta(days=30)).isoformat()
+            if not end_date:
+                end_date = now.isoformat()
     
     stats = SaleService.get_statistics(db, start_date, end_date, seller_id=seller_id)
     
@@ -2296,7 +2308,15 @@ def get_statistics(
         try:
             # Handle different date formats
             start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
-            start = datetime.fromisoformat(start_str)
+            # If no timezone info, assume UTC and convert
+            if '+' not in start_str and 'Z' not in start_str and start_str[-1] != 'Z':
+                # Naive datetime, assume it's in Uzbekistan timezone
+                start = datetime.fromisoformat(start_str)
+                if start.tzinfo is None:
+                    from utils import UZBEKISTAN_TZ
+                    start = start.replace(tzinfo=UZBEKISTAN_TZ)
+            else:
+                start = datetime.fromisoformat(start_str)
             orders_query = orders_query.filter(Order.created_at >= start)
         except (ValueError, AttributeError) as e:
             print(f"Warning: Invalid start_date format '{start_date}': {e}")
@@ -2304,7 +2324,15 @@ def get_statistics(
         try:
             # Handle different date formats
             end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
-            end = datetime.fromisoformat(end_str)
+            # If no timezone info, assume UTC and convert
+            if '+' not in end_str and 'Z' not in end_str and end_str[-1] != 'Z':
+                # Naive datetime, assume it's in Uzbekistan timezone
+                end = datetime.fromisoformat(end_str)
+                if end.tzinfo is None:
+                    from utils import UZBEKISTAN_TZ
+                    end = end.replace(tzinfo=UZBEKISTAN_TZ)
+            else:
+                end = datetime.fromisoformat(end_str)
             orders_query = orders_query.filter(Order.created_at <= end)
         except (ValueError, AttributeError) as e:
             print(f"Warning: Invalid end_date format '{end_date}': {e}")
