@@ -479,7 +479,7 @@ class OrderService:
             "payment_method": payment_method_value,
             "items": items_data,
             "is_offline": order.is_offline,
-            "synced_at": order.synced_at,
-            "created_at": order.created_at,
-            "updated_at": order.updated_at
+            "synced_at": order.synced_at.isoformat() if order.synced_at else None,
+            "created_at": to_uzbekistan_time(order.created_at).isoformat() if order.created_at else None,
+            "updated_at": to_uzbekistan_time(order.updated_at).isoformat() if order.updated_at else None
         }
