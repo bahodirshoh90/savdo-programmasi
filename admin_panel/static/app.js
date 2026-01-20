@@ -2214,15 +2214,24 @@ async function updateOrderStatus(id, status) {
         
         showToast('Buyurtma holati yangilandi');
         
-        // If status changed to 'completed' and filter excludes it, update filter
+        // If status changed to 'completed' and filter excludes it, update filter to show all
         if (status === 'completed') {
             const statusFilter = document.getElementById('order-status-filter');
-            if (statusFilter && (statusFilter.value === 'pending' || statusFilter.value === 'processing')) {
-                statusFilter.value = 'all';
+            if (statusFilter) {
+                const currentFilter = (statusFilter.value || '').trim();
+                // If filter is set to pending/processing (excludes completed), change to all (empty string)
+                // Empty string means "all" in the filter logic
+                if (currentFilter === 'pending' || currentFilter === 'processing') {
+                    statusFilter.value = '';
+                    console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show completed orders');
+                }
             }
         }
         
-        loadOrders();
+        // Always reload orders to show updated status
+        // Force reload after a short delay to ensure filter change is applied
+        await new Promise(resolve => setTimeout(resolve, 150));
+        await loadOrders();
     } catch (error) {
         console.error('[updateOrderStatus] Error:', error);
         alert('Xatolik: ' + error.message);
@@ -4349,10 +4358,33 @@ function setupWebSocket() {
         // Buyurtma status o'zgarganida
         if (data.type === 'order_status_update') {
             const activePage = document.querySelector('.page.active')?.id;
-            if (activePage === 'orders') loadOrders();
-            if (activePage === 'dashboard') loadDashboard();
-            
             const statusData = data.data || {};
+            const newStatus = statusData.status || '';
+            
+            // If order is completed and filter excludes it, update filter
+            if (newStatus === 'completed' && activePage === 'orders') {
+                const statusFilter = document.getElementById('order-status-filter');
+                if (statusFilter) {
+                    const currentFilter = (statusFilter.value || '').trim();
+                    // If filter is set to pending/processing (excludes completed), change to all
+                    if (currentFilter === 'pending' || currentFilter === 'processing') {
+                        statusFilter.value = '';
+                        console.log('[WebSocket] Changed filter to show completed order');
+                    }
+                }
+            }
+            
+            // Refresh orders page if active
+            if (activePage === 'orders') {
+                // Use setTimeout to ensure filter change is applied
+                setTimeout(() => {
+                    loadOrders();
+                }, 100);
+            }
+            if (activePage === 'dashboard') {
+                loadDashboard();
+            }
+            
             const message = `📦 Buyurtma #${statusData.order_id} holati: ${statusData.status_name || statusData.status}`;
             showToast(message, 'info');
         }

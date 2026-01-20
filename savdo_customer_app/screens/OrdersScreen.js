@@ -69,6 +69,14 @@ export default function OrdersScreen({ navigation }) {
         };
         
         const statusName = data.status_name || statusNames[data.status] || data.status;
+        const newStatus = data.status || '';
+        
+        // If order is completed and filter excludes it, update filter to show all
+        if (newStatus === 'completed' && statusFilter !== 'all') {
+          setStatusFilter('all');
+          console.log('[ORDERS SCREEN] Changed filter to "all" to show completed order');
+        }
+        
         Alert.alert(
           'Buyurtma holati o\'zgardi',
           `Buyurtma #${data.order_id} holati: ${statusName}`,

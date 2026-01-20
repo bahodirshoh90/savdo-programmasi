@@ -1990,29 +1990,27 @@ def get_orders(
         for order in orders:
             try:
                 order_response_dict = OrderService.order_to_response(order)
-                # Ensure status is a valid OrderStatus enum value
+                # Convert status string to OrderStatus enum for Pydantic validation
                 from models import OrderStatus
                 status_value = order_response_dict.get('status', 'pending')
                 
-                # Convert to enum if needed
-                status_enum = None
+                # Convert string to enum if needed
                 if isinstance(status_value, str):
-                    # Try to find matching enum by value
-                    for status in OrderStatus:
-                        if status.value == status_value:
-                            status_enum = status
-                            break
-                    if status_enum is None:
-                        # Default to PENDING if not found
-                        status_enum = OrderStatus.PENDING
+                    try:
+                        # Try to convert string to enum
+                        status_enum = OrderStatus(status_value)
+                        order_response_dict['status'] = status_enum
+                    except ValueError:
+                        # Invalid status string, default to PENDING
+                        print(f"Warning: Invalid order status '{status_value}', defaulting to PENDING")
+                        order_response_dict['status'] = OrderStatus.PENDING
                 elif isinstance(status_value, OrderStatus):
                     # Already an enum, use it
-                    status_enum = status_value
+                    order_response_dict['status'] = status_value
                 else:
-                    # Fallback to PENDING
-                    status_enum = OrderStatus.PENDING
+                    # Fallback
+                    order_response_dict['status'] = OrderStatus.PENDING
                 
-                order_response_dict['status'] = status_enum
                 # Validate and convert to response
                 validated_order = OrderResponse.model_validate(order_response_dict)
                 result.append(validated_order)
