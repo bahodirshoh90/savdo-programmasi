@@ -212,19 +212,45 @@ class OrderService:
         """Get all orders (can filter by status, seller_id, or customer_id)"""
         from sqlalchemy.orm import joinedload
         
+        # Debug logging
+        print(f"[ORDER_SERVICE.get_orders] Params: status={status}, seller_id={seller_id}, customer_id={customer_id}, skip={skip}, limit={limit}")
+        
         query = db.query(Order).options(
             joinedload(Order.customer),
             joinedload(Order.seller),
             joinedload(Order.items).joinedload(OrderItem.product)
         )
+        
+        # Count total orders before filtering
+        total_before_filter = query.count()
+        print(f"[ORDER_SERVICE.get_orders] Total orders before filter: {total_before_filter}")
+        
         # Status bo'sh yoki None bo'lsa, filter ishlamasin
         if status is not None and status != '' and str(status).lower() != 'all':
-            query = query.filter(Order.status == OrderStatus(status))
+            try:
+                status_enum = OrderStatus(status)
+                query = query.filter(Order.status == status_enum)
+                print(f"[ORDER_SERVICE.get_orders] Applied status filter: {status} ({status_enum})")
+            except ValueError as e:
+                print(f"[ORDER_SERVICE.get_orders] Invalid status '{status}': {e}")
+        else:
+            print(f"[ORDER_SERVICE.get_orders] No status filter applied (status={status})")
+        
         if seller_id:
             query = query.filter(Order.seller_id == seller_id)
+            print(f"[ORDER_SERVICE.get_orders] Applied seller_id filter: {seller_id}")
         if customer_id:
             query = query.filter(Order.customer_id == customer_id)
-        return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+            print(f"[ORDER_SERVICE.get_orders] Applied customer_id filter: {customer_id}")
+        
+        # Count after filtering
+        count_after_filter = query.count()
+        print(f"[ORDER_SERVICE.get_orders] Orders after filter: {count_after_filter}")
+        
+        result = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+        print(f"[ORDER_SERVICE.get_orders] Returning {len(result)} orders (after skip={skip}, limit={limit})")
+        
+        return result
     
     @staticmethod
     def get_orders_count(

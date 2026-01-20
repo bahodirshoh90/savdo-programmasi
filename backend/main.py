@@ -1989,8 +1989,13 @@ def get_orders(
         # Convert empty string to None for status filter
         status_filter = status if status and status.strip() else None
         
+        # Debug logging
+        print(f"[GET_ORDERS] Request params: status={status_filter}, seller_id={seller_id}, customer_id={customer_id}, skip={skip}, limit={limit}")
+        
         # Get orders with filters
         orders = OrderService.get_orders(db, status=status_filter, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
+        
+        print(f"[GET_ORDERS] Found {len(orders)} orders from database")
         
         # Apply date filters if provided
         if start_date or end_date:
