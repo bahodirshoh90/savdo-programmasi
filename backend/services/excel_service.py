@@ -39,7 +39,7 @@ class ExcelService:
         
         # Headers
         headers = [
-            'ID', 'Nomi', 'Barcode', 'Brend', 'Yetkazib beruvchi', 'Joylashuv', '1 qop = dona',
+            'ID', 'Nomi', 'Mahsulot kodi (Item Number)', 'Barcode', 'Brend', 'Yetkazib beruvchi', 'Joylashuv', '1 qop = dona',
             'Kelgan narx (dona)', 'Ulgurji narx (dona)', 'Dona narx (dona)', 'Oddiy narx (dona)',
             'Ulgurji qop narxi', 'Dona qop narxi', 'Oddiy qop narxi',
             'Ombordagi qop', 'Ombordagi dona', 'Jami dona', 'Rasm URL'
@@ -64,6 +64,7 @@ class ExcelService:
             ws.append([
                 product.id,
                 product.name,
+                product.item_number or '',
                 product.barcode or '',
                 product.brand or '',
                 product.supplier or '',

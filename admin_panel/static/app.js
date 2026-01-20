@@ -2198,11 +2198,12 @@ function clearOrderFilters() {
 async function updateOrderStatus(id, status) {
     console.log(`[updateOrderStatus] Updating order ${id} to status: ${status}`);
     try {
+        const headers = getAuthHeaders();
+        headers['Content-Type'] = 'application/json';
+        
         const response = await fetch(`${API_BASE}/orders/${id}/status?status=${encodeURIComponent(status)}`, { 
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify({ status: status })
         });
         
@@ -2223,6 +2224,7 @@ async function updateOrderStatus(id, status) {
         
         loadOrders();
     } catch (error) {
+        console.error('[updateOrderStatus] Error:', error);
         alert('Xatolik: ' + error.message);
     }
 }
