@@ -1977,15 +1977,85 @@ def get_orders(
     status: Optional[str] = None,
     seller_id: Optional[int] = None,
     customer_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Get all orders (can filter by status, seller_id, or customer_id)"""
+    """Get all orders (can filter by status, seller_id, customer_id, or date range)"""
     try:
+        from datetime import datetime
         # Convert empty string to None for status filter
         status_filter = status if status and status.strip() else None
+        
+        # Get orders with filters
         orders = OrderService.get_orders(db, status=status_filter, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
+        
+        # Apply date filters if provided
+        if start_date or end_date:
+            filtered_orders = []
+            for order in orders:
+                order_date = order.created_at
+                # Handle timezone-aware and naive datetime
+                if isinstance(order_date, datetime):
+                    # Convert to UTC if timezone-aware
+                    if order_date.tzinfo is not None:
+                        from utils import UZBEKISTAN_TZ
+                        # Convert to Uzbekistan timezone for comparison
+                        order_date_uz = order_date.astimezone(UZBEKISTAN_TZ)
+                    else:
+                        order_date_uz = order_date
+                    
+                    # Parse filter dates
+                    if start_date:
+                        try:
+                            start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
+                            if '+' not in start_str and 'Z' not in start_str:
+                                start = datetime.fromisoformat(start_str)
+                                if start.tzinfo is None:
+                                    from utils import UZBEKISTAN_TZ
+                                    start = start.replace(tzinfo=UZBEKISTAN_TZ)
+                            else:
+                                start = datetime.fromisoformat(start_str)
+                                # Convert to Uzbekistan timezone
+                                from utils import UZBEKISTAN_TZ
+                                start = start.astimezone(UZBEKISTAN_TZ)
+                            
+                            if order_date_uz < start:
+                                continue
+                        except (ValueError, AttributeError) as e:
+                            print(f"Warning: Invalid start_date format '{start_date}': {e}")
+                    
+                    if end_date:
+                        try:
+                            end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
+                            if '+' not in end_str and 'Z' not in end_str:
+                                end = datetime.fromisoformat(end_str)
+                                if end.tzinfo is None:
+                                    from utils import UZBEKISTAN_TZ
+                                    # Set end time to end of day
+                                    end = end.replace(hour=23, minute=59, second=59, tzinfo=UZBEKISTAN_TZ)
+                                else:
+                                    end = end.replace(hour=23, minute=59, second=59)
+                            else:
+                                end = datetime.fromisoformat(end_str)
+                                # Convert to Uzbekistan timezone
+                                from utils import UZBEKISTAN_TZ
+                                end = end.astimezone(UZBEKISTAN_TZ)
+                                end = end.replace(hour=23, minute=59, second=59)
+                            
+                            if order_date_uz > end:
+                                continue
+                        except (ValueError, AttributeError) as e:
+                            print(f"Warning: Invalid end_date format '{end_date}': {e}")
+                    
+                    filtered_orders.append(order)
+                else:
+                    # If not a datetime, include it
+                    filtered_orders.append(order)
+            
+            orders = filtered_orders
         result = []
         for order in orders:
             try:

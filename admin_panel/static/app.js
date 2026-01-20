@@ -2214,16 +2214,30 @@ async function updateOrderStatus(id, status) {
         
         showToast('Buyurtma holati yangilandi');
         
-        // If status changed to 'completed' and filter excludes it, update filter to show all
-        if (status === 'completed') {
-            const statusFilter = document.getElementById('order-status-filter');
-            if (statusFilter) {
-                const currentFilter = (statusFilter.value || '').trim();
-                // If filter is set to pending/processing (excludes completed), change to all (empty string)
-                // Empty string means "all" in the filter logic
+        // If status changed and filter excludes it, update filter to show all or the new status
+        const statusFilter = document.getElementById('order-status-filter');
+        if (statusFilter) {
+            const currentFilter = (statusFilter.value || '').trim();
+            
+            // If status changed to 'completed' and filter is pending/processing, show all
+            if (status === 'completed') {
                 if (currentFilter === 'pending' || currentFilter === 'processing') {
                     statusFilter.value = '';
                     console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show completed orders');
+                }
+            }
+            // If status changed to 'processing' and filter is pending, show all to ensure visibility
+            else if (status === 'processing') {
+                if (currentFilter === 'pending') {
+                    statusFilter.value = '';
+                    console.log('[updateOrderStatus] Changed filter from "pending" to "all" (empty) to show processing orders');
+                }
+            }
+            // If status changed to 'pending' and filter is processing/completed, show all
+            else if (status === 'pending') {
+                if (currentFilter === 'processing' || currentFilter === 'completed') {
+                    statusFilter.value = '';
+                    console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show pending orders');
                 }
             }
         }
