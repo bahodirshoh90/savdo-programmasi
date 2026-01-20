@@ -2249,6 +2249,7 @@ async def process_order_payment(
         )
         
         # Update order status to completed using OrderService
+        # Note: OrderService.update_status expects lowercase status, but will convert to enum
         from services.order_service import OrderService
         OrderService.update_status(db, order_id, "completed")
         
