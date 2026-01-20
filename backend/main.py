@@ -2393,9 +2393,13 @@ def get_statistics(
             print(f"Error getting inventory statistics: {e}")
             stats["inventory"] = {"total_value": 0, "total_packages": 0, "total_pieces": 0}
         
-        # Add total debt statistics
-        total_debt = DebtService.get_total_debt(db)
-        stats["total_debt"] = total_debt
+        try:
+            # Add total debt statistics
+            total_debt = DebtService.get_total_debt(db)
+            stats["total_debt"] = total_debt
+        except Exception as e:
+            print(f"Error getting debt statistics: {e}")
+            stats["total_debt"] = 0
         
         return stats
     except Exception as e:
