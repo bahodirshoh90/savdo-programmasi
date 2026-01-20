@@ -217,7 +217,8 @@ class OrderService:
             joinedload(Order.seller),
             joinedload(Order.items).joinedload(OrderItem.product)
         )
-        if status:
+        # Status bo'sh yoki None bo'lsa, filter ishlamasin
+        if status is not None and status != '' and str(status).lower() != 'all':
             query = query.filter(Order.status == OrderStatus(status))
         if seller_id:
             query = query.filter(Order.seller_id == seller_id)
