@@ -231,11 +231,16 @@ class OrderService:
                 # Normalize status string (lowercase)
                 status_normalized = str(status).lower().strip()
                 status_enum = OrderStatus(status_normalized)
-                query = query.filter(Order.status == status_enum)
+                
+                # Use case-insensitive comparison for SQLite VARCHAR enum
+                # SQLite stores enum as VARCHAR, so we need to compare case-insensitively
+                from sqlalchemy import func
+                query = query.filter(func.lower(Order.status) == status_normalized)
+                
                 print(f"[ORDER_SERVICE.get_orders] Applied status filter: '{status}' -> '{status_normalized}' ({status_enum})")
                 
-                # Debug: Check how many orders match this status
-                count_with_status = db.query(Order).filter(Order.status == status_enum).count()
+                # Debug: Check how many orders match this status (case-insensitive)
+                count_with_status = db.query(Order).filter(func.lower(Order.status) == status_normalized).count()
                 print(f"[ORDER_SERVICE.get_orders] Total orders with status '{status_normalized}': {count_with_status}")
             except ValueError as e:
                 print(f"[ORDER_SERVICE.get_orders] Invalid status '{status}': {e}")
