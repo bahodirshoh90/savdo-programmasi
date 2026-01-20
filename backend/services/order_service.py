@@ -286,12 +286,15 @@ class OrderService:
             return None
         
         old_status = db_order.status
-        print(f"[ORDER_SERVICE.update_status] Order {order_id} current status: {old_status}")
+        print(f"[ORDER_SERVICE.update_status] Order {order_id} current status: {old_status} (type: {type(old_status)})")
         try:
-            new_status = OrderStatus(status)
-            print(f"[ORDER_SERVICE.update_status] New status enum: {new_status}")
+            # Normalize status string (lowercase)
+            status_normalized = str(status).lower().strip()
+            new_status = OrderStatus(status_normalized)
+            print(f"[ORDER_SERVICE.update_status] New status: '{status}' -> '{status_normalized}' ({new_status})")
         except ValueError as e:
             print(f"[ORDER_SERVICE.update_status] Invalid status '{status}': {e}")
+            print(f"[ORDER_SERVICE.update_status] Available statuses: {[s.value for s in OrderStatus]}")
             raise ValueError(f"Invalid order status: {status}")
         
         # If order was completed/processing and now cancelled/returned, restore inventory
