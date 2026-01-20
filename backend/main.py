@@ -2269,7 +2269,8 @@ def get_statistics(
     """Get detailed sales statistics with payment methods and profit"""
     from datetime import datetime, timedelta
     
-    # Auto-set date range based on period if not provided
+    try:
+        # Auto-set date range based on period if not provided
     if not start_date or not end_date:
         now = get_uzbekistan_now()
         if period == "daily":
@@ -2392,11 +2393,16 @@ def get_statistics(
         print(f"Error getting inventory statistics: {e}")
         stats["inventory"] = {"total_value": 0, "total_packages": 0, "total_pieces": 0}
     
-    # Add total debt statistics
-    total_debt = DebtService.get_total_debt(db)
-    stats["total_debt"] = total_debt
-    
-    return stats
+        # Add total debt statistics
+        total_debt = DebtService.get_total_debt(db)
+        stats["total_debt"] = total_debt
+        
+        return stats
+    except Exception as e:
+        print(f"Error in get_statistics: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting statistics: {str(e)}")
 
 
 @app.get("/api/inventory/value")
