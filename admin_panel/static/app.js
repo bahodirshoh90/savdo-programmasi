@@ -2926,10 +2926,12 @@ async function loadSellersMarkers() {
         }
         
         // Remove no-locations info if exists
-        const mapContainer = map.getContainer();
-        const infoDiv = mapContainer.querySelector('.no-locations-info');
-        if (infoDiv) {
-            infoDiv.remove();
+        if (map) {
+            const mapContainer = map.getContainer();
+            const infoDiv = mapContainer.querySelector('.no-locations-info');
+            if (infoDiv) {
+                infoDiv.remove();
+            }
         }
         
         // Add markers for each location
