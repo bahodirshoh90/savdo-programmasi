@@ -2085,38 +2085,28 @@ def get_orders(
                     filtered_orders.append(order)
             
             orders = filtered_orders
-        result = []
+        # Build simple dict responses using service helper
+        response_list = []
         for order in orders:
             try:
-                order_response_dict = OrderService.order_to_response(order)
-                
-                # Ensure status is always a simple lowercase string for API response
-                raw_status = order_response_dict.get('status', None)
+                data = OrderService.order_to_response(order)
+                # Normalize status to lowercase string for frontend
+                raw_status = data.get("status")
                 if raw_status is not None:
                     if hasattr(raw_status, "value"):
-                        # Enum -> use its value
-                        order_response_dict["status"] = str(raw_status.value).lower()
+                        data["status"] = str(raw_status.value).lower()
                     else:
-                        order_response_dict["status"] = str(raw_status).lower()
+                        data["status"] = str(raw_status).lower()
                 else:
-                    order_response_dict["status"] = "pending"
-                
-                # Validate and convert to response
-                validated_order = OrderResponse.model_validate(order_response_dict)
-                result.append(validated_order)
+                    data["status"] = "pending"
+                response_list.append(data)
             except Exception as e:
-                print(f"Error converting order {order.id if order else 'unknown'} to response: {e}")
+                print(f"Error building order response for order {getattr(order, 'id', 'unknown')}: {e}")
                 import traceback
                 traceback.print_exc()
-                # Skip this order instead of failing completely
                 continue
-        
-        if not result:
-            # If no orders could be converted, return empty list instead of error
-            print("Warning: No orders could be converted to response format")
-            return []
-        
-        return result
+
+        return response_list
     except Exception as e:
         print(f"Error in get_orders endpoint: {e}")
         import traceback
