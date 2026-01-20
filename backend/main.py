@@ -2349,29 +2349,48 @@ def get_statistics(
         if status_count > 0:
             orders_by_status[status.value] = status_count
     
-    # Get total amount of completed orders
-    completed_orders = orders_query.filter(Order.status == OrderStatus.COMPLETED).all()
-    total_orders_amount = sum(order.total_amount for order in completed_orders)
+    try:
+        # Get total amount of completed orders
+        completed_orders = orders_query.filter(Order.status == OrderStatus.COMPLETED).all()
+        total_orders_amount = sum(order.total_amount for order in completed_orders) if completed_orders else 0
+        
+        # Get online orders amount (completed)
+        online_completed_orders = orders_query.filter(
+            Order.is_offline == False
+        ).filter(
+            Order.status == OrderStatus.COMPLETED
+        ).all()
+        online_orders_amount = sum(order.total_amount for order in online_completed_orders) if online_completed_orders else 0
+        
+        stats["orders"] = {
+            "total_orders": total_orders,
+            "online_orders_count": online_orders_count,
+            "offline_orders_count": offline_orders_count,
+            "orders_by_status": orders_by_status,
+            "total_orders_amount": total_orders_amount,
+            "online_orders_amount": online_orders_amount
+        }
+    except Exception as e:
+        print(f"Error getting order statistics: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return empty order stats if there's an error
+        stats["orders"] = {
+            "total_orders": 0,
+            "online_orders_count": 0,
+            "offline_orders_count": 0,
+            "orders_by_status": {},
+            "total_orders_amount": 0,
+            "online_orders_amount": 0
+        }
     
-    # Get online orders amount (completed)
-    online_completed_orders = orders_query.filter(
-        Order.is_offline == False,
-        Order.status == OrderStatus.COMPLETED
-    ).all()
-    online_orders_amount = sum(order.total_amount for order in online_completed_orders)
-    
-    stats["orders"] = {
-        "total_orders": total_orders,
-        "online_orders_count": online_orders_count,
-        "offline_orders_count": offline_orders_count,
-        "orders_by_status": orders_by_status,
-        "total_orders_amount": total_orders_amount,
-        "online_orders_amount": online_orders_amount
-    }
-    
-    # Add inventory statistics
-    inventory_stats = ProductService.get_inventory_total_value(db)
-    stats["inventory"] = inventory_stats
+    try:
+        # Add inventory statistics
+        inventory_stats = ProductService.get_inventory_total_value(db)
+        stats["inventory"] = inventory_stats
+    except Exception as e:
+        print(f"Error getting inventory statistics: {e}")
+        stats["inventory"] = {"total_value": 0, "total_packages": 0, "total_pieces": 0}
     
     # Add total debt statistics
     total_debt = DebtService.get_total_debt(db)
