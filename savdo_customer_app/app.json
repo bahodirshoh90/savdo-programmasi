@@ -20,6 +20,18 @@
       "package": "com.savdo.customerapp",
       "adaptiveIcon": {
         "backgroundColor": "#4f46e5"
+      },
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "com.android.alarm.permission.SET_ALARM"
+      ],
+      "notification": {
+        "icon": "./assets/notification-icon.png",
+        "color": "#4f46e5",
+        "sound": true,
+        "androidMode": "default",
+        "androidCollapsedTitle": "Yangi xabar"
       }
     },
     "web": {
