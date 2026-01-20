@@ -2402,12 +2402,18 @@ async function processOrderPayment(e) {
         // Check current status filter - if it only shows pending/processing, 
         // change it to show all or include completed orders
         const statusFilter = document.getElementById('order-status-filter');
-        if (statusFilter && (statusFilter.value === 'pending' || statusFilter.value === 'processing')) {
-            // Change filter to 'all' to show all orders including completed ones
-            statusFilter.value = 'all';
+        if (statusFilter) {
+            const currentFilter = (statusFilter.value || '').trim();
+            // If filter is 'pending' or 'processing', change to 'all' to show completed order
+            if (currentFilter === 'pending' || currentFilter === 'processing') {
+                statusFilter.value = ''; // Empty string means "all"
+                console.log(`[processOrderPayment] Filter "${currentFilter}" dan "all" (empty) ga o'zgartirildi`);
+            }
         }
         
-        loadOrders();
+        // Reload orders after a short delay to ensure filter change is applied
+        await new Promise(resolve => setTimeout(resolve, 150));
+        await loadOrders();
         loadDashboard();
     } catch (error) {
         alert('Xatolik: ' + error.message);
