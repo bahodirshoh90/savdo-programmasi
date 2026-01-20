@@ -2915,9 +2915,8 @@ async function loadAdminOrders() {
             return;
         }
         
-        const startDate = document.getElementById('admin-order-start-date')?.value;
-        const endDate = document.getElementById('admin-order-end-date')?.value;
-        const statusFilter = document.getElementById('admin-order-status-filter')?.value || '';
+        // Reuse startDate, endDate, and statusFilter from above (already declared at line 2884-2885, 2883)
+        // No need to redeclare them here
         
         let filteredOrders = orders;
         if (startDate || endDate || statusFilter) {

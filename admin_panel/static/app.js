@@ -2226,11 +2226,11 @@ async function updateOrderStatus(id, status) {
                     console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show completed orders');
                 }
             }
-            // If status changed to 'processing' and filter is pending, show all to ensure visibility
+            // If status changed to 'processing' and filter is pending, change to processing to show the order
             else if (status === 'processing') {
                 if (currentFilter === 'pending') {
-                    statusFilter.value = '';
-                    console.log('[updateOrderStatus] Changed filter from "pending" to "all" (empty) to show processing orders');
+                    statusFilter.value = 'processing';
+                    console.log('[updateOrderStatus] Changed filter from "pending" to "processing" to show processing orders');
                 }
             }
             // If status changed to 'pending' and filter is processing/completed, show all
