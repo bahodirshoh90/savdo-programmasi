@@ -1992,10 +1992,34 @@ def get_orders(
         # Debug logging
         print(f"[GET_ORDERS] Request params: status={status_filter}, seller_id={seller_id}, customer_id={customer_id}, skip={skip}, limit={limit}")
         
-        # Get orders with filters
-        orders = OrderService.get_orders(db, status=status_filter, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
+        # IMPORTANT:
+        # Don't apply status filter at database level (Enum/SQLite case issues),
+        # instead load by seller/customer and filter by status in Python.
+        
+        # Get orders with basic filters (without status)
+        orders = OrderService.get_orders(db, status=None, seller_id=seller_id, customer_id=customer_id, skip=skip, limit=limit)
         
         print(f"[GET_ORDERS] Found {len(orders)} orders from database")
+        
+        # Apply status filter in Python (case-insensitive, robust against DB enum storage)
+        if status_filter:
+            status_normalized = str(status_filter).lower().strip()
+            filtered_by_status = []
+            for order in orders:
+                raw_status = getattr(order, "status", None)
+                # Order.status may be Enum or str; handle both
+                if raw_status is None:
+                    continue
+                if hasattr(raw_status, "value"):
+                    value = str(raw_status.value).lower()
+                else:
+                    value = str(raw_status).lower()
+                
+                if value == status_normalized:
+                    filtered_by_status.append(order)
+            
+            print(f"[GET_ORDERS] After Python status filter '{status_normalized}': {len(filtered_by_status)} orders")
+            orders = filtered_by_status
         
         # Apply date filters if provided
         if start_date or end_date:
