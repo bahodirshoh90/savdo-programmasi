@@ -10,10 +10,15 @@ try:
     from .calculation_service import CalculationService
     from .inventory_service import InventoryService
     from .audit_service import AuditService
+    from ..utils import to_uzbekistan_time
 except ImportError:
     from calculation_service import CalculationService
     from inventory_service import InventoryService
     from audit_service import AuditService
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils import to_uzbekistan_time
 
 
 class SaleService:
@@ -575,7 +580,7 @@ class SaleService:
                 }
                 for item in sale.items
             ],
-            "created_at": sale.created_at  # SQLAlchemy datetime object, already compatible with Pydantic datetime
+            "created_at": to_uzbekistan_time(sale.created_at).isoformat() if sale.created_at else None
         }
     
     @staticmethod
@@ -762,7 +767,11 @@ class SaleService:
         # Daily statistics
         daily_stats = {}
         for sale in sales:
-            date_key = sale.created_at.date().isoformat()
+            # Convert to Uzbekistan timezone before getting date
+            sale_date_uz = to_uzbekistan_time(sale.created_at) if sale.created_at else None
+            date_key = sale_date_uz.date().isoformat() if sale_date_uz else None
+            if not date_key:
+                continue
             if date_key not in daily_stats:
                 daily_stats[date_key] = {"count": 0, "amount": 0.0}
             daily_stats[date_key]["count"] += 1
@@ -876,7 +885,7 @@ class SaleService:
             history.append({
                 "id": item.id,
                 "sale_id": item.sale_id,
-                "date": item.sale.created_at.isoformat(),
+                "date": to_uzbekistan_time(item.sale.created_at).isoformat() if item.sale.created_at else None,
                 "customer_name": item.sale.customer.name if item.sale.customer else "O'chirilgan mijoz",
                 "seller_name": item.sale.seller.name if item.sale.seller else "Noma'lum",
                 "requested_quantity": item.requested_quantity,
