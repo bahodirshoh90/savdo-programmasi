@@ -4338,6 +4338,24 @@ function setupWebSocket() {
                 : `❌ Sotuv #${data.sale_id} rad etildi`;
             showToast(message);
         }
+        // Mijozdan yordam so'rovi
+        if (data.type === 'help_request') {
+            const helpData = data.data || {};
+            const message = `📞 Yordam so'rovi: ${helpData.username || 'Noma\'lum mijoz'}\n${helpData.message || ''}`;
+            showToast(message, 'info', 10000); // Show for 10 seconds
+            // Optionally, you can open a modal or show a notification
+            console.log('[WebSocket] Help request received:', helpData);
+        }
+        // Buyurtma status o'zgarganida
+        if (data.type === 'order_status_update') {
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'orders') loadOrders();
+            if (activePage === 'dashboard') loadDashboard();
+            
+            const statusData = data.data || {};
+            const message = `📦 Buyurtma #${statusData.order_id} holati: ${statusData.status_name || statusData.status}`;
+            showToast(message, 'info');
+        }
     };
     
     ws.onerror = (error) => {
@@ -4351,19 +4369,29 @@ function setupWebSocket() {
 }
 
 // Toast notification
-function showToast(message) {
+function showToast(message, type = 'success', duration = 3000) {
     const toast = document.createElement('div');
+    
+    // Set background color based on type
+    let bgColor = '#4CAF50'; // default green
+    if (type === 'error') bgColor = '#f44336';
+    if (type === 'info') bgColor = '#2196F3';
+    if (type === 'warning') bgColor = '#ff9800';
+    
     toast.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        background: #4CAF50;
+        background: ${bgColor};
         color: white;
         padding: 15px 20px;
         border-radius: 5px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         z-index: 10000;
         animation: slideIn 0.3s ease-out;
+        max-width: 400px;
+        word-wrap: break-word;
+        white-space: pre-line;
     `;
     toast.textContent = message;
     document.body.appendChild(toast);

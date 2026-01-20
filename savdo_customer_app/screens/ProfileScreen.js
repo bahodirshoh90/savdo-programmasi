@@ -13,6 +13,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import Colors from '../constants/colors';
@@ -38,6 +39,12 @@ export default function ProfileScreen({ navigation }) {
     confirmPassword: '',
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [contactData, setContactData] = useState({
+    issueType: 'other',
+    message: '',
+  });
+  const [isSendingContact, setIsSendingContact] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -268,6 +275,45 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const handleContactAdmin = async () => {
+    if (!contactData.message.trim()) {
+      Alert.alert('Xatolik', 'Xabaringizni kiriting');
+      return;
+    }
+
+    setIsSendingContact(true);
+    try {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      const response = await api.post('/help-request', {
+        message: contactData.message.trim(),
+        issue_type: contactData.issueType,
+      }, {
+        headers: {
+          'X-Customer-ID': customerId || '',
+        },
+      });
+
+      Alert.alert('Muvaffaqiyatli', response.message || 'Xabar yuborildi. Admin tez orada siz bilan bog\'lanadi.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            setShowContactModal(false);
+            setContactData({
+              issueType: 'other',
+              message: '',
+            });
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error('Error sending contact message:', error);
+      const errorMessage = error.response?.data?.detail || error.message || 'Xabar yuborishda xatolik';
+      Alert.alert('Xatolik', errorMessage);
+    } finally {
+      setIsSendingContact(false);
+    }
+  };
+
   const handleLogout = async () => {
     console.log('[LOGOUT] Logout button pressed');
     
@@ -418,6 +464,16 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Yordam</Text>
+        <TouchableOpacity
+          style={styles.changePasswordButton}
+          onPress={() => setShowContactModal(true)}
+        >
+          <Text style={styles.changePasswordButtonText}>Admin bilan bog'lanish</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Qarz balansi</Text>
         <Text style={styles.debtAmount}>
           {customerData?.debt_balance?.toLocaleString('uz-UZ') || '0'} so'm
@@ -429,6 +485,81 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.logoutButtonText}>Chiqish</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Contact Admin Modal */}
+      <Modal
+        visible={showContactModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowContactModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Admin bilan bog'lanish</Text>
+              <TouchableOpacity onPress={() => setShowContactModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Muammo turi:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={contactData.issueType}
+                    onValueChange={(value) => setContactData({ ...contactData, issueType: value })}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Buyurtma haqida" value="order" />
+                    <Picker.Item label="Mahsulot haqida" value="product" />
+                    <Picker.Item label="To'lov haqida" value="payment" />
+                    <Picker.Item label="Boshqa" value="other" />
+                  </Picker>
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Xabar:</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={contactData.message}
+                  onChangeText={(text) => setContactData({ ...contactData, message: text })}
+                  placeholder="Xabaringizni yozing..."
+                  multiline
+                  numberOfLines={5}
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setShowContactModal(false);
+                    setContactData({
+                      issueType: 'other',
+                      message: '',
+                    });
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Bekor qilish</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton, isSendingContact && styles.saveButtonDisabled]}
+                  onPress={handleContactAdmin}
+                  disabled={isSendingContact}
+                >
+                  {isSendingContact ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Yuborish</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Password Change Modal */}
       <Modal
@@ -675,6 +806,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 20,
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  pickerContainer: {
+    backgroundColor: Colors.borderLight,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  picker: {
+    color: Colors.textDark,
   },
   modalButton: {
     flex: 1,

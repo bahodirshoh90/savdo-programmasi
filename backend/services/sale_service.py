@@ -742,16 +742,17 @@ class SaleService:
         
         # Top products
         from collections import defaultdict
-        product_stats = defaultdict(lambda: {"quantity": 0, "amount": 0.0, "name": ""})
+        product_stats = defaultdict(lambda: {"quantity": 0, "amount": 0.0, "name": "", "item_number": ""})
         
         for sale in sales:
             for item in sale.items:
                 product_stats[item.product_id]["quantity"] += item.requested_quantity
                 product_stats[item.product_id]["amount"] += item.subtotal
                 product_stats[item.product_id]["name"] = item.product.name
+                product_stats[item.product_id]["item_number"] = item.product.item_number or ""
         
         top_products = sorted(
-            [{"product_id": k, "name": v["name"], "quantity": v["quantity"], "amount": v["amount"]}
+            [{"product_id": k, "name": v["name"], "item_number": v["item_number"], "quantity": v["quantity"], "amount": v["amount"]}
              for k, v in product_stats.items()],
             key=lambda x: x["quantity"],
             reverse=True

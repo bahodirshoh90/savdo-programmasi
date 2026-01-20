@@ -319,14 +319,19 @@ class ExcelService:
         # Sheet 2: Top Products
         if 'top_products' in stats:
             ws2 = wb.create_sheet("Top Mahsulotlar")
-            ws2.append(["Mahsulot", "Sotildi", "Summa"])
+            ws2.append(["Mahsulot", "Mahsulot kodi (Item Number)", "Sotildi", "Summa"])
             for cell in ws2[1]:
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = Alignment(horizontal='center', vertical='center')
             
             for product in stats['top_products']:
-                ws2.append([product['name'], product['quantity'], f"{product['amount']:,.0f}"])
+                ws2.append([
+                    product['name'],
+                    product.get('item_number', '') or '',
+                    product['quantity'],
+                    f"{product['amount']:,.0f}"
+                ])
         
         # Sheet 3: Top Customers
         if 'top_customers' in stats:

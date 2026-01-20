@@ -1447,17 +1447,36 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
 @app.post("/api/help-request")
 async def create_help_request(
     request_data: dict = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
 ):
     """Create a help request from customer app (sent to admin)"""
-    from models import Settings
+    from models import Settings, Customer
     import json
     from datetime import datetime
     
-    customer_username = request_data.get('username', 'Noma\'lum')
-    customer_phone = request_data.get('phone', 'Noma\'lum')
+    # Try to get customer info from database if customer_id provided
+    customer_id = None
+    customer_name = 'Noma\'lum'
+    customer_username = 'Noma\'lum'
+    customer_phone = 'Noma\'lum'
+    
+    if x_customer_id:
+        try:
+            customer_id = int(x_customer_id)
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            if customer:
+                customer_name = customer.name or 'Noma\'lum'
+                customer_username = customer.username or 'Noma\'lum'
+                customer_phone = customer.phone or 'Noma\'lum'
+        except (ValueError, Exception) as e:
+            print(f"Error fetching customer: {e}")
+    
+    # Override with request data if provided
+    customer_username = request_data.get('username', customer_username)
+    customer_phone = request_data.get('phone', customer_phone)
     message = request_data.get('message', '')
-    issue_type = request_data.get('issue_type', 'other')  # login, password, other
+    issue_type = request_data.get('issue_type', 'other')  # login, password, other, order, product
     
     if not message.strip():
         raise HTTPException(status_code=400, detail="Xabar matnini kiriting")
@@ -1466,6 +1485,8 @@ async def create_help_request(
     help_message = f"""
 === YORDAM SO'ROVI ===
 Vaqt: {get_uzbekistan_now().strftime('%Y-%m-%d %H:%M:%S')}
+Mijoz ID: {customer_id or 'Noma\'lum'}
+Mijoz ismi: {customer_name}
 Mijoz username: {customer_username}
 Telefon: {customer_phone}
 Muammo turi: {issue_type}
@@ -1477,6 +1498,8 @@ Xabar: {message}
         await manager.broadcast({
             "type": "help_request",
             "data": {
+                "customer_id": customer_id,
+                "customer_name": customer_name,
                 "username": customer_username,
                 "phone": customer_phone,
                 "message": message,
@@ -1484,8 +1507,11 @@ Xabar: {message}
                 "timestamp": get_uzbekistan_now().isoformat()
             }
         })
+        print(f"[Help Request] WebSocket notification sent for customer {customer_id}")
     except Exception as e:
         print(f"Error broadcasting help request: {e}")
+        import traceback
+        traceback.print_exc()
         # Continue even if WebSocket fails
     
     # Log to console/file for now (can be extended to save in database)
@@ -2259,6 +2285,53 @@ def get_statistics(
             start_date = (now - timedelta(days=365)).isoformat()
     
     stats = SaleService.get_statistics(db, start_date, end_date, seller_id=seller_id)
+    
+    # Add order statistics (online orders)
+    from models import Order, OrderStatus
+    from sqlalchemy import func
+    
+    # Filter orders by date range if provided
+    orders_query = db.query(Order)
+    if start_date:
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        orders_query = orders_query.filter(Order.created_at >= start)
+    if end_date:
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        orders_query = orders_query.filter(Order.created_at <= end)
+    if seller_id:
+        orders_query = orders_query.filter(Order.seller_id == seller_id)
+    
+    # Count online vs offline orders
+    total_orders = orders_query.count()
+    online_orders_count = orders_query.filter(Order.is_offline == False).count()
+    offline_orders_count = orders_query.filter(Order.is_offline == True).count()
+    
+    # Get orders by status
+    orders_by_status = {}
+    for status in OrderStatus:
+        status_count = orders_query.filter(Order.status == status).count()
+        if status_count > 0:
+            orders_by_status[status.value] = status_count
+    
+    # Get total amount of completed orders
+    completed_orders = orders_query.filter(Order.status == OrderStatus.COMPLETED).all()
+    total_orders_amount = sum(order.total_amount for order in completed_orders)
+    
+    # Get online orders amount (completed)
+    online_completed_orders = orders_query.filter(
+        Order.is_offline == False,
+        Order.status == OrderStatus.COMPLETED
+    ).all()
+    online_orders_amount = sum(order.total_amount for order in online_completed_orders)
+    
+    stats["orders"] = {
+        "total_orders": total_orders,
+        "online_orders_count": online_orders_count,
+        "offline_orders_count": offline_orders_count,
+        "orders_by_status": orders_by_status,
+        "total_orders_amount": total_orders_amount,
+        "online_orders_amount": online_orders_amount
+    }
     
     # Add inventory statistics
     inventory_stats = ProductService.get_inventory_total_value(db)

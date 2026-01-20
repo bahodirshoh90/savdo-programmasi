@@ -302,12 +302,17 @@ class PDFService:
             subtotal_text = f"{item.subtotal:,.0f}"
             
             product_name = item.product.name
-            if len(product_name) > 40:
-                product_name = product_name[:37] + "..."
+            # Include item_number if available
+            if item.product.item_number:
+                product_display = f"{product_name} [{item.product.item_number}]"
+            else:
+                product_display = product_name
+            if len(product_display) > 50:
+                product_display = product_display[:47] + "..."
             
             table_data.append([
                 Paragraph(str(item_num), table_cell_style),
-                Paragraph(product_name, table_cell_style),
+                Paragraph(product_display, table_cell_style),
                 Paragraph(quantity_text, table_cell_style),
                 Paragraph(price_text, table_cell_style),
                 Paragraph(subtotal_text, table_cell_style)
@@ -579,9 +584,13 @@ class PDFService:
             elements.append(Paragraph("ENG KO'P SOTILGAN MAHSULOTLAR", styles['Heading2']))
             elements.append(Spacer(1, 5*mm))
             
-            products_data = [["Mahsulot", "Miqdor", "Summa"]]
+            products_data = [["Mahsulot", "Kod", "Miqdor", "Summa"]]
             for product in stats['top_products'][:10]:  # Top 10
-                products_data.append([product['name'], f"{product['quantity']}", f"{product['amount']:,.0f} so'm"])
+                product_display = product['name']
+                item_number = product.get('item_number', '') or ''
+                if item_number:
+                    product_display = f"{product['name']} [{item_number}]"
+                products_data.append([product_display, item_number, f"{product['quantity']}", f"{product['amount']:,.0f} so'm"])
             
             products_table = Table(products_data, colWidths=[60*mm, 30*mm, 40*mm])
             products_table.setStyle(TableStyle([
