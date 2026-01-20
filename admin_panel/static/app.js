@@ -2222,10 +2222,26 @@ async function updateOrderStatus(id, status) {
         const statusFilter = document.getElementById('order-status-filter');
         if (statusFilter) {
             const currentFilter = (statusFilter.value || '').trim();
-            // Agar status o'zgarsa va filterda ko'rinmay qolsa, filterni "all"ga o'zgartiramiz
-            if (["completed", "processing", "pending", "cancelled", "returned"].includes(status)) {
-                statusFilter.value = 'all';
-                console.log(`[updateOrderStatus] Filter "${currentFilter}" dan "all"ga o'zgartirildi`);
+            
+            // Agar status o'zgarsa va filterda ko'rinmay qolsa, filterni yangi statusga o'zgartiramiz
+            if (status === 'processing') {
+                // Agar filter "pending" bo'lsa, uni "processing" ga o'zgartiramiz
+                if (currentFilter === 'pending' || currentFilter === '') {
+                    statusFilter.value = 'processing';
+                    console.log(`[updateOrderStatus] Filter "${currentFilter}" dan "processing" ga o'zgartirildi`);
+                }
+            } else if (status === 'completed') {
+                // Agar filter "pending" yoki "processing" bo'lsa, uni "all" ga o'zgartiramiz
+                if (currentFilter === 'pending' || currentFilter === 'processing') {
+                    statusFilter.value = '';
+                    console.log(`[updateOrderStatus] Filter "${currentFilter}" dan "all" (empty) ga o'zgartirildi`);
+                }
+            } else if (status === 'pending') {
+                // Agar filter "processing" yoki "completed" bo'lsa, uni "pending" ga o'zgartiramiz
+                if (currentFilter === 'processing' || currentFilter === 'completed') {
+                    statusFilter.value = 'pending';
+                    console.log(`[updateOrderStatus] Filter "${currentFilter}" dan "pending" ga o'zgartirildi`);
+                }
             }
         }
         
