@@ -2694,16 +2694,16 @@ seller_static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "se
 if os.path.exists(admin_static_dir):
     try:
         app.mount("/static", StaticFiles(directory=admin_static_dir), name="static")
-        print(f"✓ Admin static files mounted: {admin_static_dir}")
+        print(f"[OK] Admin static files mounted: {admin_static_dir}")
     except Exception as e:
-        print(f"⚠ Warning: Could not mount admin static files: {e}")
+        print(f"[WARNING] Could not mount admin static files: {e}")
 
 if os.path.exists(seller_static_dir):
     try:
         app.mount("/seller/static", StaticFiles(directory=seller_static_dir), name="seller-static")
-        print(f"✓ Seller static files mounted: {seller_static_dir}")
+        print(f"[OK] Seller static files mounted: {seller_static_dir}")
     except Exception as e:
-        print(f"⚠ Warning: Could not mount seller static files: {e}")
+        print(f"[WARNING] Could not mount seller static files: {e}")
 
 # Fallback static file endpoints (if mount doesn't work)
 @app.get("/static/{file_path:path}")
