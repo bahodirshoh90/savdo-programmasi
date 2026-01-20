@@ -10,10 +10,15 @@ try:
     from .calculation_service import CalculationService
     from .inventory_service import InventoryService
     from .audit_service import AuditService
+    from ..utils import to_uzbekistan_time
 except ImportError:
     from calculation_service import CalculationService
     from inventory_service import InventoryService
     from audit_service import AuditService
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils import to_uzbekistan_time
 from sqlalchemy.orm import joinedload
 
 
