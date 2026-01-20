@@ -2915,9 +2915,7 @@ async function loadAdminOrders() {
             return;
         }
         
-        // Reuse startDate, endDate, and statusFilter from above (already declared at line 2884-2885, 2883)
-        // No need to redeclare them here
-        
+        // startDate, endDate, statusFilter yuqorida e'lon qilingan, qayta e'lon qilish shart emas
         let filteredOrders = orders;
         if (startDate || endDate || statusFilter) {
             filteredOrders = orders.filter(o => {

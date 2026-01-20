@@ -2057,7 +2057,11 @@ async function loadOrders() {
         
         tbody.innerHTML = '<tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>';
         
-        const status = document.getElementById('order-status-filter')?.value || '';
+        let status = document.getElementById('order-status-filter')?.value || '';
+        // Agar filter "all" yoki bo'sh bo'lsa, statusni null qilib yubor (barcha buyurtmalar)
+        if (!status || status === 'all') {
+            status = null;
+        }
         const startDate = document.getElementById('order-start-date')?.value;
         const endDate = document.getElementById('order-end-date')?.value;
         const customerId = selectedCustomerIdForOrderFilter;
@@ -2214,31 +2218,14 @@ async function updateOrderStatus(id, status) {
         
         showToast('Buyurtma holati yangilandi');
         
-        // If status changed and filter excludes it, update filter to show all or the new status
+        // Status o'zgarganda filterni moslashtirish
         const statusFilter = document.getElementById('order-status-filter');
         if (statusFilter) {
             const currentFilter = (statusFilter.value || '').trim();
-            
-            // If status changed to 'completed' and filter is pending/processing, show all
-            if (status === 'completed') {
-                if (currentFilter === 'pending' || currentFilter === 'processing') {
-                    statusFilter.value = '';
-                    console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show completed orders');
-                }
-            }
-            // If status changed to 'processing' and filter is pending, change to processing to show the order
-            else if (status === 'processing') {
-                if (currentFilter === 'pending') {
-                    statusFilter.value = 'processing';
-                    console.log('[updateOrderStatus] Changed filter from "pending" to "processing" to show processing orders');
-                }
-            }
-            // If status changed to 'pending' and filter is processing/completed, show all
-            else if (status === 'pending') {
-                if (currentFilter === 'processing' || currentFilter === 'completed') {
-                    statusFilter.value = '';
-                    console.log('[updateOrderStatus] Changed filter from "' + currentFilter + '" to "all" (empty) to show pending orders');
-                }
+            // Agar status o'zgarsa va filterda ko'rinmay qolsa, filterni "all"ga o'zgartiramiz
+            if (["completed", "processing", "pending", "cancelled", "returned"].includes(status)) {
+                statusFilter.value = 'all';
+                console.log(`[updateOrderStatus] Filter "${currentFilter}" dan "all"ga o'zgartirildi`);
             }
         }
         
