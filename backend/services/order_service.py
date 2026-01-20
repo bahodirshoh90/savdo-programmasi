@@ -228,11 +228,18 @@ class OrderService:
         # Status bo'sh yoki None bo'lsa, filter ishlamasin
         if status is not None and status != '' and str(status).lower() != 'all':
             try:
-                status_enum = OrderStatus(status)
+                # Normalize status string (lowercase)
+                status_normalized = str(status).lower().strip()
+                status_enum = OrderStatus(status_normalized)
                 query = query.filter(Order.status == status_enum)
-                print(f"[ORDER_SERVICE.get_orders] Applied status filter: {status} ({status_enum})")
+                print(f"[ORDER_SERVICE.get_orders] Applied status filter: '{status}' -> '{status_normalized}' ({status_enum})")
+                
+                # Debug: Check how many orders match this status
+                count_with_status = db.query(Order).filter(Order.status == status_enum).count()
+                print(f"[ORDER_SERVICE.get_orders] Total orders with status '{status_normalized}': {count_with_status}")
             except ValueError as e:
                 print(f"[ORDER_SERVICE.get_orders] Invalid status '{status}': {e}")
+                print(f"[ORDER_SERVICE.get_orders] Available statuses: {[s.value for s in OrderStatus]}")
         else:
             print(f"[ORDER_SERVICE.get_orders] No status filter applied (status={status})")
         
