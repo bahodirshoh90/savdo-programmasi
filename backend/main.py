@@ -2248,9 +2248,12 @@ async def process_order_payment(
             created_by_name=seller_name
         )
         
-        # Update order status to completed
-        order.status = "completed"
-        db.commit()
+        # Update order status to completed using OrderService
+        from services.order_service import OrderService
+        OrderService.update_status(db, order_id, "completed")
+        
+        # Refresh order to get updated status
+        db.refresh(order)
         
         return {
             "success": True,
