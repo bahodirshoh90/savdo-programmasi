@@ -2293,11 +2293,21 @@ def get_statistics(
     # Filter orders by date range if provided
     orders_query = db.query(Order)
     if start_date:
-        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        orders_query = orders_query.filter(Order.created_at >= start)
+        try:
+            # Handle different date formats
+            start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
+            start = datetime.fromisoformat(start_str)
+            orders_query = orders_query.filter(Order.created_at >= start)
+        except (ValueError, AttributeError) as e:
+            print(f"Warning: Invalid start_date format '{start_date}': {e}")
     if end_date:
-        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        orders_query = orders_query.filter(Order.created_at <= end)
+        try:
+            # Handle different date formats
+            end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
+            end = datetime.fromisoformat(end_str)
+            orders_query = orders_query.filter(Order.created_at <= end)
+        except (ValueError, AttributeError) as e:
+            print(f"Warning: Invalid end_date format '{end_date}': {e}")
     if seller_id:
         orders_query = orders_query.filter(Order.seller_id == seller_id)
     

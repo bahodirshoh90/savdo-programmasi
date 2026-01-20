@@ -716,12 +716,22 @@ class SaleService:
         query = db.query(Sale)
         
         if start_date:
-            start = datetime.fromisoformat(start_date)
-            query = query.filter(Sale.created_at >= start)
+            try:
+                # Handle different date formats
+                start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
+                start = datetime.fromisoformat(start_str)
+                query = query.filter(Sale.created_at >= start)
+            except (ValueError, AttributeError) as e:
+                print(f"Warning: Invalid start_date format '{start_date}' in get_statistics: {e}")
         
         if end_date:
-            end = datetime.fromisoformat(end_date)
-            query = query.filter(Sale.created_at <= end)
+            try:
+                # Handle different date formats
+                end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
+                end = datetime.fromisoformat(end_str)
+                query = query.filter(Sale.created_at <= end)
+            except (ValueError, AttributeError) as e:
+                print(f"Warning: Invalid end_date format '{end_date}' in get_statistics: {e}")
         
         if seller_id:
             query = query.filter(Sale.seller_id == seller_id)

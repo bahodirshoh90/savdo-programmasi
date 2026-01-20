@@ -323,11 +323,19 @@ class OrderService:
                     ))
                 
                 # Create sale from order
+                # Use order's payment_method if available, otherwise default to cash
+                order_payment_method = "cash"
+                if db_order.payment_method:
+                    if hasattr(db_order.payment_method, 'value'):
+                        order_payment_method = db_order.payment_method.value
+                    else:
+                        order_payment_method = str(db_order.payment_method).lower()
+                
                 sale_create = SaleCreate(
                     seller_id=db_order.seller_id,
                     customer_id=db_order.customer_id,
                     items=sale_items,
-                    payment_method="cash",  # Default to cash for orders
+                    payment_method=order_payment_method,  # Use order's payment method
                     payment_amount=db_order.total_amount,
                     requires_admin_approval=False  # Orders are already approved
                 )
