@@ -521,3 +521,27 @@ class PriceAlertResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+# ==================== PERSONAL PRODUCT TAG SCHEMAS ====================
+
+class ProductTagBase(BaseModel):
+    product_id: int = Field(..., description="Product ID")
+    tag: str = Field(..., min_length=1, max_length=100, description="Personal tag/category name")
+
+
+class ProductTagCreate(ProductTagBase):
+    """Create personal product tag"""
+    pass
+
+
+class ProductTagResponse(BaseModel):
+    """Personal product tag response schema"""
+    id: int
+    customer_id: int
+    product_id: int
+    tag: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

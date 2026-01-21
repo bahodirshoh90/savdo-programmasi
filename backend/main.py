@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     ProductImageResponse, ProductImageCreate,
@@ -34,7 +34,8 @@ from schemas import (
     DebtHistoryResponse, LoginRequest, LoginResponse,
     SettingsUpdate, SettingsResponse,
     BannerCreate, BannerUpdate, BannerResponse,
-    PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse
+    PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse,
+    ProductTagCreate, ProductTagResponse,
 )
 from services import (
     ProductService, CustomerService, SaleService,
@@ -3451,6 +3452,108 @@ def check_favorite(
     ).first()
     
     return {"is_favorite": favorite is not None}
+
+
+# ==================== PERSONAL PRODUCT TAGS ====================
+
+@app.get("/api/product-tags", response_model=List[ProductTagResponse])
+def get_product_tags(
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Get all personal product tags for the current customer"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID is required")
+
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    tags = db.query(CustomerProductTag).filter(
+        CustomerProductTag.customer_id == customer_id
+    ).order_by(
+        CustomerProductTag.tag.asc(),
+        CustomerProductTag.created_at.desc()
+    ).all()
+
+    return tags
+
+
+@app.post("/api/product-tags", response_model=ProductTagResponse)
+def add_product_tag(
+    tag_data: ProductTagCreate,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Add a personal tag/category to a product for the current customer"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID is required")
+
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    # Normalize tag (strip spaces)
+    tag_normalized = tag_data.tag.strip()
+    if not tag_normalized:
+        raise HTTPException(status_code=400, detail="Tag cannot be empty")
+
+    # Check product exists
+    product = db.query(Product).filter(Product.id == tag_data.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Check if same tag already exists for this product & customer
+    existing = db.query(CustomerProductTag).filter(
+        CustomerProductTag.customer_id == customer_id,
+        CustomerProductTag.product_id == tag_data.product_id,
+        CustomerProductTag.tag == tag_normalized,
+    ).first()
+
+    if existing:
+        return existing
+
+    tag_obj = CustomerProductTag(
+        customer_id=customer_id,
+        product_id=tag_data.product_id,
+        tag=tag_normalized,
+    )
+    db.add(tag_obj)
+    db.commit()
+    db.refresh(tag_obj)
+
+    return tag_obj
+
+
+@app.delete("/api/product-tags/{tag_id}")
+def delete_product_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Delete a personal tag assignment from a product for the current customer"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID is required")
+
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    tag = db.query(CustomerProductTag).filter(
+        CustomerProductTag.id == tag_id,
+        CustomerProductTag.customer_id == customer_id,
+    ).first()
+
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    db.delete(tag)
+    db.commit()
+
+    return {"success": True, "message": "Tag deleted successfully"}
 
 
 # ==================== PRICE ALERT ENDPOINTS ====================

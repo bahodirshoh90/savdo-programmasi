@@ -510,6 +510,28 @@ class Favorite(Base):
     )
 
 
+class CustomerProductTag(Base):
+    """Personal product tags/categories per customer"""
+    __tablename__ = "customer_product_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    tag = Column(String(100), nullable=False, index=True)  # Tag name / personal category
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Relationships
+    customer = relationship("Customer")
+    product = relationship("Product")
+
+    # One customer can assign a given tag to a product only once
+    __table_args__ = (
+        {'sqlite_autoincrement': True},
+    )
+
+
 class Settings(Base):
     """Application settings model (single row)"""
     __tablename__ = "settings"
