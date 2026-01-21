@@ -52,12 +52,29 @@ class ProductUpdate(BaseModel):
     pieces_in_stock: Optional[int] = Field(None, ge=0)
 
 
+class ProductImageResponse(BaseModel):
+    id: int
+    product_id: int
+    image_url: str
+    display_order: int
+    is_primary: bool
+    created_at: Optional[datetime] = None
+
+
+class ProductImageCreate(BaseModel):
+    product_id: int
+    image_url: str
+    display_order: Optional[int] = 0
+    is_primary: Optional[bool] = False
+
+
 class ProductResponse(ProductBase):
     id: int
     total_pieces: int
     total_value: Optional[float] = None
     total_value_cost: Optional[float] = None
     total_value_wholesale: Optional[float] = None
+    images: Optional[List[ProductImageResponse]] = []
     last_sold_date: Optional[datetime] = None  # Oxirgi sotilgan sana
     days_since_last_sale: Optional[int] = None  # Oxirgi sotilganidan beri kunlar
     is_slow_moving: Optional[bool] = None  # Uzoq vaqt sotilmagan (30+ kun)

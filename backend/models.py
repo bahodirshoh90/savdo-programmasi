@@ -198,6 +198,8 @@ class Product(Base):
     sale_items = relationship("SaleItem", back_populates="product")
     order_items = relationship("OrderItem", back_populates="product")
     inventory_transactions = relationship("InventoryTransaction", back_populates="product")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
+    favorited_by = relationship("Favorite", back_populates="product")
 
 
 class Customer(Base):

@@ -881,6 +881,221 @@ def get_product_barcode(product_id: int, db: Session = Depends(get_db)):
     return BarcodeService.get_barcode_data(product_id, product.barcode)
 
 
+# ==================== PRODUCT IMAGES ====================
+
+@app.post("/api/products/{product_id}/images", response_model=ProductImageResponse)
+async def add_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    display_order: int = Form(0),
+    is_primary: bool = Form(False),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
+):
+    """Add an additional image to a product"""
+    import os
+    import uuid
+    from pathlib import Path
+    from models import ProductImage
+    
+    # Verify product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    # Validate file type
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    
+    if not file.filename:
+        ext = ".jpg"
+        if file.content_type == "image/png":
+            ext = ".png"
+        elif file.content_type == "image/gif":
+            ext = ".gif"
+        elif file.content_type == "image/webp":
+            ext = ".webp"
+        file.filename = f"upload_{uuid.uuid4()}{ext}"
+    
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Faqat rasm fayllari qabul qilinadi")
+    
+    try:
+        # Generate unique filename
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "products")
+        os.makedirs(uploads_dir, exist_ok=True)
+        file_path = os.path.join(uploads_dir, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # If this is marked as primary, unset other primary images
+        if is_primary:
+            db.query(ProductImage).filter(
+                ProductImage.product_id == product_id,
+                ProductImage.is_primary == True
+            ).update({"is_primary": False})
+        
+        # Create ProductImage record
+        image_url = f"/uploads/products/{unique_filename}"
+        product_image = ProductImage(
+            product_id=product_id,
+            image_url=image_url,
+            display_order=display_order,
+            is_primary=is_primary
+        )
+        
+        db.add(product_image)
+        db.commit()
+        db.refresh(product_image)
+        
+        return {
+            "id": product_image.id,
+            "product_id": product_image.product_id,
+            "image_url": product_image.image_url,
+            "display_order": product_image.display_order,
+            "is_primary": product_image.is_primary,
+            "created_at": product_image.created_at
+        }
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_details = traceback.print_exc()
+        print(f"Error uploading product image: {e}")
+        raise HTTPException(status_code=500, detail=f"Rasm yuklashda xatolik: {str(e)}")
+
+
+@app.get("/api/products/{product_id}/images", response_model=List[ProductImageResponse])
+def get_product_images(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all images for a product"""
+    from models import ProductImage
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    images = db.query(ProductImage).filter(
+        ProductImage.product_id == product_id
+    ).order_by(ProductImage.display_order.asc(), ProductImage.created_at.asc()).all()
+    
+    return [
+        {
+            "id": img.id,
+            "product_id": img.product_id,
+            "image_url": img.image_url,
+            "display_order": img.display_order,
+            "is_primary": img.is_primary,
+            "created_at": img.created_at
+        }
+        for img in images
+    ]
+
+
+@app.delete("/api/products/{product_id}/images/{image_id}")
+def delete_product_image(
+    product_id: int,
+    image_id: int,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
+):
+    """Delete a product image"""
+    import os
+    from models import ProductImage
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    product_image = db.query(ProductImage).filter(
+        ProductImage.id == image_id,
+        ProductImage.product_id == product_id
+    ).first()
+    
+    if not product_image:
+        raise HTTPException(status_code=404, detail="Rasm topilmadi")
+    
+    try:
+        # Delete physical file
+        if product_image.image_url:
+            file_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                product_image.image_url.lstrip('/')
+            )
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # Delete database record
+        db.delete(product_image)
+        db.commit()
+        
+        return {"success": True, "message": "Rasm o'chirildi"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting product image: {e}")
+        raise HTTPException(status_code=500, detail=f"Rasmni o'chirishda xatolik: {str(e)}")
+
+
+@app.put("/api/products/{product_id}/images/{image_id}", response_model=ProductImageResponse)
+def update_product_image(
+    product_id: int,
+    image_id: int,
+    display_order: Optional[int] = Body(None),
+    is_primary: Optional[bool] = Body(None),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
+):
+    """Update product image (order or primary status)"""
+    from models import ProductImage
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    product_image = db.query(ProductImage).filter(
+        ProductImage.id == image_id,
+        ProductImage.product_id == product_id
+    ).first()
+    
+    if not product_image:
+        raise HTTPException(status_code=404, detail="Rasm topilmadi")
+    
+    try:
+        # If setting as primary, unset other primary images
+        if is_primary is not None and is_primary:
+            db.query(ProductImage).filter(
+                ProductImage.product_id == product_id,
+                ProductImage.id != image_id,
+                ProductImage.is_primary == True
+            ).update({"is_primary": False})
+        
+        if display_order is not None:
+            product_image.display_order = display_order
+        if is_primary is not None:
+            product_image.is_primary = is_primary
+        
+        db.commit()
+        db.refresh(product_image)
+        
+        return {
+            "id": product_image.id,
+            "product_id": product_image.product_id,
+            "image_url": product_image.image_url,
+            "display_order": product_image.display_order,
+            "is_primary": product_image.is_primary,
+            "created_at": product_image.created_at
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating product image: {e}")
+        raise HTTPException(status_code=500, detail=f"Rasmni yangilashda xatolik: {str(e)}")
+
+
 # ==================== CUSTOMERS ====================
 
 @app.post("/api/customers", response_model=CustomerResponse)
