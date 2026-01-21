@@ -484,6 +484,27 @@ class HelpRequest(Base):
     resolver = relationship("Seller", foreign_keys=[resolved_by])
 
 
+class Favorite(Base):
+    """Favorite products for customers"""
+    __tablename__ = "favorites"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    customer = relationship("Customer")
+    product = relationship("Product")
+    
+    # Unique constraint: one customer can favorite a product only once
+    __table_args__ = (
+        {'sqlite_autoincrement': True},
+    )
+
+
 class Settings(Base):
     """Application settings model (single row)"""
     __tablename__ = "settings"

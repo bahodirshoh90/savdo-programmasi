@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     CustomerCreate, CustomerUpdate, CustomerResponse,
