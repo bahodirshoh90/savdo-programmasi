@@ -6,7 +6,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Colors from '../constants/colors';
 import API_CONFIG from '../config/api';
 
-export default function ProductCard({ product, onPress, onAdd, quantity = 0, style }) {
+export default function ProductCard({ product, onPress, onAdd, quantity = 0, style, onCompare = null, isInCompare = false }) {
   if (!product) return null;
 
   const displayPrice = product.retail_price || product.regular_price || 0;

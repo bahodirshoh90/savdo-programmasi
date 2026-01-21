@@ -19,6 +19,7 @@ import OrdersScreen from './screens/OrdersScreen';
 import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
+import CompareProductsScreen from './screens/CompareProductsScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -83,6 +84,11 @@ function ProductsStack() {
         name="ProductDetail"
         component={ProductDetailScreen}
         options={{ title: 'Mahsulot detallari' }}
+      />
+      <Stack.Screen
+        name="CompareProducts"
+        component={CompareProductsScreen}
+        options={{ title: 'Mahsulotlarni Taqqoslash' }}
       />
     </Stack.Navigator>
   );
