@@ -466,3 +466,40 @@ class BannerResponse(BannerBase):
     class Config:
         from_attributes = True
 
+
+# ==================== PRICE ALERT SCHEMAS ====================
+
+class PriceAlertBase(BaseModel):
+    product_id: int = Field(..., description="Product ID")
+    target_price: float = Field(..., gt=0, description="Target price to trigger alert")
+
+
+class PriceAlertCreate(PriceAlertBase):
+    """Price alert creation schema"""
+    pass
+
+
+class PriceAlertUpdate(BaseModel):
+    """Price alert update schema"""
+    target_price: Optional[float] = Field(None, gt=0)
+    is_active: Optional[bool] = None
+
+
+class PriceAlertResponse(BaseModel):
+    """Price alert response schema"""
+    id: int
+    customer_id: int
+    product_id: int
+    product_name: Optional[str] = None
+    product_image_url: Optional[str] = None
+    current_price: Optional[float] = None
+    target_price: float
+    is_active: bool
+    notified: bool
+    notified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+

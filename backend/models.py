@@ -563,3 +563,31 @@ class Banner(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+class PriceAlert(Base):
+    """Price alert model for customers to get notified when product price drops"""
+    __tablename__ = "price_alerts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    
+    # Alert conditions
+    target_price = Column(Float, nullable=False)  # Price threshold to trigger alert
+    is_active = Column(Boolean, nullable=False, default=True)  # Whether alert is active
+    notified = Column(Boolean, nullable=False, default=False)  # Whether notification was sent
+    notified_at = Column(DateTime(timezone=True), nullable=True)  # When notification was sent
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    customer = relationship("Customer")
+    product = relationship("Product")
+    
+    # Unique constraint: one customer can have one alert per product
+    __table_args__ = (
+        {'sqlite_autoincrement': True},
+    )
+
