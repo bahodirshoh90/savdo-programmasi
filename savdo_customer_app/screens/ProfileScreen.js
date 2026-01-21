@@ -17,6 +17,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import Colors from '../constants/colors';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/api';

@@ -25,6 +25,7 @@ import CompareProductsScreen from './screens/CompareProductsScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider, useCart } from './context/CartContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Colors from './constants/colors';
 
 const Stack = createStackNavigator();
@@ -223,14 +224,16 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <CartProvider>
-          <AppNavigator />
-          <StatusBar style="auto" />
-        </CartProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <CartProvider>
+            <AppNavigator />
+            <StatusBar style="auto" />
+          </CartProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }
 
