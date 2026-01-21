@@ -89,6 +89,10 @@
                 <a href="#" class="nav-item" data-page="audit-logs">
                     <i class="fas fa-history"></i> Audit Log
                 </a>
+                <a href="#" class="nav-item" data-page="help-requests">
+                    <i class="fas fa-life-ring"></i> Yordam So'rovlari
+                    <span id="help-requests-badge" class="badge" style="display: none; margin-left: auto; background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">0</span>
+                </a>
                 <a href="#" class="nav-item" data-page="banners">
                     <i class="fas fa-image"></i> Bannerlar
                 </a>
@@ -609,6 +613,42 @@
             </div>
 
             <!-- Audit Logs Page -->
+            <div id="help-requests" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-life-ring"></i> Yordam So'rovlari</h1>
+                    <div class="page-actions">
+                        <select id="help-request-status-filter" onchange="loadHelpRequests()" style="padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #d1d5db;">
+                            <option value="">Barcha holatlar</option>
+                            <option value="pending">Kutilmoqda</option>
+                            <option value="resolved">Hal qilindi</option>
+                            <option value="closed">Yopilgan</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadHelpRequests()">
+                            <i class="fas fa-sync"></i> Yangilash
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Vaqt</th>
+                                <th>Mijoz</th>
+                                <th>Telefon</th>
+                                <th>Muammo turi</th>
+                                <th>Xabar</th>
+                                <th>Holat</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="help-requests-tbody">
+                            <tr><td colspan="8" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="audit-logs" class="page">
                 <div class="page-header">
                     <h1><i class="fas fa-history"></i> Audit Log</h1>

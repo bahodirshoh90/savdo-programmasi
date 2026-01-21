@@ -318,6 +318,9 @@ function showPage(pageName) {
             loadRoles();
             loadAllPermissions();
             break;
+        case 'help-requests':
+            loadHelpRequests();
+            break;
         case 'audit-logs':
             loadAuditLogs();
             break;
@@ -4375,9 +4378,39 @@ function setupWebSocket() {
         // Mijozdan yordam so'rovi
         if (data.type === 'help_request') {
             const helpData = data.data || {};
-            const message = `📞 Yordam so'rovi: ${helpData.username || 'Noma\'lum mijoz'}\n${helpData.message || ''}`;
+            const message = `📞 Yordam so'rovi: ${helpData.username || helpData.customer_name || 'Noma\'lum mijoz'}\n${helpData.message || ''}`;
             showToast(message, 'info', 10000); // Show for 10 seconds
-            // Optionally, you can open a modal or show a notification
+            
+            // Refresh help requests page if active
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'help-requests') {
+                loadHelpRequests();
+            }
+            
+            // Update badge count
+            if (typeof loadHelpRequests === 'function') {
+                // Load help requests to update badge
+                setTimeout(() => {
+                    fetch(`${API_BASE}/help-requests?status=pending`, {
+                        headers: getAuthHeaders()
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        const pendingCount = data.requests?.filter(r => r.status === 'pending').length || 0;
+                        const badge = document.getElementById('help-requests-badge');
+                        if (badge) {
+                            if (pendingCount > 0) {
+                                badge.textContent = pendingCount;
+                                badge.style.display = 'inline-block';
+                            } else {
+                                badge.style.display = 'none';
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Error updating badge:', err));
+                }, 500);
+            }
+            
             console.log('[WebSocket] Help request received:', helpData);
         }
         // Buyurtma status o'zgarganida
@@ -4923,6 +4956,171 @@ async function viewSellerPermissions(sellerId) {
         
         modal.style.display = 'block';
     } catch (error) {
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// Help Requests
+async function loadHelpRequests() {
+    try {
+        const statusFilter = document.getElementById('help-request-status-filter')?.value || '';
+        const url = statusFilter ? `${API_BASE}/help-requests?status=${statusFilter}` : `${API_BASE}/help-requests`;
+        
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error('Help requestlarni yuklashda xatolik');
+        }
+        
+        const data = await response.json();
+        const requests = data.requests || [];
+        const tbody = document.getElementById('help-requests-tbody');
+        
+        if (requests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Help requestlar topilmadi</td></tr>';
+            return;
+        }
+        
+        const statusNames = {
+            'pending': 'Kutilmoqda',
+            'resolved': 'Hal qilindi',
+            'closed': 'Yopilgan'
+        };
+        
+        const issueTypeNames = {
+            'login': 'Kirish',
+            'password': 'Parol',
+            'order': 'Buyurtma',
+            'product': 'Mahsulot',
+            'other': 'Boshqa'
+        };
+        
+        tbody.innerHTML = requests.map(req => `
+            <tr>
+                <td>${req.id}</td>
+                <td>${formatDate(req.created_at)}</td>
+                <td>${escapeHtml(req.customer_name || req.username || 'Noma\'lum')}</td>
+                <td>${escapeHtml(req.phone || '-')}</td>
+                <td>${issueTypeNames[req.issue_type] || req.issue_type || 'Boshqa'}</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(req.message)}">
+                    ${escapeHtml(req.message)}
+                </td>
+                <td>
+                    <span class="badge" style="background: ${req.status === 'pending' ? '#ef4444' : req.status === 'resolved' ? '#10b981' : '#6b7280'}; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
+                        ${statusNames[req.status] || req.status}
+                    </span>
+                </td>
+                <td>
+                    ${req.status === 'pending' ? `
+                        <button class="btn btn-success" onclick="resolveHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
+                            <i class="fas fa-check"></i> Hal qilindi
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-secondary" onclick="viewHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        <i class="fas fa-eye"></i> Ko'rish
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        
+        // Update badge count
+        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        const badge = document.getElementById('help-requests-badge');
+        if (badge) {
+            if (pendingCount > 0) {
+                badge.textContent = pendingCount;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading help requests:', error);
+        const tbody = document.getElementById('help-requests-tbody');
+        if (tbody) {
+            tbody.innerHTML = 
+                `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+async function resolveHelpRequest(requestId) {
+    if (!confirm('Bu help requestni hal qilingan deb belgilaysizmi?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/help-requests/${requestId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: 'resolved' })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Help request statusini yangilashda xatolik');
+        }
+        
+        showToast('Help request hal qilingan deb belgilandi');
+        loadHelpRequests();
+    } catch (error) {
+        console.error('Error resolving help request:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function viewHelpRequest(requestId) {
+    try {
+        const response = await fetch(`${API_BASE}/help-requests`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error('Help requestlarni yuklashda xatolik');
+        }
+        
+        const data = await response.json();
+        const req = data.requests.find(r => r.id === requestId);
+        
+        if (!req) {
+            alert('Help request topilmadi');
+            return;
+        }
+        
+        const statusNames = {
+            'pending': 'Kutilmoqda',
+            'resolved': 'Hal qilindi',
+            'closed': 'Yopilgan'
+        };
+        
+        const issueTypeNames = {
+            'login': 'Kirish',
+            'password': 'Parol',
+            'order': 'Buyurtma',
+            'product': 'Mahsulot',
+            'other': 'Boshqa'
+        };
+        
+        const message = `Help Request #${req.id}
+
+Vaqt: ${formatDate(req.created_at)}
+Mijoz: ${req.customer_name || req.username || 'Noma\'lum'}
+Telefon: ${req.phone || '-'}
+Muammo turi: ${issueTypeNames[req.issue_type] || req.issue_type || 'Boshqa'}
+Holat: ${statusNames[req.status] || req.status}
+
+Xabar:
+${req.message}
+
+${req.notes ? `Admin izohi:\n${req.notes}` : ''}`;
+        
+        alert(message);
+    } catch (error) {
+        console.error('Error viewing help request:', error);
         alert('Xatolik: ' + error.message);
     }
 }
