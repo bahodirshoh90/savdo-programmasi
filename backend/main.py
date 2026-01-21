@@ -2716,6 +2716,138 @@ def delete_audit_logs(
         raise HTTPException(status_code=500, detail=f"Audit loglarni o'chirishda xatolik: {str(e)}")
 
 
+# ==================== FAVORITES ====================
+
+@app.get("/api/favorites")
+def get_favorites(
+    customer_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Get favorite products for a customer"""
+    # Get customer_id from header if not provided
+    if not customer_id and x_customer_id:
+        try:
+            customer_id = int(x_customer_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id is required")
+    
+    favorites = db.query(Favorite).filter(
+        Favorite.customer_id == customer_id
+    ).order_by(Favorite.created_at.desc()).all()
+    
+    # Get product details
+    from sqlalchemy.orm import joinedload
+    products = []
+    for fav in favorites:
+        product = db.query(Product).options(
+            joinedload(Product.sale_items)
+        ).filter(Product.id == fav.product_id).first()
+        if product:
+            products.append(ProductService.product_to_response(product))
+    
+    return {
+        "total": len(products),
+        "favorites": products
+    }
+
+
+@app.post("/api/favorites")
+def add_favorite(
+    product_id: int = Body(...),
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Add a product to favorites"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID is required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    # Check if product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check if already favorited
+    existing = db.query(Favorite).filter(
+        Favorite.customer_id == customer_id,
+        Favorite.product_id == product_id
+    ).first()
+    
+    if existing:
+        return {"success": True, "message": "Mahsulot allaqachon sevimlilar ro'yxatida", "favorite_id": existing.id}
+    
+    # Create favorite
+    favorite = Favorite(
+        customer_id=customer_id,
+        product_id=product_id
+    )
+    db.add(favorite)
+    db.commit()
+    db.refresh(favorite)
+    
+    return {"success": True, "message": "Mahsulot sevimlilar ro'yxatiga qo'shildi", "favorite_id": favorite.id}
+
+
+@app.delete("/api/favorites/{product_id}")
+def remove_favorite(
+    product_id: int,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Remove a product from favorites"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID is required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    favorite = db.query(Favorite).filter(
+        Favorite.customer_id == customer_id,
+        Favorite.product_id == product_id
+    ).first()
+    
+    if not favorite:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    
+    db.delete(favorite)
+    db.commit()
+    
+    return {"success": True, "message": "Mahsulot sevimlilar ro'yxatidan olib tashlandi"}
+
+
+@app.get("/api/favorites/check/{product_id}")
+def check_favorite(
+    product_id: int,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Check if a product is favorited by customer"""
+    if not x_customer_id:
+        return {"is_favorite": False}
+    
+    try:
+        customer_id = int(x_customer_id)
+    except (ValueError, TypeError):
+        return {"is_favorite": False}
+    
+    favorite = db.query(Favorite).filter(
+        Favorite.customer_id == customer_id,
+        Favorite.product_id == product_id
+    ).first()
+    
+    return {"is_favorite": favorite is not None}
+
+
 # ==================== EXCEL IMPORT/EXPORT ====================
 
 @app.post("/api/products/import")
