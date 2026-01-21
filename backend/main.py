@@ -2360,7 +2360,37 @@ async def process_order_payment(
         # Update order status to completed using OrderService
         # Note: OrderService.update_status expects lowercase status, but will convert to enum
         from services.order_service import OrderService
-        OrderService.update_status(db, order_id, "completed")
+        updated_order = OrderService.update_status(db, order_id, "completed")
+        
+        # Notify customer via WebSocket about payment completion
+        if updated_order and updated_order.customer_id:
+            try:
+                status_names = {
+                    "completed": "Bajarildi"
+                }
+                await manager.send_to_customer(updated_order.customer_id, {
+                    "type": "order_status_update",
+                    "data": {
+                        "order_id": order_id,
+                        "status": "completed",
+                        "status_name": status_names.get("completed", "completed"),
+                        "message": f"Buyurtma #{order_id} to'lov qilindi va bajarildi: {status_names.get('completed', 'completed')}"
+                    }
+                })
+                print(f"[Order Payment] Notification sent to customer {updated_order.customer_id} for order {order_id} completion")
+            except Exception as e:
+                print(f"[Order Payment] Error sending notification to customer {updated_order.customer_id}: {e}")
+        
+        # Also broadcast to admin panel
+        await manager.broadcast({
+            "type": "order_status_update",
+            "data": {
+                "order_id": order_id,
+                "status": "completed",
+                "status_name": "Bajarildi",
+                "customer_id": updated_order.customer_id if updated_order else None
+            }
+        })
         
         # Refresh order to get updated status
         db.refresh(order)
