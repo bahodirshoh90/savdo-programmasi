@@ -149,6 +149,24 @@ class CustomerResponse(CustomerBase):
         from_attributes = True
 
 
+class CustomerStatsResponse(BaseModel):
+    """Customer statistics for dashboard (orders & sales)"""
+    customer_id: int
+    total_orders: int
+    completed_orders: int
+    cancelled_orders: int
+    pending_orders: int
+    total_sales_amount: float
+    total_paid_amount: float
+    total_debt_amount: float
+    average_order_amount: float
+    last_order_date: Optional[datetime] = None
+    last_sale_date: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class DebtHistoryResponse(BaseModel):
     id: int
     customer_id: int

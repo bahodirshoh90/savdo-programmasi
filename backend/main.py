@@ -26,7 +26,7 @@ from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     ProductImageResponse, ProductImageCreate,
     ProductReviewResponse, ProductReviewCreate, ProductReviewUpdate,
-    CustomerCreate, CustomerUpdate, CustomerResponse,
+    CustomerCreate, CustomerUpdate, CustomerResponse, CustomerStatsResponse,
     SaleCreate, SaleResponse, SaleItemCreate,
     SellerCreate, SellerUpdate, SellerResponse,
     OrderCreate, OrderResponse, OrderItemCreate,
@@ -1536,6 +1536,18 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
+
+
+@app.get("/api/customers/{customer_id}/stats", response_model=CustomerStatsResponse)
+def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
+    """Get statistics for a specific customer (orders & sales)"""
+    # Ensure customer exists
+    customer = CustomerService.get_customer(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    stats = CustomerService.get_customer_stats(db, customer_id)
+    return stats
 
 
 @app.put("/api/customers/{customer_id}", response_model=CustomerResponse)
