@@ -231,6 +231,7 @@ class Customer(Base):
     sales = relationship("Sale", back_populates="customer")
     orders = relationship("Order", back_populates="customer")
     debt_history = relationship("DebtHistory", back_populates="customer")
+    search_history = relationship("SearchHistory", back_populates="customer")
 
 
 class Seller(Base):

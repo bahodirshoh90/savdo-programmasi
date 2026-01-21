@@ -1322,6 +1322,150 @@ def get_product_rating_summary(
     }
 
 
+# ==================== SEARCH HISTORY ====================
+
+@app.post("/api/search-history", response_model=SearchHistoryResponse)
+def create_search_history(
+    search: SearchHistoryCreate,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Save a search query to history"""
+    from models import SearchHistory
+    
+    # Don't save empty queries
+    if not search.search_query or not search.search_query.strip():
+        raise HTTPException(status_code=400, detail="Qidiruv so'rovi bo'sh bo'lishi mumkin emas")
+    
+    try:
+        # Check if same search exists recently (within last hour) to avoid duplicates
+        from datetime import datetime, timedelta, timezone
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        
+        existing = db.query(SearchHistory).filter(
+            SearchHistory.customer_id == customer_id,
+            SearchHistory.search_query.ilike(search.search_query.strip()),
+            SearchHistory.created_at >= one_hour_ago
+        ).first()
+        
+        if existing:
+            # Update existing record timestamp
+            existing.created_at = datetime.now(timezone.utc)
+            existing.result_count = search.result_count
+            db.commit()
+            db.refresh(existing)
+            return {
+                "id": existing.id,
+                "customer_id": existing.customer_id,
+                "search_query": existing.search_query,
+                "result_count": existing.result_count,
+                "created_at": existing.created_at
+            }
+        
+        # Create new search history entry
+        search_history = SearchHistory(
+            customer_id=customer_id,
+            search_query=search.search_query.strip(),
+            result_count=search.result_count
+        )
+        
+        db.add(search_history)
+        db.commit()
+        db.refresh(search_history)
+        
+        return {
+            "id": search_history.id,
+            "customer_id": search_history.customer_id,
+            "search_query": search_history.search_query,
+            "result_count": search_history.result_count,
+            "created_at": search_history.created_at
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating search history: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Qidiruv tarixini saqlashda xatolik: {str(e)}")
+
+
+@app.get("/api/search-history", response_model=List[SearchHistoryResponse])
+def get_search_history(
+    limit: int = Query(20, le=50, ge=1),
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Get recent search history for customer"""
+    from models import SearchHistory
+    
+    try:
+        query = db.query(SearchHistory).filter(
+            SearchHistory.customer_id == customer_id
+        ).order_by(SearchHistory.created_at.desc()).limit(limit)
+        
+        history = query.all()
+        
+        return [
+            {
+                "id": h.id,
+                "customer_id": h.customer_id,
+                "search_query": h.search_query,
+                "result_count": h.result_count,
+                "created_at": h.created_at
+            }
+            for h in history
+        ]
+    except Exception as e:
+        print(f"Error getting search history: {e}")
+        return []
+
+
+@app.delete("/api/search-history/{history_id}")
+def delete_search_history(
+    history_id: int,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Delete a search history entry"""
+    from models import SearchHistory
+    
+    search_history = db.query(SearchHistory).filter(
+        SearchHistory.id == history_id,
+        SearchHistory.customer_id == customer_id
+    ).first()
+    
+    if not search_history:
+        raise HTTPException(status_code=404, detail="Qidiruv tarixi topilmadi")
+    
+    try:
+        db.delete(search_history)
+        db.commit()
+        return {"success": True, "message": "Qidiruv tarixi o'chirildi"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting search history: {e}")
+        raise HTTPException(status_code=500, detail=f"Qidiruv tarixini o'chirishda xatolik: {str(e)}")
+
+
+@app.delete("/api/search-history")
+def clear_search_history(
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Clear all search history for customer"""
+    from models import SearchHistory
+    
+    try:
+        db.query(SearchHistory).filter(
+            SearchHistory.customer_id == customer_id
+        ).delete()
+        db.commit()
+        return {"success": True, "message": "Barcha qidiruv tarixi o'chirildi"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error clearing search history: {e}")
+        raise HTTPException(status_code=500, detail=f"Qidiruv tarixini tozalashda xatolik: {str(e)}")
+
+
 # ==================== CUSTOMERS ====================
 
 @app.post("/api/customers", response_model=CustomerResponse)

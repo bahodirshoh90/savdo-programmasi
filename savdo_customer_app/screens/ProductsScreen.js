@@ -21,6 +21,8 @@ import { getProducts } from '../services/products';
 import ProductCard from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import responsive from '../utils/responsive';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function ProductsScreen({ navigation }) {
   const { addToCart, cartItems, removeFromCart, updateQuantity } = useCart();
@@ -34,6 +36,8 @@ export default function ProductsScreen({ navigation }) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
   const PRODUCTS_PER_PAGE = 20; // Mahsulotlar bir sahifada
 
   const loadProducts = async (resetPage = false) => {
@@ -150,14 +154,31 @@ export default function ProductsScreen({ navigation }) {
       {/* Search and Filters */}
       <View style={styles.searchContainer}>
         <View style={styles.searchRow}>
-          <TextInput
-            style={[styles.searchInput, { flex: 1 }]}
-            placeholder="Mahsulot qidirish..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.searchInputWrapper}>
+            <TextInput
+              style={[styles.searchInput, { flex: 1 }]}
+              placeholder="Mahsulot qidirish..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery('');
+                  loadProducts(true);
+                }}
+                style={styles.clearSearchButton}
+              >
+                <Ionicons name="close-circle" size={20} color={Colors.textLight} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name="search" size={20} color={Colors.textLight} style={styles.searchIcon} />
+            )}
+          </View>
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilters(true)}
@@ -168,6 +189,31 @@ export default function ProductsScreen({ navigation }) {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Search History Dropdown */}
+        {showSearchHistory && searchHistory.length > 0 && !searchQuery && (
+          <View style={styles.searchHistoryContainer}>
+            <View style={styles.searchHistoryHeader}>
+              <Text style={styles.searchHistoryTitle}>So'nggi qidiruvlar</Text>
+              <TouchableOpacity onPress={clearSearchHistory}>
+                <Text style={styles.clearHistoryText}>Tozalash</Text>
+              </TouchableOpacity>
+            </View>
+            {searchHistory.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.historyItem}
+                onPress={() => handleHistoryItemPress(item.search_query)}
+              >
+                <Ionicons name="time-outline" size={18} color={Colors.textLight} />
+                <Text style={styles.historyText}>{item.search_query}</Text>
+                {item.result_count !== null && (
+                  <Text style={styles.historyCount}>{item.result_count} ta</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {isLoading && products.length === 0 ? (
@@ -299,13 +345,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  searchInput: {
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.borderLight,
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
     borderWidth: 1,
     borderColor: Colors.border,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  searchIcon: {
+    marginLeft: 8,
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  searchHistoryContainer: {
+    marginTop: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    maxHeight: 200,
+    overflow: 'hidden',
+  },
+  searchHistoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchHistoryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  clearHistoryText: {
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  historyText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: Colors.text,
+  },
+  historyCount: {
+    fontSize: 12,
+    color: Colors.textLight,
   },
   filterButton: {
     padding: 8,
