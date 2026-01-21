@@ -20,6 +20,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
+import StarRating from '../components/StarRating';
+import { TextInput } from 'react-native';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
@@ -28,6 +30,13 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [ratingSummary, setRatingSummary] = useState(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   
   // Get current cart quantity for this product
   const getCartQuantity = () => {
@@ -207,6 +216,20 @@ export default function ProductDetailScreen({ route, navigation }) {
       <View style={styles.content}>
         <Text style={styles.name}>{product.name}</Text>
 
+        {/* Rating Summary */}
+        {ratingSummary && ratingSummary.total_reviews > 0 && (
+          <View style={styles.ratingContainer}>
+            <StarRating 
+              rating={ratingSummary.average_rating} 
+              size={18}
+              showValue={true}
+            />
+            <Text style={styles.reviewCount}>
+              ({ratingSummary.total_reviews} baholash)
+            </Text>
+          </View>
+        )}
+
         {product.barcode && (
           <Text style={styles.barcode}>Barcode: {product.barcode}</Text>
         )}
@@ -259,6 +282,82 @@ export default function ProductDetailScreen({ route, navigation }) {
             {isOutOfStock ? 'Omborda yo\'q' : 'Savatchaga qo\'shish'}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Reviews Section */}
+      <View style={styles.reviewsSection}>
+        <View style={styles.reviewsHeader}>
+          <Text style={styles.reviewsTitle}>Baholashlar va Sharhlar</Text>
+          <TouchableOpacity
+            style={styles.writeReviewButton}
+            onPress={() => setShowReviewForm(!showReviewForm)}
+          >
+            <Text style={styles.writeReviewText}>
+              {showReviewForm ? 'Bekor qilish' : 'Baholash yozish'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Review Form */}
+        {showReviewForm && (
+          <View style={styles.reviewForm}>
+            <Text style={styles.reviewFormLabel}>Baholash:</Text>
+            <StarRating
+              rating={reviewRating}
+              onRatingPress={setReviewRating}
+              size={30}
+            />
+            <Text style={styles.reviewFormLabel}>Sharh:</Text>
+            <TextInput
+              style={styles.reviewInput}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              placeholder="Baholashingizni yozing..."
+              multiline
+              numberOfLines={4}
+              placeholderTextColor={Colors.textLight}
+            />
+            <TouchableOpacity
+              style={[styles.submitReviewButton, isSubmittingReview && styles.submitReviewButtonDisabled]}
+              onPress={handleSubmitReview}
+              disabled={isSubmittingReview}
+            >
+              {isSubmittingReview ? (
+                <ActivityIndicator color={Colors.surface} />
+              ) : (
+                <Text style={styles.submitReviewText}>Yuborish</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Reviews List */}
+        {reviews.length > 0 ? (
+          reviews.map((review) => (
+            <View key={review.id} style={styles.reviewItem}>
+              <View style={styles.reviewHeader}>
+                <Text style={styles.reviewAuthor}>{review.customer_name}</Text>
+                <View style={styles.reviewMeta}>
+                  <StarRating rating={review.rating} size={14} />
+                  <Text style={styles.reviewDate}>
+                    {new Date(review.created_at).toLocaleDateString('uz-UZ')}
+                  </Text>
+                </View>
+              </View>
+              {review.comment && (
+                <Text style={styles.reviewComment}>{review.comment}</Text>
+              )}
+              {review.is_verified_purchase && (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                  <Text style={styles.verifiedText}>Tasdiqlangan xarid</Text>
+                </View>
+              )}
+            </View>
+          ))
+        ) : (
+          <Text style={styles.noReviewsText}>Hozircha baholashlar yo'q</Text>
+        )}
       </View>
     </ScrollView>
   );
