@@ -3441,6 +3441,221 @@ def check_favorite(
     return {"is_favorite": favorite is not None}
 
 
+# ==================== PRICE ALERT ENDPOINTS ====================
+
+@app.get("/api/price-alerts", response_model=List[PriceAlertResponse])
+async def get_price_alerts(
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Get all price alerts for the customer"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    alerts = db.query(PriceAlert).filter(
+        PriceAlert.customer_id == customer_id
+    ).order_by(PriceAlert.created_at.desc()).all()
+    
+    # Enrich with product information
+    result = []
+    for alert in alerts:
+        product = db.query(Product).filter(Product.id == alert.product_id).first()
+        if product:
+            # Get customer price based on customer type
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            current_price = product.regular_price
+            if customer and customer.customer_type:
+                if customer.customer_type.value == "wholesale":
+                    current_price = product.wholesale_price
+                elif customer.customer_type.value == "retail":
+                    current_price = product.retail_price
+            
+            result.append({
+                "id": alert.id,
+                "customer_id": alert.customer_id,
+                "product_id": alert.product_id,
+                "product_name": product.name,
+                "product_image_url": product.image_url,
+                "current_price": current_price,
+                "target_price": alert.target_price,
+                "is_active": alert.is_active,
+                "notified": alert.notified,
+                "notified_at": alert.notified_at,
+                "created_at": alert.created_at,
+                "updated_at": alert.updated_at,
+            })
+    
+    return result
+
+
+@app.post("/api/price-alerts", response_model=PriceAlertResponse)
+async def create_price_alert(
+    alert: PriceAlertCreate,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Create a new price alert"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    # Check if product exists
+    product = db.query(Product).filter(Product.id == alert.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check if alert already exists
+    existing = db.query(PriceAlert).filter(
+        PriceAlert.customer_id == customer_id,
+        PriceAlert.product_id == alert.product_id,
+        PriceAlert.is_active == True
+    ).first()
+    
+    if existing:
+        # Update existing alert
+        existing.target_price = alert.target_price
+        existing.notified = False
+        existing.notified_at = None
+        db.commit()
+        db.refresh(existing)
+        alert_obj = existing
+    else:
+        # Create new alert
+        alert_obj = PriceAlert(
+            customer_id=customer_id,
+            product_id=alert.product_id,
+            target_price=alert.target_price,
+            is_active=True,
+            notified=False
+        )
+        db.add(alert_obj)
+        db.commit()
+        db.refresh(alert_obj)
+    
+    # Get current price
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    current_price = product.regular_price
+    if customer and customer.customer_type:
+        if customer.customer_type.value == "wholesale":
+            current_price = product.wholesale_price
+        elif customer.customer_type.value == "retail":
+            current_price = product.retail_price
+    
+    return {
+        "id": alert_obj.id,
+        "customer_id": alert_obj.customer_id,
+        "product_id": alert_obj.product_id,
+        "product_name": product.name,
+        "product_image_url": product.image_url,
+        "current_price": current_price,
+        "target_price": alert_obj.target_price,
+        "is_active": alert_obj.is_active,
+        "notified": alert_obj.notified,
+        "notified_at": alert_obj.notified_at,
+        "created_at": alert_obj.created_at,
+        "updated_at": alert_obj.updated_at,
+    }
+
+
+@app.put("/api/price-alerts/{alert_id}", response_model=PriceAlertResponse)
+async def update_price_alert(
+    alert_id: int,
+    alert_update: PriceAlertUpdate,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Update a price alert"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    alert = db.query(PriceAlert).filter(
+        PriceAlert.id == alert_id,
+        PriceAlert.customer_id == customer_id
+    ).first()
+    
+    if not alert:
+        raise HTTPException(status_code=404, detail="Price alert not found")
+    
+    if alert_update.target_price is not None:
+        alert.target_price = alert_update.target_price
+        alert.notified = False  # Reset notification status when price changes
+        alert.notified_at = None
+    
+    if alert_update.is_active is not None:
+        alert.is_active = alert_update.is_active
+    
+    db.commit()
+    db.refresh(alert)
+    
+    # Get product and current price
+    product = db.query(Product).filter(Product.id == alert.product_id).first()
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    current_price = product.regular_price if product else None
+    if customer and customer.customer_type and product:
+        if customer.customer_type.value == "wholesale":
+            current_price = product.wholesale_price
+        elif customer.customer_type.value == "retail":
+            current_price = product.retail_price
+    
+    return {
+        "id": alert.id,
+        "customer_id": alert.customer_id,
+        "product_id": alert.product_id,
+        "product_name": product.name if product else None,
+        "product_image_url": product.image_url if product else None,
+        "current_price": current_price,
+        "target_price": alert.target_price,
+        "is_active": alert.is_active,
+        "notified": alert.notified,
+        "notified_at": alert.notified_at,
+        "created_at": alert.created_at,
+        "updated_at": alert.updated_at,
+    }
+
+
+@app.delete("/api/price-alerts/{alert_id}")
+async def delete_price_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Delete a price alert"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID required")
+    
+    try:
+        customer_id = int(x_customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    alert = db.query(PriceAlert).filter(
+        PriceAlert.id == alert_id,
+        PriceAlert.customer_id == customer_id
+    ).first()
+    
+    if not alert:
+        raise HTTPException(status_code=404, detail="Price alert not found")
+    
+    db.delete(alert)
+    db.commit()
+    
+    return {"message": "Price alert deleted successfully"}
+
+
 # ==================== EXCEL IMPORT/EXPORT ====================
 
 @app.post("/api/products/import")
