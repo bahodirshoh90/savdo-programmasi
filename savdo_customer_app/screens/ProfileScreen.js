@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
   const { theme, isDark, colors, toggleTheme } = useTheme();
+  const { language, changeLanguage, t } = useLanguage();
   const [customerData, setCustomerData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
