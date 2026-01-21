@@ -1451,9 +1451,7 @@ async def create_help_request(
     x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
 ):
     """Create a help request from customer app (sent to admin)"""
-    from models import Settings, Customer
-    import json
-    from datetime import datetime
+    from models import Settings, Customer, HelpRequest
     
     # Try to get customer info from database if customer_id provided
     customer_id = None
@@ -1481,9 +1479,26 @@ async def create_help_request(
     if not message.strip():
         raise HTTPException(status_code=400, detail="Xabar matnini kiriting")
     
+    # Save help request to database
+    help_request = HelpRequest(
+        customer_id=customer_id,
+        customer_name=customer_name,
+        username=customer_username,
+        phone=customer_phone,
+        message=message,
+        issue_type=issue_type,
+        status="pending"
+    )
+    db.add(help_request)
+    db.commit()
+    db.refresh(help_request)
+    
+    print(f"[Help Request] Saved to database with ID {help_request.id}")
+    
     # Format help request message
     help_message = f"""
 === YORDAM SO'ROVI ===
+ID: {help_request.id}
 Vaqt: {get_uzbekistan_now().strftime('%Y-%m-%d %H:%M:%S')}
 Mijoz ID: {customer_id or 'Noma\'lum'}
 Mijoz ismi: {customer_name}
@@ -1493,17 +1508,19 @@ Muammo turi: {issue_type}
 Xabar: {message}
 """
     
-    # Try to send via WebSocket to admin panel
+    # Try to send via WebSocket to admin panel (if admin is online)
     try:
         await manager.broadcast({
             "type": "help_request",
             "data": {
+                "id": help_request.id,
                 "customer_id": customer_id,
                 "customer_name": customer_name,
                 "username": customer_username,
                 "phone": customer_phone,
                 "message": message,
                 "issue_type": issue_type,
+                "status": "pending",
                 "timestamp": get_uzbekistan_now().isoformat()
             }
         })
@@ -1512,16 +1529,108 @@ Xabar: {message}
         print(f"Error broadcasting help request: {e}")
         import traceback
         traceback.print_exc()
-        # Continue even if WebSocket fails
+        # Continue even if WebSocket fails - request is saved in database
     
-    # Log to console/file for now (can be extended to save in database)
+    # Log to console
     print("=" * 50)
     print(help_message)
     print("=" * 50)
     
     return {
         "success": True,
-        "message": "Yordam so'rovi yuborildi. Admin tez orada siz bilan bog'lanadi."
+        "message": "Yordam so'rovi yuborildi. Admin tez orada siz bilan bog'lanadi.",
+        "request_id": help_request.id
+    }
+
+
+@app.get("/api/help-requests")
+def get_help_requests(
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get help requests (admin only)"""
+    from models import HelpRequest
+    from sqlalchemy import desc
+    
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    query = db.query(HelpRequest)
+    
+    if status:
+        query = query.filter(HelpRequest.status == status)
+    
+    if customer_id:
+        query = query.filter(HelpRequest.customer_id == customer_id)
+    
+    total = query.count()
+    requests = query.order_by(desc(HelpRequest.created_at)).offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "requests": [
+            {
+                "id": req.id,
+                "customer_id": req.customer_id,
+                "customer_name": req.customer_name,
+                "username": req.username,
+                "phone": req.phone,
+                "message": req.message,
+                "issue_type": req.issue_type,
+                "status": req.status,
+                "resolved_by": req.resolved_by,
+                "resolved_at": to_uzbekistan_time(req.resolved_at).isoformat() if req.resolved_at else None,
+                "notes": req.notes,
+                "created_at": to_uzbekistan_time(req.created_at).isoformat() if req.created_at else None,
+                "updated_at": to_uzbekistan_time(req.updated_at).isoformat() if req.updated_at else None
+            }
+            for req in requests
+        ]
+    }
+
+
+@app.put("/api/help-requests/{request_id}")
+def update_help_request(
+    request_id: int,
+    request_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Update help request status (admin only)"""
+    from models import HelpRequest
+    
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    help_request = db.query(HelpRequest).filter(HelpRequest.id == request_id).first()
+    if not help_request:
+        raise HTTPException(status_code=404, detail="Help request not found")
+    
+    status = request_data.get('status')
+    notes = request_data.get('notes')
+    
+    if status:
+        help_request.status = status
+        if status in ['resolved', 'closed']:
+            help_request.resolved_by = seller.id
+            help_request.resolved_at = get_uzbekistan_now()
+    
+    if notes is not None:
+        help_request.notes = notes
+    
+    db.commit()
+    db.refresh(help_request)
+    
+    return {
+        "id": help_request.id,
+        "status": help_request.status,
+        "notes": help_request.notes,
+        "resolved_by": help_request.resolved_by,
+        "resolved_at": to_uzbekistan_time(help_request.resolved_at).isoformat() if help_request.resolved_at else None
     }
 
 

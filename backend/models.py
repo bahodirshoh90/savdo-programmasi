@@ -459,6 +459,31 @@ class DebtHistory(Base):
     creator = relationship("Seller", foreign_keys=[created_by])
 
 
+class HelpRequest(Base):
+    """Help request from customer app"""
+    __tablename__ = "help_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(200), nullable=True)
+    username = Column(String(100), nullable=True)
+    phone = Column(String(50), nullable=True)
+    message = Column(Text, nullable=False)
+    issue_type = Column(String(50), nullable=True)  # login, password, other, order, product
+    status = Column(String(20), nullable=False, default="pending")  # pending, resolved, closed
+    resolved_by = Column(Integer, ForeignKey("sellers.id"), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)  # Admin notes
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    customer = relationship("Customer")
+    resolver = relationship("Seller", foreign_keys=[resolved_by])
+
+
 class Settings(Base):
     """Application settings model (single row)"""
     __tablename__ = "settings"
