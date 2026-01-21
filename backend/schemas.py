@@ -227,6 +227,17 @@ class LoginResponse(BaseModel):
     role_name: Optional[str] = None
 
 
+class SendOtpRequest(BaseModel):
+    """Request to send OTP to a customer's phone"""
+    phone: str = Field(..., min_length=5, max_length=50, description="Customer phone number")
+
+
+class VerifyOtpRequest(BaseModel):
+    """Request to verify OTP code for a customer's phone"""
+    phone: str = Field(..., min_length=5, max_length=50, description="Customer phone number")
+    code: str = Field(..., min_length=3, max_length=10, description="OTP code")
+
+
 class SellerResponse(SellerBase):
     id: int
     is_active: bool

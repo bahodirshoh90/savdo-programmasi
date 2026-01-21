@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag, OtpCode
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     ProductImageResponse, ProductImageCreate,
@@ -32,6 +32,7 @@ from schemas import (
     OrderCreate, OrderResponse, OrderItemCreate,
     LocationUpdate, RoleCreate, RoleUpdate, RoleResponse, PermissionResponse,
     DebtHistoryResponse, LoginRequest, LoginResponse,
+    SendOtpRequest, VerifyOtpRequest,
     SettingsUpdate, SettingsResponse,
     BannerCreate, BannerUpdate, BannerResponse,
     PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse,
@@ -2048,6 +2049,99 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
             "detail": "Noto'g'ri login yoki parol"
         }
     )
+
+
+@app.post("/api/auth/send-otp")
+def send_otp(request: SendOtpRequest, db: Session = Depends(get_db)):
+    """Send OTP code to customer's phone (code is logged in server for testing)"""
+    from models import Customer
+    phone = request.phone.strip()
+
+    if not phone:
+        raise HTTPException(status_code=400, detail="Telefon raqamni kiriting")
+
+    customer = db.query(Customer).filter(Customer.phone == phone).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Ushbu telefon raqam bo'yicha mijoz topilmadi")
+
+    # Generate 4-digit OTP code
+    import random
+    code = f"{random.randint(1000, 9999)}"
+
+    # Set expiry time (5 minutes from now)
+    expires_at = get_uzbekistan_now() + timedelta(minutes=5)
+
+    otp = OtpCode(
+        customer_id=customer.id,
+        code=code,
+        purpose="phone_verification",
+        expires_at=expires_at,
+    )
+    db.add(otp)
+    db.commit()
+    db.refresh(otp)
+
+    # Log OTP code for testing instead of sending SMS
+    print("======================================")
+    print("=== OTP KODI YUBORILDI (TEST REJIM) ===")
+    print(f"Mijoz ID: {customer.id}")
+    print(f"Telefon: {customer.phone}")
+    print(f"OTP kod: {code}")
+    print(f"Amal qilish muddati: {expires_at}")
+    print("======================================")
+
+    return {
+        "success": True,
+        "message": "Tasdiqlash kodi telefon raqamingizga yuborildi (test rejimida server logida ko'rinadi).",
+    }
+
+
+@app.post("/api/auth/verify-otp")
+def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
+    """Verify OTP code for customer's phone"""
+    from models import Customer
+    phone = request.phone.strip()
+    code = request.code.strip()
+
+    if not phone or not code:
+        raise HTTPException(status_code=400, detail="Telefon raqam va kodni kiriting")
+
+    customer = db.query(Customer).filter(Customer.phone == phone).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Ushbu telefon raqam bo'yicha mijoz topilmadi")
+
+    # Get latest unused OTP for this customer
+    otp = (
+        db.query(OtpCode)
+        .filter(
+            OtpCode.customer_id == customer.id,
+            OtpCode.is_used == False,
+            OtpCode.purpose == "phone_verification",
+        )
+        .order_by(OtpCode.created_at.desc())
+        .first()
+    )
+
+    if not otp:
+        raise HTTPException(status_code=400, detail="Tasdiqlash kodi topilmadi yoki allaqachon ishlatilgan")
+
+    now = get_uzbekistan_now()
+    if now > otp.expires_at:
+        otp.is_used = True
+        db.commit()
+        raise HTTPException(status_code=400, detail="Tasdiqlash kodi eskirgan. Iltimos, yangi kod oling")
+
+    if otp.code != code:
+        raise HTTPException(status_code=400, detail="Tasdiqlash kodi noto'g'ri")
+
+    # Mark OTP as used
+    otp.is_used = True
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Telefon raqami muvaffaqiyatli tasdiqlandi (test rejimi, holat bazada alohida saqlanmaydi).",
+    }
 
 
 @app.post("/api/help-request")
