@@ -489,6 +489,35 @@ export default function ProfileScreen({ navigation }) {
             />
           </View>
         </TouchableOpacity>
+
+        {/* Language Setting */}
+        <TouchableOpacity
+          style={styles.settingButton}
+          onPress={() => {
+            const newLang = language === 'uz' ? 'ru' : 'uz';
+            changeLanguage(newLang);
+          }}
+        >
+          <View style={styles.settingRow}>
+            <Ionicons 
+              name="language" 
+              size={24} 
+              color={colors.primary} 
+              style={styles.settingIcon}
+            />
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Til</Text>
+              <Text style={[styles.settingValue, { color: colors.textLight }]}>
+                {language === 'uz' ? 'O\'zbek' : 'Русский'}
+              </Text>
+            </View>
+            <Ionicons 
+              name="chevron-forward" 
+              size={20}
+              color={colors.textLight} 
+            />
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
