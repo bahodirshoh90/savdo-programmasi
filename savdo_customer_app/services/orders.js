@@ -6,6 +6,54 @@ import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const OFFLINE_ORDERS_KEY = 'offline_orders_queue';
+
+const loadOfflineOrders = async () => {
+  try {
+    const data = await AsyncStorage.getItem(OFFLINE_ORDERS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.error('[OFFLINE] Error loading offline orders:', e);
+    return [];
+  }
+};
+
+const saveOfflineOrders = async (orders) => {
+  try {
+    await AsyncStorage.setItem(OFFLINE_ORDERS_KEY, JSON.stringify(orders));
+  } catch (e) {
+    console.error('[OFFLINE] Error saving offline orders:', e);
+  }
+};
+
+export const syncOfflineOrders = async () => {
+  try {
+    const offlineOrders = await loadOfflineOrders();
+    if (!offlineOrders.length) {
+      console.log('[OFFLINE] No offline orders to sync');
+      return { synced: 0 };
+    }
+
+    console.log('[OFFLINE] Syncing offline orders:', offlineOrders.length);
+    const payload = offlineOrders.map((order) => ({
+      ...order,
+      is_offline: true,
+    }));
+
+    const response = await api.post(API_ENDPOINTS.OFFLINE.SYNC_ORDERS, payload);
+    console.log('[OFFLINE] Sync response:', response);
+
+    // Clear queue only on success
+    await saveOfflineOrders([]);
+
+    return { synced: offlineOrders.length, response };
+  } catch (error) {
+    console.error('[OFFLINE] Error syncing offline orders:', error);
+    // Keep queue on error
+    return { synced: 0, error };
+  }
+};
+
 /**
  * Get customer's orders
  */
@@ -100,23 +148,29 @@ export const createOrder = async (orderData) => {
     
     try {
       // Use api.post directly (it's already exported from api.js)
-      // api.post returns response.data directly (see api.js apiCall function)
       console.log('[ORDERS] Making POST request to:', API_CONFIG.BASE_URL + API_ENDPOINTS.ORDERS.CREATE);
       const response = await api.post(API_ENDPOINTS.ORDERS.CREATE, orderPayload);
       console.log('[ORDERS] ===== ORDER CREATED SUCCESSFULLY =====');
       console.log('[ORDERS] Response received:', response);
-      console.log('[ORDERS] Response type:', typeof response);
-      console.log('[ORDERS] Response keys:', Object.keys(response || {}));
-      console.log('[ORDERS] Response data:', JSON.stringify(response, null, 2));
-      
-      // api.post already returns response.data, so return directly
       return response;
     } catch (apiError) {
       console.error('[ORDERS] ===== API CALL FAILED =====');
       console.error('[ORDERS] API Error:', apiError);
-      console.error('[ORDERS] Error message:', apiError.message);
-      console.error('[ORDERS] Error response data:', apiError.response?.data);
-      console.error('[ORDERS] Error response status:', apiError.response?.status);
+
+      // If there is no response object, treat as network/offline error and queue order
+      if (!apiError.response) {
+        console.log('[OFFLINE] Network error detected, saving order to offline queue');
+        const offlineOrders = await loadOfflineOrders();
+        offlineOrders.push(orderPayload);
+        await saveOfflineOrders(offlineOrders);
+
+        return {
+          offline: true,
+          message: 'Internet yo\\'q. Buyurtma offline saqlandi, keyinroq yuboriladi.',
+        };
+      }
+
+      // For server-side errors, rethrow
       throw apiError;
     }
   } catch (error) {

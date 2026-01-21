@@ -15,7 +15,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
 import Colors from '../constants/colors';
-import { getOrders } from '../services/orders';
+import { getOrders, syncOfflineOrders } from '../services/orders';
 import OrderCard from '../components/OrderCard';
 import websocketService from '../services/websocket';
 
@@ -29,6 +29,13 @@ export default function OrdersScreen({ navigation }) {
     console.log('[ORDERS SCREEN] Loading orders with filter:', statusFilter);
     setIsLoading(true);
     try {
+      // First try to sync any offline orders when screen loads
+      try {
+        await syncOfflineOrders();
+      } catch (syncError) {
+        console.warn('[ORDERS SCREEN] Offline sync failed (continuing to load orders):', syncError?.message);
+      }
+
       const status = statusFilter === 'all' ? null : statusFilter;
       console.log('[ORDERS SCREEN] Calling getOrders with status:', status);
       const result = await getOrders(status);

@@ -48,6 +48,11 @@ export const API_ENDPOINTS = {
     CREATE: '/orders',
     GET: (id) => `/orders/${id}`,
   },
+
+  // Offline sync
+  OFFLINE: {
+    SYNC_ORDERS: '/offline/sync',
+  },
   
   // Customers
   CUSTOMERS: {
