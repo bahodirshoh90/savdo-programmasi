@@ -32,7 +32,7 @@ from schemas import (
     OrderCreate, OrderResponse, OrderItemCreate,
     LocationUpdate, RoleCreate, RoleUpdate, RoleResponse, PermissionResponse,
     DebtHistoryResponse, LoginRequest, LoginResponse,
-    SendOtpRequest, VerifyOtpRequest,
+    SendOtpRequest, VerifyOtpRequest, SocialLoginRequest,
     SettingsUpdate, SettingsResponse,
     BannerCreate, BannerUpdate, BannerResponse,
     PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse,
@@ -2142,6 +2142,71 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
         "success": True,
         "message": "Telefon raqami muvaffaqiyatli tasdiqlandi (test rejimi, holat bazada alohida saqlanmaydi).",
     }
+
+
+@app.post("/api/auth/social-login")
+def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
+    """
+    Social login for customers (Google/Facebook).
+    NOTE: Actual Google/Facebook token verification is handled on mobile side.
+    Backend only links/creates customer by phone and returns same shape as /api/auth/login (customer branch).
+    """
+    from models import Customer
+
+    provider = (request.provider or "").strip().lower()
+    if provider not in ("google", "facebook"):
+        raise HTTPException(status_code=400, detail="Noto'g'ri provider. Faqat 'google' yoki 'facebook' qo'llab-quvvatlanadi")
+
+    phone = (request.phone or "").strip()
+    name = (request.name or "").strip() or "Social foydalanuvchi"
+
+    if not phone:
+        raise HTTPException(status_code=400, detail="Telefon raqam talab qilinadi (social login uchun)")
+
+    # Try to find existing customer by phone
+    customer = db.query(Customer).filter(Customer.phone == phone).first()
+
+    # If not found, create new customer with default type
+    if not customer:
+        try:
+            customer_create = CustomerCreate(
+                name=name,
+                phone=phone,
+            )
+            customer = CustomerService.create_customer(db, customer_create)
+        except Exception as e:
+            print(f"[SOCIAL_LOGIN] Error creating customer: {e}")
+            raise HTTPException(status_code=400, detail="Mijoz yaratishda xatolik")
+
+    # Generate token (reuse AuthService)
+    token = AuthService.generate_token()
+
+    # Log for debugging
+    print("======================================")
+    print("=== SOCIAL LOGIN (TEST) ===")
+    print(f"Provider: {provider}")
+    print(f"Customer ID: {customer.id}")
+    print(f"Name: {customer.name}")
+    print(f"Phone: {customer.phone}")
+    print("======================================")
+
+    user_payload = {
+        "customer_id": customer.id,
+        "name": customer.name,
+        "phone": customer.phone,
+    }
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "token": token,
+            "user": user_payload,
+            "customer_id": customer.id,
+            "user_type": "customer",
+            "provider": provider,
+        },
+    )
 
 
 @app.post("/api/help-request")

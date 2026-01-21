@@ -238,6 +238,13 @@ class VerifyOtpRequest(BaseModel):
     code: str = Field(..., min_length=3, max_length=10, description="OTP code")
 
 
+class SocialLoginRequest(BaseModel):
+    """Request body for social login (Google/Facebook) from mobile app"""
+    provider: str = Field(..., min_length=2, max_length=50, description="Auth provider: google, facebook")
+    phone: Optional[str] = Field(None, max_length=50, description="Customer phone number (used to link account)")
+    name: Optional[str] = Field(None, max_length=200, description="Customer display name from social profile")
+
+
 class SellerResponse(SellerBase):
     id: int
     is_active: bool
