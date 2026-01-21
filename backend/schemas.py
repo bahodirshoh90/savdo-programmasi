@@ -68,6 +68,30 @@ class ProductImageCreate(BaseModel):
     is_primary: Optional[bool] = False
 
 
+class ProductReviewResponse(BaseModel):
+    id: int
+    product_id: int
+    customer_id: Optional[int] = None
+    customer_name: str
+    rating: int  # 1-5
+    comment: Optional[str] = None
+    is_verified_purchase: bool
+    helpful_count: int
+    is_approved: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class ProductReviewCreate(BaseModel):
+    product_id: int
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1 to 5")
+    comment: Optional[str] = Field(None, max_length=2000)
+
+
+class ProductReviewUpdate(BaseModel):
+    helpful: Optional[bool] = None  # Mark as helpful/unhelpful
+
+
 class ProductResponse(ProductBase):
     id: int
     total_pieces: int

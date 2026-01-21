@@ -24,6 +24,8 @@ from database import SessionLocal, engine, init_db
 from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
+    ProductImageResponse, ProductImageCreate,
+    ProductReviewResponse, ProductReviewCreate, ProductReviewUpdate,
     CustomerCreate, CustomerUpdate, CustomerResponse,
     SaleCreate, SaleResponse, SaleItemCreate,
     SellerCreate, SellerUpdate, SellerResponse,
@@ -1094,6 +1096,230 @@ def update_product_image(
         db.rollback()
         print(f"Error updating product image: {e}")
         raise HTTPException(status_code=500, detail=f"Rasmni yangilashda xatolik: {str(e)}")
+
+
+# ==================== PRODUCT REVIEWS ====================
+
+@app.post("/api/products/{product_id}/reviews", response_model=ProductReviewResponse)
+def create_product_review(
+    product_id: int,
+    review: ProductReviewCreate,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Create a product review/rating"""
+    from models import ProductReview
+    
+    # Verify product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    # Get customer info
+    customer_name = "Anonim mijoz"
+    is_verified = False
+    
+    if customer_id:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer:
+            customer_name = customer.name
+            # Check if customer has purchased this product (verified purchase)
+            from models import Order, OrderItem
+            orders = db.query(Order).filter(
+                Order.customer_id == customer_id,
+                Order.status == "completed"
+            ).join(OrderItem).filter(
+                OrderItem.product_id == product_id
+            ).all()
+            is_verified = len(orders) > 0
+    
+    # Check if customer already reviewed this product
+    if customer_id:
+        existing_review = db.query(ProductReview).filter(
+            ProductReview.product_id == product_id,
+            ProductReview.customer_id == customer_id,
+            ProductReview.is_deleted == False
+        ).first()
+        if existing_review:
+            raise HTTPException(status_code=400, detail="Bu mahsulotga allaqachon baho berilgan")
+    
+    try:
+        product_review = ProductReview(
+            product_id=product_id,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            rating=review.rating,
+            comment=review.comment,
+            is_verified_purchase=is_verified
+        )
+        
+        db.add(product_review)
+        db.commit()
+        db.refresh(product_review)
+        
+        return {
+            "id": product_review.id,
+            "product_id": product_review.product_id,
+            "customer_id": product_review.customer_id,
+            "customer_name": product_review.customer_name,
+            "rating": product_review.rating,
+            "comment": product_review.comment,
+            "is_verified_purchase": product_review.is_verified_purchase,
+            "helpful_count": product_review.helpful_count,
+            "is_approved": product_review.is_approved,
+            "created_at": product_review.created_at,
+            "updated_at": product_review.updated_at
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating product review: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Baholash yozishda xatolik: {str(e)}")
+
+
+@app.get("/api/products/{product_id}/reviews", response_model=List[ProductReviewResponse])
+def get_product_reviews(
+    product_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    sort_by: Optional[str] = "created_at",  # created_at, rating, helpful
+    sort_order: Optional[str] = "desc",
+    db: Session = Depends(get_db)
+):
+    """Get all reviews for a product"""
+    from models import ProductReview
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    query = db.query(ProductReview).filter(
+        ProductReview.product_id == product_id,
+        ProductReview.is_deleted == False,
+        ProductReview.is_approved == True
+    )
+    
+    # Sort
+    if sort_by == "rating":
+        if sort_order == "desc":
+            query = query.order_by(ProductReview.rating.desc(), ProductReview.created_at.desc())
+        else:
+            query = query.order_by(ProductReview.rating.asc(), ProductReview.created_at.desc())
+    elif sort_by == "helpful":
+        if sort_order == "desc":
+            query = query.order_by(ProductReview.helpful_count.desc(), ProductReview.created_at.desc())
+        else:
+            query = query.order_by(ProductReview.helpful_count.asc(), ProductReview.created_at.desc())
+    else:  # created_at
+        if sort_order == "desc":
+            query = query.order_by(ProductReview.created_at.desc())
+        else:
+            query = query.order_by(ProductReview.created_at.asc())
+    
+    reviews = query.offset(skip).limit(limit).all()
+    
+    return [
+        {
+            "id": r.id,
+            "product_id": r.product_id,
+            "customer_id": r.customer_id,
+            "customer_name": r.customer_name,
+            "rating": r.rating,
+            "comment": r.comment,
+            "is_verified_purchase": r.is_verified_purchase,
+            "helpful_count": r.helpful_count,
+            "is_approved": r.is_approved,
+            "created_at": r.created_at,
+            "updated_at": r.updated_at
+        }
+        for r in reviews
+    ]
+
+
+@app.post("/api/products/{product_id}/reviews/{review_id}/helpful")
+def mark_review_helpful(
+    product_id: int,
+    review_id: int,
+    helpful: bool = Body(True),
+    db: Session = Depends(get_db)
+):
+    """Mark a review as helpful or not helpful"""
+    from models import ProductReview
+    
+    product_review = db.query(ProductReview).filter(
+        ProductReview.id == review_id,
+        ProductReview.product_id == product_id,
+        ProductReview.is_deleted == False
+    ).first()
+    
+    if not product_review:
+        raise HTTPException(status_code=404, detail="Baholash topilmadi")
+    
+    try:
+        if helpful:
+            product_review.helpful_count += 1
+        else:
+            product_review.helpful_count = max(0, product_review.helpful_count - 1)
+        
+        db.commit()
+        db.refresh(product_review)
+        
+        return {
+            "success": True,
+            "helpful_count": product_review.helpful_count,
+            "message": "Baholash foydali deb belgilandi" if helpful else "Baholash foydali emas deb belgilandi"
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error marking review as helpful: {e}")
+        raise HTTPException(status_code=500, detail=f"Xatolik: {str(e)}")
+
+
+@app.get("/api/products/{product_id}/rating-summary")
+def get_product_rating_summary(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get rating summary (average, count, distribution) for a product"""
+    from models import ProductReview
+    from sqlalchemy import func
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    reviews = db.query(ProductReview).filter(
+        ProductReview.product_id == product_id,
+        ProductReview.is_deleted == False,
+        ProductReview.is_approved == True
+    ).all()
+    
+    if not reviews:
+        return {
+            "average_rating": 0.0,
+            "total_reviews": 0,
+            "rating_distribution": {
+                "5": 0,
+                "4": 0,
+                "3": 0,
+                "2": 0,
+                "1": 0
+            }
+        }
+    
+    total_rating = sum(r.rating for r in reviews)
+    average_rating = total_rating / len(reviews)
+    
+    rating_distribution = {"5": 0, "4": 0, "3": 0, "2": 0, "1": 0}
+    for review in reviews:
+        rating_distribution[str(review.rating)] += 1
+    
+    return {
+        "average_rating": round(average_rating, 1),
+        "total_reviews": len(reviews),
+        "rating_distribution": rating_distribution
+    }
 
 
 # ==================== CUSTOMERS ====================

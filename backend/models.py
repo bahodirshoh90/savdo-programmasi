@@ -200,6 +200,7 @@ class Product(Base):
     inventory_transactions = relationship("InventoryTransaction", back_populates="product")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     favorited_by = relationship("Favorite", back_populates="product")
+    reviews = relationship("ProductReview", back_populates="product", cascade="all, delete-orphan")
 
 
 class Customer(Base):
