@@ -139,6 +139,14 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.actionCard}
+          onPress={() => navigation.navigate('QRScanner')}
+        >
+          <Ionicons name="qr-code-outline" size={32} color={Colors.primary} />
+          <Text style={styles.actionText}>QR Kod</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
           onPress={() => navigation.navigate('Cart')}
         >
           <Ionicons name="cart-outline" size={32} color={Colors.primary} />
@@ -156,14 +164,6 @@ export default function HomeScreen() {
         >
           <Ionicons name="list-outline" size={32} color={Colors.primary} />
           <Text style={styles.actionText}>Buyurtmalar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons name="person-outline" size={32} color={Colors.primary} />
-          <Text style={styles.actionText}>Profil</Text>
         </TouchableOpacity>
       </View>
 

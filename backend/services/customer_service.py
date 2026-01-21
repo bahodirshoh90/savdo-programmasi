@@ -2,9 +2,10 @@
 Customer Service
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
-from models import Customer, CustomerType
-from schemas import CustomerCreate, CustomerUpdate, CustomerResponse
+from models import Customer, CustomerType, Sale, Order
+from schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerStatsResponse
 
 
 class CustomerService:
@@ -153,7 +154,7 @@ class CustomerService:
     def delete_customer(db: Session, customer_id: int) -> bool:
         """Delete a customer - prevents deletion only if customer has active debt (debt_balance > 0)
         Sales and orders will remain in the system with customer_id set to NULL"""
-        from models import DebtHistory, Sale, Order
+        from models import DebtHistory
         from sqlalchemy.exc import IntegrityError
         
         db_customer = db.query(Customer).filter(Customer.id == customer_id).first()
@@ -181,3 +182,63 @@ class CustomerService:
             db.rollback()
             raise ValueError("Mijozni o'chirib bo'lmaydi: bog'liq ma'lumotlar mavjud.")
 
+    @staticmethod
+    def get_customer_stats(db: Session, customer_id: int) -> CustomerStatsResponse:
+        """Get aggregated statistics for a customer (orders & sales)"""
+        # Total orders per status
+        total_orders = db.query(func.count(Order.id)).filter(Order.customer_id == customer_id).scalar() or 0
+        completed_orders = db.query(func.count(Order.id)).filter(
+            Order.customer_id == customer_id,
+            Order.status == 'completed'
+        ).scalar() or 0
+        cancelled_orders = db.query(func.count(Order.id)).filter(
+            Order.customer_id == customer_id,
+            Order.status == 'cancelled'
+        ).scalar() or 0
+        pending_orders = db.query(func.count(Order.id)).filter(
+            Order.customer_id == customer_id,
+            Order.status == 'pending'
+        ).scalar() or 0
+
+        # Sales amounts
+        total_sales_amount = db.query(func.coalesce(func.sum(Sale.total_amount), 0.0)).filter(
+            Sale.customer_id == customer_id
+        ).scalar() or 0.0
+
+        total_paid_amount = db.query(func.coalesce(func.sum(Sale.payment_amount), 0.0)).filter(
+            Sale.customer_id == customer_id
+        ).scalar() or 0.0
+
+        # Debt amount is difference
+        total_debt_amount = float(total_sales_amount) - float(total_paid_amount)
+
+        # Average order amount
+        average_order_amount = 0.0
+        if total_orders > 0:
+            total_order_amount = db.query(func.coalesce(func.sum(Order.total_amount), 0.0)).filter(
+                Order.customer_id == customer_id
+            ).scalar() or 0.0
+            average_order_amount = float(total_order_amount) / float(total_orders)
+
+        # Last order & sale dates
+        last_order_date = db.query(func.max(Order.created_at)).filter(
+            Order.customer_id == customer_id
+        ).scalar()
+
+        last_sale_date = db.query(func.max(Sale.created_at)).filter(
+            Sale.customer_id == customer_id
+        ).scalar()
+
+        return CustomerStatsResponse(
+            customer_id=customer_id,
+            total_orders=int(total_orders),
+            completed_orders=int(completed_orders),
+            cancelled_orders=int(cancelled_orders),
+            pending_orders=int(pending_orders),
+            total_sales_amount=float(total_sales_amount),
+            total_paid_amount=float(total_paid_amount),
+            total_debt_amount=float(total_debt_amount),
+            average_order_amount=float(average_order_amount),
+            last_order_date=last_order_date,
+            last_sale_date=last_sale_date,
+        )

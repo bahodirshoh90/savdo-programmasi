@@ -32,7 +32,7 @@ from schemas import (
     OrderCreate, OrderResponse, OrderItemCreate,
     LocationUpdate, RoleCreate, RoleUpdate, RoleResponse, PermissionResponse,
     DebtHistoryResponse, LoginRequest, LoginResponse,
-    SendOtpRequest, VerifyOtpRequest, SocialLoginRequest,
+    SendOtpRequest, VerifyOtpRequest, SocialLoginRequest, ScanCodeRequest,
     SettingsUpdate, SettingsResponse,
     BannerCreate, BannerUpdate, BannerResponse,
     PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse,
@@ -884,6 +884,82 @@ def get_product_barcode(product_id: int, db: Session = Depends(get_db)):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return BarcodeService.get_barcode_data(product_id, product.barcode)
+
+
+@app.post("/api/products/scan")
+def scan_product_code(request: ScanCodeRequest, db: Session = Depends(get_db)):
+    """
+    Scan QR code or barcode to find product.
+    Supports:
+    - Barcode: Direct barcode match
+    - QR Code: PRODUCT_{id}_{name} format or product ID
+    - Deep link: product/{id} format
+    """
+    from models import Product
+    code = request.code.strip()
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="Kod bo'sh bo'lishi mumkin emas")
+    
+    # Try to find by barcode first
+    product = db.query(Product).filter(Product.barcode == code).first()
+    if product:
+        return {
+            "success": True,
+            "product": ProductService.product_to_response(product),
+            "match_type": "barcode"
+        }
+    
+    # Try to parse QR code format: PRODUCT_{id}_{name}
+    if code.startswith("PRODUCT_"):
+        try:
+            parts = code.split("_", 2)
+            if len(parts) >= 2:
+                product_id = int(parts[1])
+                product = ProductService.get_product(db, product_id)
+                if product:
+                    return {
+                        "success": True,
+                        "product": ProductService.product_to_response(product),
+                        "match_type": "qr_code"
+                    }
+        except (ValueError, IndexError):
+            pass
+    
+    # Try to parse deep link format: product/{id} or /product/{id}
+    import re
+    product_match = re.search(r'product[/_](\d+)', code, re.IGNORECASE)
+    if product_match:
+        try:
+            product_id = int(product_match.group(1))
+            product = ProductService.get_product(db, product_id)
+            if product:
+                return {
+                    "success": True,
+                    "product": ProductService.product_to_response(product),
+                    "match_type": "deep_link"
+                }
+        except ValueError:
+            pass
+    
+    # Try direct product ID
+    try:
+        product_id = int(code)
+        product = ProductService.get_product(db, product_id)
+        if product:
+            return {
+                "success": True,
+                "product": ProductService.product_to_response(product),
+                "match_type": "product_id"
+            }
+    except ValueError:
+        pass
+    
+    # Not found
+    raise HTTPException(
+        status_code=404,
+        detail=f"Ushbu kod bo'yicha mahsulot topilmadi: {code}"
+    )
 
 
 # ==================== PRODUCT IMAGES ====================

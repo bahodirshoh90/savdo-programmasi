@@ -20,6 +20,7 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
+import QRScannerScreen from './screens/QRScannerScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -214,6 +215,11 @@ function AppNavigator() {
               name="OrderDetail"
               component={OrderDetailScreen}
               options={{ title: 'Buyurtma detallari' }}
+            />
+            <Stack.Screen
+              name="QRScanner"
+              component={QRScannerScreen}
+              options={{ title: 'QR Kod Skaner', headerShown: false }}
             />
           </>
         )}

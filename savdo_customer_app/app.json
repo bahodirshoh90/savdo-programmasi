@@ -14,7 +14,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.savdo.customerapp"
+      "bundleIdentifier": "com.savdo.customerapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Kamera ruxsati QR kod va barcode skan qilish uchun kerak."
+      }
     },
     "android": {
       "package": "com.savdo.customerapp",
@@ -24,7 +27,8 @@
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "com.android.alarm.permission.SET_ALARM"
+        "com.android.alarm.permission.SET_ALARM",
+        "CAMERA"
       ],
       "notification": {
         "icon": "./assets/notification-icon.png",
@@ -46,8 +50,15 @@
           "sounds": [],
           "mode": "production"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kamera ruxsati QR kod va barcode skan qilish uchun kerak."
+        }
       ]
     ],
+    "scheme": "savdo",
     "extra": {
       "eas": {
         "projectId": "ea4b267c-a627-404a-a062-2ed13042ef22"

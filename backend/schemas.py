@@ -245,6 +245,11 @@ class SocialLoginRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="Customer display name from social profile")
 
 
+class ScanCodeRequest(BaseModel):
+    """Request to scan QR code or barcode"""
+    code: str = Field(..., min_length=1, max_length=200, description="Scanned QR code or barcode value")
+
+
 class SellerResponse(SellerBase):
     id: int
     is_active: bool
