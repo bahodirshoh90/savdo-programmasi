@@ -18,6 +18,7 @@ import CartScreen from './screens/CartScreen';
 import OrdersScreen from './screens/OrdersScreen';
 import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import FavoritesScreen from './screens/FavoritesScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -136,6 +137,16 @@ function MainTabs() {
           tabBarLabel: 'Buyurtmalar',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Favorites"
+        component={FavoritesScreen}
+        options={{
+          tabBarLabel: 'Sevimlilar',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="heart" size={size} color={color} />
           ),
         }}
       />

@@ -17,13 +17,17 @@ import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function ProductDetailScreen({ route, navigation }) {
-  const { productId } = route.params;
+  const { productId, product: routeProduct } = route.params || {};
   const { addToCart, cartItems } = useCart();
-  const [product, setProduct] = useState(null);
+  const [product, setProduct] = useState(routeProduct || null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
   
   // Get current cart quantity for this product
   const getCartQuantity = () => {
@@ -41,8 +45,91 @@ export default function ProductDetailScreen({ route, navigation }) {
   );
 
   useEffect(() => {
-    loadProduct();
-  }, [productId]);
+    if (currentProductId && !product && !routeProduct) {
+      loadProduct();
+    } else if (product || routeProduct) {
+      checkFavoriteStatus();
+    }
+  }, [currentProductId, product, routeProduct]);
+
+  const checkFavoriteStatus = async () => {
+    const currentProduct = product || routeProduct;
+    if (!currentProduct || !currentProduct.id) return;
+    
+    try {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (!customerId) return;
+
+      const response = await fetch(
+        `${API_ENDPOINTS.BASE_URL}/favorites/check/${currentProduct.id}`,
+        {
+          headers: {
+            'X-Customer-ID': customerId,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setIsFavorite(data.is_favorite || false);
+      }
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    const currentProduct = product || routeProduct;
+    if (!currentProduct) return;
+
+    try {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (!customerId) {
+        Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi');
+        return;
+      }
+
+      if (isFavorite) {
+        // Remove from favorites
+        const response = await fetch(
+          `${API_ENDPOINTS.BASE_URL}/favorites/${currentProduct.id}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'X-Customer-ID': customerId,
+            },
+          }
+        );
+
+        if (response.ok) {
+          setIsFavorite(false);
+          Alert.alert('Muvaffaqiyatli', 'Sevimlilar ro\'yxatidan olib tashlandi');
+        } else {
+          throw new Error('Sevimlilar ro\'yxatidan olib tashlashda xatolik');
+        }
+      } else {
+        // Add to favorites
+        const response = await fetch(`${API_ENDPOINTS.BASE_URL}/favorites`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Customer-ID': customerId,
+          },
+          body: JSON.stringify({ product_id: currentProduct.id }),
+        });
+
+        if (response.ok) {
+          setIsFavorite(true);
+          Alert.alert('Muvaffaqiyatli', 'Sevimlilar ro\'yxatiga qo\'shildi');
+        } else {
+          throw new Error('Sevimlilar ro\'yxatiga qo\'shishda xatolik');
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      Alert.alert('Xatolik', error.message || 'Xatolik yuz berdi');
+    }
+  };
 
   const loadProduct = async () => {
     setIsLoading(true);
@@ -194,6 +281,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 40,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   image: {
     width: '100%',
     height: 300,
@@ -208,6 +298,17 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderText: {
     fontSize: 64,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     backgroundColor: Colors.surface,
