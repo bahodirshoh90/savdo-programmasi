@@ -574,8 +574,11 @@ def get_products(
     low_stock_only: bool = False,
     min_stock: int = 0,
     brand: Optional[str] = None,
+    category: Optional[str] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
     sort_by: Optional[str] = None,
     sort_order: Optional[str] = 'desc',
     db: Session = Depends(get_db),
@@ -643,8 +646,11 @@ def get_products_count(
     low_stock_only: bool = False,
     min_stock: int = 0,
     brand: Optional[str] = None,
+    category: Optional[str] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
     db: Session = Depends(get_db)
 ):
     """Get total count of products matching filters"""
@@ -654,6 +660,7 @@ def get_products_count(
         low_stock_only=low_stock_only,
         min_stock=min_stock,
         brand=brand,
+        category=category,
         supplier=supplier,
         location=location
     )

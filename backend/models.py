@@ -87,6 +87,7 @@ class Product(Base):
     
     # Brend va yetkazib beruvchi
     brand = Column(String(100), nullable=True, index=True)  # Brend nomi
+    category = Column(String(100), nullable=True, index=True)  # Kategoriya
     supplier = Column(String(200), nullable=True)  # Kimdan kelgan (yetkazib beruvchi)
     received_date = Column(DateTime(timezone=True), nullable=True)  # Qachon kelgan
     

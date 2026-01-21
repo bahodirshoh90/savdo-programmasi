@@ -14,6 +14,7 @@ class ProductBase(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm

@@ -113,8 +113,11 @@ class ProductService:
         low_stock_only: bool = False,
         min_stock: int = 0,
         brand: Optional[str] = None,
+        category: Optional[str] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = 'desc'  # 'asc' or 'desc'
     ) -> List[Product]:
@@ -134,6 +137,10 @@ class ProductService:
         # Filter by brand
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
+        
+        # Filter by category
+        if category:
+            query = query.filter(Product.category.ilike(f"%{category}%"))
         
         # Filter by supplier
         if supplier:
@@ -186,6 +193,19 @@ class ProductService:
                     # "Kam qolgan" filter - products with stock > 0 but <= min_stock
                     if 0 < total_pieces <= min_stock:
                         filtered_products.append(product)
+                
+                # Apply price filters
+                if min_price is not None or max_price is not None:
+                    # Use retail_price as the default price for filtering
+                    product_price = product.retail_price or product.regular_price or 0.0
+                    if min_price is not None and product_price < min_price:
+                        if product in filtered_products:
+                            filtered_products.remove(product)
+                        continue
+                    if max_price is not None and product_price > max_price:
+                        if product in filtered_products:
+                            filtered_products.remove(product)
+                        continue
             
             # Apply custom sorting if needed (for stock and price sorting)
             if sort_by in ['stock', 'price_low', 'price_high']:
@@ -196,8 +216,21 @@ class ProductService:
         
         # For normal queries, load products first
         # If default sorting (no sort_by), we need to load more to sort by stock
-        load_limit = limit * 2 if (sort_by in ['stock', 'price_low', 'price_high'] or not sort_by) else limit
+        # Also load more if price filters are applied
+        load_limit = limit * 2 if (sort_by in ['stock', 'price_low', 'price_high'] or not sort_by or min_price is not None or max_price is not None) else limit
         products = query.offset(skip).limit(load_limit).all()
+        
+        # Apply price filters in Python
+        if min_price is not None or max_price is not None:
+            filtered_by_price = []
+            for product in products:
+                product_price = product.retail_price or product.regular_price or 0.0
+                if min_price is not None and product_price < min_price:
+                    continue
+                if max_price is not None and product_price > max_price:
+                    continue
+                filtered_by_price.append(product)
+            products = filtered_by_price
         
         # Apply custom sorting if needed (for stock and price sorting)
         if sort_by in ['stock', 'price_low', 'price_high']:
@@ -218,8 +251,11 @@ class ProductService:
         low_stock_only: bool = False,
         min_stock: int = 0,
         brand: Optional[str] = None,
+        category: Optional[str] = None,
         supplier: Optional[str] = None,
-        location: Optional[str] = None
+        location: Optional[str] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None
     ) -> int:
         """Get total count of products matching filters"""
         query = db.query(Product)
@@ -234,6 +270,9 @@ class ProductService:
         
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
+        
+        if category:
+            query = query.filter(Product.category.ilike(f"%{category}%"))
         
         if supplier:
             query = query.filter(Product.supplier.ilike(f"%{supplier}%"))
