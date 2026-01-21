@@ -16,13 +16,16 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import Colors from '../constants/colors';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
+  const { theme, isDark, colors, toggleTheme } = useTheme();
   const [customerData, setCustomerData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -387,32 +390,34 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Telefon:</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Telefon:</Text>
           {isEditing ? (
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
               value={formData.phone}
               onChangeText={(text) => setFormData({ ...formData, phone: text })}
               placeholder="Telefon"
+              placeholderTextColor={colors.textLight}
               keyboardType="phone-pad"
             />
           ) : (
-            <Text style={styles.fieldValue}>{customerData?.phone || '-'}</Text>
+            <Text style={[styles.fieldValue, { color: colors.text }]}>{customerData?.phone || '-'}</Text>
           )}
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Manzil:</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>Manzil:</Text>
           {isEditing ? (
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
               value={formData.address}
               onChangeText={(text) => setFormData({ ...formData, address: text })}
               placeholder="Manzil"
+              placeholderTextColor={colors.textLight}
               multiline
             />
           ) : (
-            <Text style={styles.fieldValue}>{customerData?.address || '-'}</Text>
+            <Text style={[styles.fieldValue, { color: colors.text }]}>{customerData?.address || '-'}</Text>
           )}
         </View>
 
@@ -454,6 +459,38 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Sozlamalar</Text>
+        <TouchableOpacity
+          style={styles.settingButton}
+          onPress={() => {
+            // Toggle theme
+            const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark';
+            toggleTheme(newTheme);
+          }}
+        >
+          <View style={styles.settingRow}>
+            <Ionicons 
+              name={isDark ? 'moon' : 'sunny'} 
+              size={24} 
+              color={colors.primary} 
+              style={styles.settingIcon}
+            />
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Tema</Text>
+              <Text style={[styles.settingValue, { color: colors.textLight }]}>
+                {theme === 'system' ? 'Tizim' : theme === 'dark' ? 'Qorong\'u' : 'Yorug\'lik'}
+              </Text>
+            </View>
+            <Ionicons 
+              name="chevron-forward" 
+              size={20} 
+              color={colors.textLight} 
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Xavfsizlik</Text>
         <TouchableOpacity
           style={styles.changePasswordButton}
@@ -463,8 +500,8 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Yordam</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Yordam</Text>
         <TouchableOpacity
           style={styles.changePasswordButton}
           onPress={() => setShowContactModal(true)}
@@ -473,15 +510,15 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Qarz balansi</Text>
-        <Text style={styles.debtAmount}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Qarz balansi</Text>
+        <Text style={[styles.debtAmount, { color: colors.primary }]}>
           {customerData?.debt_balance?.toLocaleString('uz-UZ') || '0'} so'm
         </Text>
       </View>
 
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.danger }]} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Chiqish</Text>
         </TouchableOpacity>
       </View>

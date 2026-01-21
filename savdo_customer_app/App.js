@@ -23,6 +23,7 @@ import FavoritesScreen from './screens/FavoritesScreen';
 // Import context
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider, useCart } from './context/CartContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Colors from './constants/colors';
 
 const Stack = createStackNavigator();
@@ -166,11 +167,12 @@ function MainTabs() {
 
 function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { colors } = useTheme();
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -180,9 +182,9 @@ function AppNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: Colors.primary,
+            backgroundColor: colors.primary,
           },
-          headerTintColor: Colors.surface,
+          headerTintColor: colors.surface,
           headerTitleStyle: {
             fontWeight: 'bold',
           },
@@ -215,12 +217,14 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <AppNavigator />
-        <StatusBar style="auto" />
-      </CartProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <CartProvider>
+          <AppNavigator />
+          <StatusBar style="auto" />
+        </CartProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
@@ -229,6 +233,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
   },
 });
