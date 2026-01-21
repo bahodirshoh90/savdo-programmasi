@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import Colors from '../constants/colors';
 import { getOrder } from '../services/orders';
+import OrderTrackingStepper from '../components/OrderTrackingStepper';
+import websocketService from '../services/websocket';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -40,6 +42,19 @@ export default function OrderDetailScreen({ route }) {
 
   useEffect(() => {
     loadOrder();
+    
+    // Subscribe to order status updates via WebSocket
+    const handleStatusUpdate = (data) => {
+      if (data.order_id === orderId) {
+        setOrder(prev => prev ? { ...prev, status: data.status } : null);
+      }
+    };
+
+    websocketService.on('order_status_update', handleStatusUpdate);
+
+    return () => {
+      websocketService.off('order_status_update', handleStatusUpdate);
+    };
   }, [orderId]);
 
   const loadOrder = async () => {
@@ -83,8 +98,20 @@ export default function OrderDetailScreen({ route }) {
       })
     : '-';
 
+  // Calculate estimated delivery (3 days from order date for processing orders)
+  const estimatedDelivery = order.status === 'processing' && order.created_at
+    ? new Date(new Date(order.created_at).getTime() + 3 * 24 * 60 * 60 * 1000)
+    : null;
+
   return (
     <ScrollView style={styles.container}>
+      {/* Order Tracking Stepper */}
+      <OrderTrackingStepper
+        currentStatus={order.status}
+        orderDate={order.created_at}
+        estimatedDelivery={estimatedDelivery}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.orderId}>Buyurtma #{order.id}</Text>
