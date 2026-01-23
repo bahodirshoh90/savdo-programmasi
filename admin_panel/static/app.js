@@ -1115,6 +1115,7 @@ function showAddProductModal() {
     document.getElementById('product-id').value = '';
     document.getElementById('product-item-number').value = '';
     document.getElementById('product-barcode').value = '';
+    document.getElementById('product-category').value = '';
     document.getElementById('product-image-url').value = '';
     document.getElementById('product-total-pieces-input').value = '0';
     updateProductImagePreview('');
@@ -1130,6 +1131,7 @@ async function editProduct(id) {
         document.getElementById('product-item-number').value = product.item_number || '';
         document.getElementById('product-barcode').value = product.barcode || '';
         document.getElementById('product-brand').value = product.brand || '';
+        document.getElementById('product-category').value = product.category || '';
         document.getElementById('product-supplier').value = product.supplier || '';
         document.getElementById('product-location').value = product.location || '';
         // Fix image URL if needed
@@ -1311,12 +1313,15 @@ async function saveProduct(e) {
     data.packages_in_stock = packagesInStock;
     data.pieces_in_stock = piecesInStock;
     
+    const categoryValue = document.getElementById('product-category')?.value.trim() || '';
+
     // Optional fields - include even if null/empty for update
     if (id) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
         data.brand = document.getElementById('product-brand').value.trim() || null;
+        data.category = categoryValue || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
         data.image_url = imageUrl;
@@ -1331,6 +1336,8 @@ async function saveProduct(e) {
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
+
+        if (categoryValue) data.category = categoryValue;
         
         const supplierValue = document.getElementById('product-supplier').value.trim();
         if (supplierValue) data.supplier = supplierValue;
