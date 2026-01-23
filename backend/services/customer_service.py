@@ -41,6 +41,16 @@ class CustomerService:
         
         customer_dict = customer.dict()
         password = customer_dict.pop('password', None)
+
+        # Validate referrer if provided
+        referrer_id = customer_dict.get('referred_by_id')
+        if referrer_id:
+            referrer = db.query(Customer).filter(Customer.id == referrer_id).first()
+            if not referrer:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Referrer topilmadi: {referrer_id}"
+                )
         
         # Hash password if provided
         if password:
@@ -50,6 +60,12 @@ class CustomerService:
         db.add(db_customer)
         db.commit()
         db.refresh(db_customer)
+
+        # Ensure referral code is set
+        if not db_customer.referral_code:
+            db_customer.referral_code = f"CUST{db_customer.id:06d}"
+            db.commit()
+            db.refresh(db_customer)
         return db_customer
     
     @staticmethod
@@ -142,6 +158,15 @@ class CustomerService:
         password = update_data.pop('password', None)
         if password:
             update_data['password_hash'] = AuthService.hash_password(password)
+
+        # Validate referrer if provided
+        if 'referred_by_id' in update_data and update_data['referred_by_id']:
+            referrer_id = update_data['referred_by_id']
+            if referrer_id == customer_id:
+                raise HTTPException(status_code=400, detail="Mijoz o'zini referer qila olmaydi")
+            referrer = db.query(Customer).filter(Customer.id == referrer_id).first()
+            if not referrer:
+                raise HTTPException(status_code=400, detail=f"Referrer topilmadi: {referrer_id}")
         
         for field, value in update_data.items():
             setattr(db_customer, field, value)

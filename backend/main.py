@@ -90,6 +90,17 @@ try:
             if 'password_hash' not in customers_columns:
                 conn.execute(text("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255)"))
                 conn.commit()
+            if 'referral_code' not in customers_columns:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN referral_code VARCHAR(100)"))
+                conn.execute(text("UPDATE customers SET referral_code = 'CUST' || id WHERE referral_code IS NULL"))
+                conn.commit()
+            if 'referred_by_id' not in customers_columns:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN referred_by_id INTEGER"))
+                conn.commit()
+            if 'loyalty_points' not in customers_columns:
+                conn.execute(text("ALTER TABLE customers ADD COLUMN loyalty_points INTEGER DEFAULT 0"))
+                conn.execute(text("UPDATE customers SET loyalty_points = 0 WHERE loyalty_points IS NULL"))
+                conn.commit()
         except Exception as e:
             print(f"Warning: Error migrating customers table: {e}")
         
@@ -1577,6 +1588,9 @@ def get_customers(
                     "customer_type": customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type),
                     "notes": customer.notes,
                     "username": customer.username,  # Include username field
+                    "referral_code": customer.referral_code or f"CUST{customer.id:06d}",
+                    "referred_by_id": customer.referred_by_id,
+                    "loyalty_points": customer.loyalty_points if customer.loyalty_points is not None else 0,
                     "debt_balance": customer.debt_balance if customer.debt_balance is not None else 0.0,
                     "debt_limit": customer.debt_limit,
                     "debt_due_date": customer.debt_due_date,

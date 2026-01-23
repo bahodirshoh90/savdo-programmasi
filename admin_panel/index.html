@@ -71,6 +71,12 @@
                 <a href="#" class="nav-item" data-page="customers">
                     <i class="fas fa-users"></i> Mijozlar
                 </a>
+                <a href="#" class="nav-item" data-page="price-alerts">
+                    <i class="fas fa-bell"></i> Price Alerts
+                </a>
+                <a href="#" class="nav-item" data-page="referrals-loyalty">
+                    <i class="fas fa-gift"></i> Referral & Loyalty
+                </a>
                 <a href="#" class="nav-item" data-page="orders">
                     <i class="fas fa-shopping-cart"></i> Buyurtmalar
                 </a>
@@ -90,7 +96,7 @@
                     <i class="fas fa-history"></i> Audit Log
                 </a>
                 <a href="#" class="nav-item" data-page="help-requests">
-                    <i class="fas fa-life-ring"></i> Yordam So'rovlari
+                    <i class="fas fa-comments"></i> Chat/Support
                     <span id="help-requests-badge" class="badge" style="display: none; margin-left: auto; background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">0</span>
                 </a>
                 <a href="#" class="nav-item" data-page="banners">
@@ -389,6 +395,102 @@
                 </div>
             </div>
 
+            <!-- Price Alerts Page -->
+            <div id="price-alerts" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-bell"></i> Price Alerts</h1>
+                    <div class="page-actions">
+                        <select id="price-alert-customer-filter" onchange="handlePriceAlertCustomerChange()" style="padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #d1d5db; min-width: 220px;">
+                            <option value="">Mijoz tanlang</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadPriceAlerts()">
+                            <i class="fas fa-sync"></i> Yangilash
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulot</th>
+                                <th>Joriy narx</th>
+                                <th>Maqsad narx</th>
+                                <th>Holat</th>
+                                <th>Xabar</th>
+                                <th>Vaqt</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="price-alerts-tbody">
+                            <tr><td colspan="9" style="text-align: center; padding: 2rem;">Mijoz tanlang</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Referral & Loyalty Page -->
+            <div id="referrals-loyalty" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-gift"></i> Referral & Loyalty</h1>
+                    <button class="btn btn-primary" onclick="loadReferralStats()">
+                        <i class="fas fa-sync"></i> Yangilash
+                    </button>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-ticket-alt"></i></div>
+                        <div class="stat-info">
+                            <h3 id="referral-codes-count">0</h3>
+                            <p>Referral kodlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+                        <div class="stat-info">
+                            <h3 id="referral-customers-count">0</h3>
+                            <p>Taklif qilingan mijozlar</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                        <div class="stat-info">
+                            <h3 id="loyalty-points-total">0</h3>
+                            <p>Jami loyalty ballari</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-chart-bar"></i></div>
+                        <div class="stat-info">
+                            <h3 id="loyalty-points-average">0</h3>
+                            <p>O'rtacha ball</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container" style="margin-top: 2rem;">
+                    <canvas id="referralChart"></canvas>
+                </div>
+                <div class="table-container" style="margin-top: 2rem;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Referral kod</th>
+                                <th>Taklif qilgan</th>
+                                <th>Takliflar soni</th>
+                                <th>Loyalty ballari</th>
+                                <th>Ro'yxatdan o'tgan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="referrals-tbody">
+                            <tr><td colspan="7" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Orders Page -->
             <div id="orders" class="page">
                 <div class="page-header">
@@ -615,8 +717,9 @@
             <!-- Audit Logs Page -->
             <div id="help-requests" class="page">
                 <div class="page-header">
-                    <h1><i class="fas fa-life-ring"></i> Yordam So'rovlari</h1>
-                    <div class="page-actions">
+                    <h1><i class="fas fa-comments"></i> Chat/Support</h1>
+                    <div class="page-actions" style="display: flex; gap: 0.75rem; align-items: center;">
+                        <input type="text" id="support-search" placeholder="Mijoz qidirish..." class="search-input" oninput="filterSupportConversations()">
                         <select id="help-request-status-filter" onchange="loadHelpRequests()" style="padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #d1d5db;">
                             <option value="">Barcha holatlar</option>
                             <option value="pending">Kutilmoqda</option>
@@ -628,24 +731,44 @@
                         </button>
                     </div>
                 </div>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Vaqt</th>
-                                <th>Mijoz</th>
-                                <th>Telefon</th>
-                                <th>Muammo turi</th>
-                                <th>Xabar</th>
-                                <th>Holat</th>
-                                <th>Amallar</th>
-                            </tr>
-                        </thead>
-                        <tbody id="help-requests-tbody">
-                            <tr><td colspan="8" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>
-                        </tbody>
-                    </table>
+                <div class="support-layout">
+                    <div class="support-list">
+                        <div class="support-list-header">
+                            <h3>Conversations</h3>
+                            <span id="support-total-count" class="badge">0</span>
+                        </div>
+                        <div id="support-conversations" class="support-conversations">
+                            <div class="support-empty">Yuklanmoqda...</div>
+                        </div>
+                    </div>
+                    <div class="support-thread">
+                        <div id="support-thread-header" class="support-thread-header">
+                            <div>
+                                <div id="support-thread-title" class="support-thread-title">Suhbatni tanlang</div>
+                                <div id="support-thread-subtitle" class="support-thread-subtitle">Mijoz xabarlari shu yerda ko'rinadi</div>
+                            </div>
+                            <div id="support-thread-meta" class="support-thread-meta"></div>
+                        </div>
+                        <div id="support-messages" class="support-messages">
+                            <div class="support-empty">Suhbat tanlang</div>
+                        </div>
+                        <div class="support-reply">
+                            <textarea id="support-reply-input" rows="3" placeholder="Javob yozing..."></textarea>
+                            <div class="support-reply-actions">
+                                <select id="support-status-select">
+                                    <option value="pending">Kutilmoqda</option>
+                                    <option value="resolved">Hal qilindi</option>
+                                    <option value="closed">Yopilgan</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="updateSupportStatus()">
+                                    <i class="fas fa-save"></i> Holatni saqlash
+                                </button>
+                                <button class="btn btn-primary" onclick="sendSupportReply()">
+                                    <i class="fas fa-paper-plane"></i> Javob yuborish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

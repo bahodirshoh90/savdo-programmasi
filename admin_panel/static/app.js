@@ -43,6 +43,14 @@ let totalSales = 0;
 // Selected products for bulk operations
 let selectedProducts = new Set();
 
+// Price alerts and support state
+let priceAlertCustomers = [];
+let selectedPriceAlertCustomerId = null;
+let supportRequests = [];
+let activeSupportRequestId = null;
+let supportSearchQuery = '';
+let referralChart = null;
+
 // Authentication state
 let currentAdminToken = null;
 let currentAdminUser = null;
@@ -294,6 +302,13 @@ function showPage(pageName) {
             break;
         case 'customers':
             loadCustomers();
+            break;
+        case 'price-alerts':
+            loadPriceAlertCustomers();
+            loadPriceAlerts();
+            break;
+        case 'referrals-loyalty':
+            loadReferralStats();
             break;
         case 'orders':
             loadCustomersForOrderFilter();
@@ -4960,7 +4975,327 @@ async function viewSellerPermissions(sellerId) {
     }
 }
 
-// Help Requests
+// Price Alerts
+async function loadPriceAlertCustomers() {
+    const select = document.getElementById('price-alert-customer-filter');
+    if (!select) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Mijozlarni yuklashda xatolik');
+        }
+        priceAlertCustomers = await response.json();
+        const options = [
+            '<option value="">Mijoz tanlang</option>',
+            ...priceAlertCustomers.map(customer => (
+                `<option value="${customer.id}">${escapeHtml(customer.name || customer.username || `Mijoz #${customer.id}`)}</option>`
+            ))
+        ];
+        select.innerHTML = options.join('');
+        if (selectedPriceAlertCustomerId) {
+            select.value = selectedPriceAlertCustomerId;
+        }
+    } catch (error) {
+        console.error('Error loading price alert customers:', error);
+        select.innerHTML = '<option value="">Xatolik yuz berdi</option>';
+    }
+}
+
+function handlePriceAlertCustomerChange() {
+    const select = document.getElementById('price-alert-customer-filter');
+    selectedPriceAlertCustomerId = select?.value || null;
+    loadPriceAlerts();
+}
+
+async function loadPriceAlerts() {
+    const tbody = document.getElementById('price-alerts-tbody');
+    const select = document.getElementById('price-alert-customer-filter');
+    const customerId = selectedPriceAlertCustomerId || select?.value;
+    
+    if (!tbody) return;
+    if (!customerId) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;">Mijoz tanlang</td></tr>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/price-alerts`, {
+            headers: {
+                ...getAuthHeaders(),
+                'X-Customer-ID': customerId
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Price alertlarni yuklashda xatolik');
+        }
+        
+        const alerts = await response.json();
+        const customer = priceAlertCustomers.find(c => c.id === parseInt(customerId, 10));
+        const customerName = escapeHtml(customer?.name || customer?.username || `Mijoz #${customerId}`);
+        
+        if (!Array.isArray(alerts) || alerts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;">Price alertlar topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = alerts.map(alert => {
+            const statusLabel = alert.is_active ? 'Faol' : 'Nofaol';
+            const statusColor = alert.is_active ? '#10b981' : '#6b7280';
+            const notifiedText = alert.notified ? `Ha${alert.notified_at ? ` (${formatDate(alert.notified_at)})` : ''}` : 'Yo\'q';
+            const currentPriceValue = parseFloat(alert.current_price);
+            const targetPriceValue = parseFloat(alert.target_price);
+            const currentPrice = Number.isFinite(currentPriceValue) ? formatMoney(currentPriceValue) : '-';
+            const targetPrice = Number.isFinite(targetPriceValue) ? formatMoney(targetPriceValue) : '-';
+            const productName = escapeHtml(alert.product_name || `Mahsulot #${alert.product_id}`);
+            return `
+                <tr>
+                    <td>${alert.id}</td>
+                    <td>${customerName}</td>
+                    <td>${productName}</td>
+                    <td>${currentPrice}</td>
+                    <td>${targetPrice}</td>
+                    <td>
+                        <span class="badge" style="background: ${statusColor}; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
+                            ${statusLabel}
+                        </span>
+                    </td>
+                    <td>${notifiedText}</td>
+                    <td>${alert.created_at ? formatDate(alert.created_at) : '-'}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn action-btn-edit" onclick="togglePriceAlert(${alert.id}, ${alert.is_active ? 'false' : 'true'})" title="Faollik">
+                                ${alert.is_active ? '<i class="fas fa-toggle-off"></i>' : '<i class="fas fa-toggle-on"></i>'}
+                            </button>
+                            <button class="action-btn action-btn-delete" onclick="deletePriceAlert(${alert.id})" title="O\'chirish">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading price alerts:', error);
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+async function togglePriceAlert(alertId, isActive) {
+    const select = document.getElementById('price-alert-customer-filter');
+    const customerId = selectedPriceAlertCustomerId || select?.value;
+    if (!customerId) {
+        alert('Mijoz tanlang');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/price-alerts/${alertId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'X-Customer-ID': customerId,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_active: isActive })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Price alert yangilashda xatolik');
+        }
+        
+        showToast('Price alert yangilandi');
+        loadPriceAlerts();
+    } catch (error) {
+        console.error('Error updating price alert:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deletePriceAlert(alertId) {
+    const select = document.getElementById('price-alert-customer-filter');
+    const customerId = selectedPriceAlertCustomerId || select?.value;
+    if (!customerId) {
+        alert('Mijoz tanlang');
+        return;
+    }
+    
+    if (!confirm('Price alertni o\'chirishni tasdiqlaysizmi?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/price-alerts/${alertId}`, {
+            method: 'DELETE',
+            headers: {
+                ...getAuthHeaders(),
+                'X-Customer-ID': customerId
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Price alertni o\'chirishda xatolik');
+        }
+        
+        showToast('Price alert o\'chirildi');
+        loadPriceAlerts();
+    } catch (error) {
+        console.error('Error deleting price alert:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// Referral & Loyalty
+async function loadReferralStats() {
+    try {
+        const response = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Mijozlarni yuklashda xatolik');
+        }
+        
+        const customers = await response.json();
+        const customerMap = new Map(customers.map(c => [c.id, c]));
+        const referralCounts = {};
+        
+        customers.forEach(customer => {
+            if (customer.referred_by_id) {
+                referralCounts[customer.referred_by_id] = (referralCounts[customer.referred_by_id] || 0) + 1;
+            }
+        });
+        
+        const totalReferralCodes = customers.filter(c => c.referral_code).length;
+        const totalReferredCustomers = customers.filter(c => c.referred_by_id).length;
+        const totalPoints = customers.reduce((sum, c) => sum + (parseInt(c.loyalty_points, 10) || 0), 0);
+        const averagePoints = customers.length ? Math.round(totalPoints / customers.length) : 0;
+        
+        const referralCodesEl = document.getElementById('referral-codes-count');
+        const referralCustomersEl = document.getElementById('referral-customers-count');
+        const loyaltyTotalEl = document.getElementById('loyalty-points-total');
+        const loyaltyAverageEl = document.getElementById('loyalty-points-average');
+        
+        if (referralCodesEl) referralCodesEl.textContent = totalReferralCodes.toLocaleString('uz-UZ');
+        if (referralCustomersEl) referralCustomersEl.textContent = totalReferredCustomers.toLocaleString('uz-UZ');
+        if (loyaltyTotalEl) loyaltyTotalEl.textContent = totalPoints.toLocaleString('uz-UZ');
+        if (loyaltyAverageEl) loyaltyAverageEl.textContent = averagePoints.toLocaleString('uz-UZ');
+        
+        const rows = customers.map(customer => {
+            const referralCount = referralCounts[customer.id] || 0;
+            const referrer = customer.referred_by_id ? customerMap.get(customer.referred_by_id) : null;
+            return {
+                id: customer.id,
+                name: customer.name || customer.username || `Mijoz #${customer.id}`,
+                referralCode: customer.referral_code || '-',
+                referrerName: referrer ? (referrer.name || referrer.username || `Mijoz #${referrer.id}`) : '-',
+                referralCount,
+                loyaltyPoints: parseInt(customer.loyalty_points, 10) || 0,
+                createdAt: customer.created_at
+            };
+        }).sort((a, b) => {
+            if (b.referralCount !== a.referralCount) return b.referralCount - a.referralCount;
+            return b.loyaltyPoints - a.loyaltyPoints;
+        });
+        
+        const tbody = document.getElementById('referrals-tbody');
+        if (tbody) {
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ma\'lumotlar topilmadi</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map(row => `
+                    <tr>
+                        <td>${row.id}</td>
+                        <td>${escapeHtml(row.name)}</td>
+                        <td>${escapeHtml(row.referralCode)}</td>
+                        <td>${escapeHtml(row.referrerName)}</td>
+                        <td>${row.referralCount}</td>
+                        <td>${row.loyaltyPoints.toLocaleString('uz-UZ')}</td>
+                        <td>${row.createdAt ? formatDate(row.createdAt) : '-'}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+        
+        const topReferrers = rows.filter(row => row.referralCount > 0).slice(0, 8);
+        renderReferralChart(topReferrers);
+    } catch (error) {
+        console.error('Error loading referral stats:', error);
+        const tbody = document.getElementById('referrals-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+function renderReferralChart(rows) {
+    const canvas = document.getElementById('referralChart');
+    if (!canvas) return;
+    
+    const labels = rows.map(row => row.name);
+    const referralCounts = rows.map(row => row.referralCount);
+    const loyaltyPoints = rows.map(row => row.loyaltyPoints);
+    
+    if (referralChart) {
+        referralChart.destroy();
+    }
+    
+    referralChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Takliflar soni',
+                    data: referralCounts,
+                    backgroundColor: '#4f46e5'
+                },
+                {
+                    label: 'Loyalty ballari',
+                    data: loyaltyPoints,
+                    backgroundColor: '#10b981'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Help Requests (Chat/Support)
+const supportStatusNames = {
+    'pending': 'Kutilmoqda',
+    'resolved': 'Hal qilindi',
+    'closed': 'Yopilgan'
+};
+
+const supportIssueTypeNames = {
+    'login': 'Kirish',
+    'password': 'Parol',
+    'order': 'Buyurtma',
+    'product': 'Mahsulot',
+    'other': 'Boshqa'
+};
+
 async function loadHelpRequests() {
     try {
         const statusFilter = document.getElementById('help-request-status-filter')?.value || '';
@@ -4975,58 +5310,9 @@ async function loadHelpRequests() {
         }
         
         const data = await response.json();
-        const requests = data.requests || [];
-        const tbody = document.getElementById('help-requests-tbody');
+        supportRequests = data.requests || [];
         
-        if (requests.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Help requestlar topilmadi</td></tr>';
-            return;
-        }
-        
-        const statusNames = {
-            'pending': 'Kutilmoqda',
-            'resolved': 'Hal qilindi',
-            'closed': 'Yopilgan'
-        };
-        
-        const issueTypeNames = {
-            'login': 'Kirish',
-            'password': 'Parol',
-            'order': 'Buyurtma',
-            'product': 'Mahsulot',
-            'other': 'Boshqa'
-        };
-        
-        tbody.innerHTML = requests.map(req => `
-            <tr>
-                <td>${req.id}</td>
-                <td>${formatDate(req.created_at)}</td>
-                <td>${escapeHtml(req.customer_name || req.username || 'Noma\'lum')}</td>
-                <td>${escapeHtml(req.phone || '-')}</td>
-                <td>${issueTypeNames[req.issue_type] || req.issue_type || 'Boshqa'}</td>
-                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(req.message)}">
-                    ${escapeHtml(req.message)}
-                </td>
-                <td>
-                    <span class="badge" style="background: ${req.status === 'pending' ? '#ef4444' : req.status === 'resolved' ? '#10b981' : '#6b7280'}; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
-                        ${statusNames[req.status] || req.status}
-                    </span>
-                </td>
-                <td>
-                    ${req.status === 'pending' ? `
-                        <button class="btn btn-success" onclick="resolveHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
-                            <i class="fas fa-check"></i> Hal qilindi
-                        </button>
-                    ` : ''}
-                    <button class="btn btn-secondary" onclick="viewHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                        <i class="fas fa-eye"></i> Ko'rish
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-        
-        // Update badge count
-        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        const pendingCount = supportRequests.filter(r => r.status === 'pending').length;
         const badge = document.getElementById('help-requests-badge');
         if (badge) {
             if (pendingCount > 0) {
@@ -5036,13 +5322,250 @@ async function loadHelpRequests() {
                 badge.style.display = 'none';
             }
         }
+        
+        const totalCount = document.getElementById('support-total-count');
+        if (totalCount) {
+            totalCount.textContent = supportRequests.length;
+        }
+        
+        renderSupportConversations();
+        
+        if (supportRequests.length > 0) {
+            const existing = supportRequests.find(r => r.id === activeSupportRequestId);
+            if (!existing) {
+                activeSupportRequestId = supportRequests[0].id;
+            }
+        } else {
+            activeSupportRequestId = null;
+        }
+        renderSupportThread();
     } catch (error) {
         console.error('Error loading help requests:', error);
-        const tbody = document.getElementById('help-requests-tbody');
-        if (tbody) {
-            tbody.innerHTML = 
-                `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+        const container = document.getElementById('support-conversations');
+        if (container) {
+            container.innerHTML = `<div class="support-empty" style="color: #ef4444;">Xatolik: ${error.message}</div>`;
         }
+    }
+}
+
+function filterSupportConversations() {
+    const query = document.getElementById('support-search')?.value || '';
+    supportSearchQuery = query.trim().toLowerCase();
+    renderSupportConversations();
+}
+
+function renderSupportConversations() {
+    const container = document.getElementById('support-conversations');
+    if (!container) return;
+    
+    const filtered = supportRequests.filter(req => {
+        if (!supportSearchQuery) return true;
+        const haystack = [
+            req.customer_name,
+            req.username,
+            req.phone,
+            req.message
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(supportSearchQuery);
+    });
+    
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="support-empty">Suhbatlar topilmadi</div>';
+        return;
+    }
+    
+    container.innerHTML = filtered.map(req => {
+        const name = escapeHtml(req.customer_name || req.username || 'Noma\'lum');
+        const preview = escapeHtml((req.message || '').slice(0, 80));
+        const statusLabel = supportStatusNames[req.status] || req.status || '-';
+        const createdAt = req.created_at ? formatDate(req.created_at) : '';
+        const activeClass = req.id === activeSupportRequestId ? 'active' : '';
+        return `
+            <div class="support-item ${activeClass}" onclick="selectSupportConversation(${req.id})">
+                <div class="support-item-title">${name}</div>
+                <div class="support-item-meta">${statusLabel} • ${createdAt}</div>
+                <div class="support-item-meta">${preview}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectSupportConversation(requestId) {
+    activeSupportRequestId = requestId;
+    renderSupportConversations();
+    renderSupportThread();
+}
+
+function renderSupportThread() {
+    const titleEl = document.getElementById('support-thread-title');
+    const subtitleEl = document.getElementById('support-thread-subtitle');
+    const metaEl = document.getElementById('support-thread-meta');
+    const messagesEl = document.getElementById('support-messages');
+    const statusSelect = document.getElementById('support-status-select');
+    const replyInput = document.getElementById('support-reply-input');
+    
+    if (!messagesEl || !titleEl || !subtitleEl || !metaEl || !statusSelect) return;
+    
+    const request = supportRequests.find(r => r.id === activeSupportRequestId);
+    if (!request) {
+        titleEl.textContent = 'Suhbatni tanlang';
+        subtitleEl.textContent = 'Mijoz xabarlari shu yerda ko\'rinadi';
+        metaEl.textContent = '';
+        messagesEl.innerHTML = '<div class="support-empty">Suhbat tanlang</div>';
+        statusSelect.value = 'pending';
+        if (replyInput) replyInput.value = '';
+        return;
+    }
+    
+    const issueLabel = supportIssueTypeNames[request.issue_type] || request.issue_type || '-';
+    const statusLabel = supportStatusNames[request.status] || request.status || '-';
+    const phoneLabel = request.phone ? `Tel: ${request.phone}` : '';
+    const createdLabel = request.created_at ? formatDate(request.created_at) : '';
+    titleEl.textContent = request.customer_name || request.username || `Mijoz #${request.customer_id || '-'}`;
+    subtitleEl.textContent = `Muammo: ${issueLabel}`;
+    metaEl.textContent = [`#${request.id}`, statusLabel, phoneLabel, createdLabel].filter(Boolean).join(' • ');
+    statusSelect.value = request.status || 'pending';
+    
+    const messages = [];
+    if (request.message) {
+        messages.push({
+            sender: 'customer',
+            text: request.message,
+            time: request.created_at
+        });
+    }
+    
+    const adminMessages = parseAdminNotes(request.notes);
+    adminMessages.forEach(note => {
+        messages.push({
+            sender: 'admin',
+            text: note.text,
+            time: note.timestamp
+        });
+    });
+    
+    if (messages.length === 0) {
+        messagesEl.innerHTML = '<div class="support-empty">Xabarlar yo\'q</div>';
+        return;
+    }
+    
+    messagesEl.innerHTML = messages.map(msg => {
+        const timeText = msg.time ? formatDate(msg.time) : '';
+        const senderLabel = msg.sender === 'admin' ? 'Admin' : 'Mijoz';
+        return `
+            <div class="support-message ${msg.sender}">
+                <div>${escapeHtml(msg.text)}</div>
+                <div class="support-message-meta">${senderLabel}${timeText ? ` • ${timeText}` : ''}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function parseAdminNotes(notes) {
+    if (!notes) return [];
+    const lines = notes.split('\n').map(line => line.trim()).filter(Boolean);
+    const adminPrefix = '[ADMIN ';
+    const isStructured = lines.length > 0 && lines.every(line => line.startsWith(adminPrefix));
+    if (!isStructured) {
+        return [{ text: notes, timestamp: null }];
+    }
+    
+    return lines.map(line => {
+        const endIdx = line.indexOf(']');
+        const timestamp = endIdx !== -1 ? line.slice(adminPrefix.length, endIdx) : null;
+        const text = endIdx !== -1 ? line.slice(endIdx + 1).trim() : line;
+        return { text, timestamp };
+    });
+}
+
+function buildAdminNotes(existingNotes, message) {
+    const timestamp = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' });
+    const entry = `[ADMIN ${timestamp}] ${message}`;
+    if (existingNotes && existingNotes.trim()) {
+        return `${existingNotes}\n${entry}`;
+    }
+    return entry;
+}
+
+async function sendSupportReply() {
+    const request = supportRequests.find(r => r.id === activeSupportRequestId);
+    if (!request) {
+        alert('Suhbat tanlanmagan');
+        return;
+    }
+    
+    const input = document.getElementById('support-reply-input');
+    const statusSelect = document.getElementById('support-status-select');
+    const message = input?.value?.trim() || '';
+    
+    if (!message) {
+        alert('Javob matnini kiriting');
+        return;
+    }
+    
+    const updatedNotes = buildAdminNotes(request.notes, message);
+    const status = statusSelect?.value || request.status || 'pending';
+    
+    try {
+        const response = await fetch(`${API_BASE}/help-requests/${request.id}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status, notes: updatedNotes })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Javob yuborishda xatolik');
+        }
+        
+        const updated = await response.json();
+        request.status = updated.status || status;
+        request.notes = updatedNotes;
+        request.updated_at = updated.updated_at || request.updated_at;
+        
+        if (input) input.value = '';
+        renderSupportConversations();
+        renderSupportThread();
+        showToast('Javob yuborildi');
+    } catch (error) {
+        console.error('Error sending support reply:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function updateSupportStatus() {
+    const request = supportRequests.find(r => r.id === activeSupportRequestId);
+    if (!request) {
+        alert('Suhbat tanlanmagan');
+        return;
+    }
+    
+    const statusSelect = document.getElementById('support-status-select');
+    const status = statusSelect?.value || request.status || 'pending';
+    
+    try {
+        const response = await fetch(`${API_BASE}/help-requests/${request.id}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Holatni yangilashda xatolik');
+        }
+        
+        request.status = status;
+        renderSupportConversations();
+        renderSupportThread();
+        showToast('Holat yangilandi');
+    } catch (error) {
+        console.error('Error updating support status:', error);
+        alert('Xatolik: ' + error.message);
     }
 }
 
