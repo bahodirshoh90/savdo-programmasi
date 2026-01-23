@@ -53,6 +53,32 @@ const tokenStorage = {
   },
 };
 
+const normalizeErrorData = (data) => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data.detail) {
+    const details = data.details;
+    if (typeof details === 'string') {
+      data.detail = details;
+    } else if (details && typeof details === 'object' && !Array.isArray(details)) {
+      const nestedDetail =
+        details.detail ||
+        details.title ||
+        details.message ||
+        details.error;
+      if (nestedDetail) {
+        data.detail = nestedDetail;
+      }
+    } else if (typeof data.error === 'string') {
+      data.detail = data.error;
+    }
+  }
+
+  return data;
+};
+
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -91,6 +117,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error.response?.data) {
+      normalizeErrorData(error.response.data);
+    }
+
     // Only clear auth on 401 for non-auth endpoints (not /auth/me during initial check)
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/me')) {
       // Token expired - clear auth (but don't clear during initial auth check)
