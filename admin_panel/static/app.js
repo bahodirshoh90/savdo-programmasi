@@ -49,6 +49,7 @@ let selectedPriceAlertCustomerId = null;
 let supportRequests = [];
 let activeSupportRequestId = null;
 let supportSearchQuery = '';
+let supportMessages = {};
 let referralChart = null;
 
 // Authentication state
@@ -4413,12 +4414,12 @@ function setupWebSocket() {
             if (typeof loadHelpRequests === 'function') {
                 // Load help requests to update badge
                 setTimeout(() => {
-                    fetch(`${API_BASE}/help-requests?status=pending`, {
+                    fetch(`${API_BASE}/conversations?status=pending`, {
                         headers: getAuthHeaders()
                     })
                     .then(res => res.json())
                     .then(data => {
-                        const pendingCount = data.requests?.filter(r => r.status === 'pending').length || 0;
+                        const pendingCount = data.conversations?.filter(r => r.status === 'pending').length || 0;
                         const badge = document.getElementById('help-requests-badge');
                         if (badge) {
                             if (pendingCount > 0) {
@@ -5306,7 +5307,7 @@ const supportIssueTypeNames = {
 async function loadHelpRequests() {
     try {
         const statusFilter = document.getElementById('help-request-status-filter')?.value || '';
-        const url = statusFilter ? `${API_BASE}/help-requests?status=${statusFilter}` : `${API_BASE}/help-requests`;
+        const url = statusFilter ? `${API_BASE}/conversations?status=${statusFilter}` : `${API_BASE}/conversations`;
         
         const response = await fetch(url, {
             headers: getAuthHeaders()
@@ -5317,7 +5318,8 @@ async function loadHelpRequests() {
         }
         
         const data = await response.json();
-        supportRequests = data.requests || [];
+        supportRequests = data.conversations || [];
+        supportMessages = {};
         
         const pendingCount = supportRequests.filter(r => r.status === 'pending').length;
         const badge = document.getElementById('help-requests-badge');
@@ -5342,10 +5344,11 @@ async function loadHelpRequests() {
             if (!existing) {
                 activeSupportRequestId = supportRequests[0].id;
             }
+            loadSupportConversation(activeSupportRequestId);
         } else {
             activeSupportRequestId = null;
+            renderSupportThread();
         }
-        renderSupportThread();
     } catch (error) {
         console.error('Error loading help requests:', error);
         const container = document.getElementById('support-conversations');
@@ -5383,14 +5386,17 @@ function renderSupportConversations() {
     
     container.innerHTML = filtered.map(req => {
         const name = escapeHtml(req.customer_name || req.username || 'Noma\'lum');
-        const preview = escapeHtml((req.message || '').slice(0, 80));
+        const subject = req.subject ? `Mavzu: ${escapeHtml(req.subject)}` : '';
+        const previewSource = req.last_message || req.message || '';
+        const preview = escapeHtml(previewSource.slice(0, 80));
         const statusLabel = supportStatusNames[req.status] || req.status || '-';
-        const createdAt = req.created_at ? formatDate(req.created_at) : '';
+        const createdAt = req.last_message_at ? formatDate(req.last_message_at) : (req.created_at ? formatDate(req.created_at) : '');
         const activeClass = req.id === activeSupportRequestId ? 'active' : '';
         return `
             <div class="support-item ${activeClass}" onclick="selectSupportConversation(${req.id})">
                 <div class="support-item-title">${name}</div>
                 <div class="support-item-meta">${statusLabel} • ${createdAt}</div>
+                ${subject ? `<div class="support-item-meta">${subject}</div>` : ''}
                 <div class="support-item-meta">${preview}</div>
             </div>
         `;
@@ -5400,7 +5406,7 @@ function renderSupportConversations() {
 function selectSupportConversation(requestId) {
     activeSupportRequestId = requestId;
     renderSupportConversations();
-    renderSupportThread();
+    loadSupportConversation(requestId);
 }
 
 function renderSupportThread() {
@@ -5428,28 +5434,25 @@ function renderSupportThread() {
     const statusLabel = supportStatusNames[request.status] || request.status || '-';
     const phoneLabel = request.phone ? `Tel: ${request.phone}` : '';
     const createdLabel = request.created_at ? formatDate(request.created_at) : '';
+    const subjectLabel = request.subject ? `Mavzu: ${request.subject}` : '';
     titleEl.textContent = request.customer_name || request.username || `Mijoz #${request.customer_id || '-'}`;
-    subtitleEl.textContent = `Muammo: ${issueLabel}`;
+    subtitleEl.textContent = subjectLabel || `Muammo: ${issueLabel}`;
     metaEl.textContent = [`#${request.id}`, statusLabel, phoneLabel, createdLabel].filter(Boolean).join(' • ');
     statusSelect.value = request.status || 'pending';
     
-    const messages = [];
-    if (request.message) {
+    if (!Object.prototype.hasOwnProperty.call(supportMessages, request.id)) {
+        messagesEl.innerHTML = '<div class="support-empty">Yuklanmoqda...</div>';
+        return;
+    }
+
+    const messages = supportMessages[request.id] || [];
+    if (messages.length === 0 && request.message) {
         messages.push({
-            sender: 'customer',
-            text: request.message,
-            time: request.created_at
+            sender_type: 'customer',
+            message: request.message,
+            created_at: request.created_at
         });
     }
-    
-    const adminMessages = parseAdminNotes(request.notes);
-    adminMessages.forEach(note => {
-        messages.push({
-            sender: 'admin',
-            text: note.text,
-            time: note.timestamp
-        });
-    });
     
     if (messages.length === 0) {
         messagesEl.innerHTML = '<div class="support-empty">Xabarlar yo\'q</div>';
@@ -5457,41 +5460,45 @@ function renderSupportThread() {
     }
     
     messagesEl.innerHTML = messages.map(msg => {
-        const timeText = msg.time ? formatDate(msg.time) : '';
-        const senderLabel = msg.sender === 'admin' ? 'Admin' : 'Mijoz';
+        const timeText = msg.created_at ? formatDate(msg.created_at) : '';
+        const senderLabel = msg.sender_type === 'admin' ? 'Admin' : 'Mijoz';
         return `
-            <div class="support-message ${msg.sender}">
-                <div>${escapeHtml(msg.text)}</div>
+            <div class="support-message ${msg.sender_type}">
+                <div>${escapeHtml(msg.message)}</div>
                 <div class="support-message-meta">${senderLabel}${timeText ? ` • ${timeText}` : ''}</div>
             </div>
         `;
     }).join('');
 }
 
-function parseAdminNotes(notes) {
-    if (!notes) return [];
-    const lines = notes.split('\n').map(line => line.trim()).filter(Boolean);
-    const adminPrefix = '[ADMIN ';
-    const isStructured = lines.length > 0 && lines.every(line => line.startsWith(adminPrefix));
-    if (!isStructured) {
-        return [{ text: notes, timestamp: null }];
+async function loadSupportConversation(conversationId) {
+    const messagesEl = document.getElementById('support-messages');
+    if (messagesEl) {
+        messagesEl.innerHTML = '<div class="support-empty">Yuklanmoqda...</div>';
     }
-    
-    return lines.map(line => {
-        const endIdx = line.indexOf(']');
-        const timestamp = endIdx !== -1 ? line.slice(adminPrefix.length, endIdx) : null;
-        const text = endIdx !== -1 ? line.slice(endIdx + 1).trim() : line;
-        return { text, timestamp };
-    });
-}
-
-function buildAdminNotes(existingNotes, message) {
-    const timestamp = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' });
-    const entry = `[ADMIN ${timestamp}] ${message}`;
-    if (existingNotes && existingNotes.trim()) {
-        return `${existingNotes}\n${entry}`;
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Suhbatni yuklashda xatolik');
+        }
+        const data = await response.json();
+        if (data.conversation) {
+            const index = supportRequests.findIndex(r => r.id === data.conversation.id);
+            if (index !== -1) {
+                supportRequests[index] = { ...supportRequests[index], ...data.conversation };
+            }
+        }
+        supportMessages[conversationId] = data.messages || [];
+        renderSupportConversations();
+        renderSupportThread();
+    } catch (error) {
+        console.error('Error loading support conversation:', error);
+        if (messagesEl) {
+            messagesEl.innerHTML = `<div class="support-empty" style="color: #ef4444;">Xatolik: ${error.message}</div>`;
+        }
     }
-    return entry;
 }
 
 async function sendSupportReply() {
@@ -5510,17 +5517,15 @@ async function sendSupportReply() {
         return;
     }
     
-    const updatedNotes = buildAdminNotes(request.notes, message);
-    const status = statusSelect?.value || request.status || 'pending';
-    
     try {
-        const response = await fetch(`${API_BASE}/help-requests/${request.id}`, {
-            method: 'PUT',
+        const status = statusSelect?.value || request.status || 'pending';
+        const response = await fetch(`${API_BASE}/conversations/${request.id}/messages`, {
+            method: 'POST',
             headers: {
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ status, notes: updatedNotes })
+            body: JSON.stringify({ message, status })
         });
         
         if (!response.ok) {
@@ -5528,9 +5533,12 @@ async function sendSupportReply() {
         }
         
         const updated = await response.json();
-        request.status = updated.status || status;
-        request.notes = updatedNotes;
-        request.updated_at = updated.updated_at || request.updated_at;
+        request.status = updated.conversation?.status || status;
+        if (updated.message) {
+            supportMessages[request.id] = [...(supportMessages[request.id] || []), updated.message];
+        } else {
+            await loadSupportConversation(request.id);
+        }
         
         if (input) input.value = '';
         renderSupportConversations();
@@ -5553,8 +5561,8 @@ async function updateSupportStatus() {
     const status = statusSelect?.value || request.status || 'pending';
     
     try {
-        const response = await fetch(`${API_BASE}/help-requests/${request.id}`, {
-            method: 'PUT',
+        const response = await fetch(`${API_BASE}/conversations/${request.id}/messages`, {
+            method: 'POST',
             headers: {
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json'
@@ -5566,7 +5574,8 @@ async function updateSupportStatus() {
             throw new Error('Holatni yangilashda xatolik');
         }
         
-        request.status = status;
+        const updated = await response.json();
+        request.status = updated.conversation?.status || status;
         renderSupportConversations();
         renderSupportThread();
         showToast('Holat yangilandi');

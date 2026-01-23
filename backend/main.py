@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag, OtpCode
+from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, HelpRequestMessage, Favorite, PriceAlert, CustomerProductTag, OtpCode
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     ProductImageResponse, ProductImageCreate,
@@ -103,6 +103,15 @@ try:
                 conn.commit()
         except Exception as e:
             print(f"Warning: Error migrating customers table: {e}")
+
+        # Migrate help_requests table to add subject column if it doesn't exist
+        try:
+            help_request_columns = [col['name'] for col in inspector.get_columns('help_requests')]
+            if 'subject' not in help_request_columns:
+                conn.execute(text("ALTER TABLE help_requests ADD COLUMN subject VARCHAR(200)"))
+                conn.commit()
+        except Exception as e:
+            print(f"Warning: Error migrating help_requests table: {e}")
         
         # Migrate banners table to add rotation_interval column if it doesn't exist
         try:
@@ -2328,6 +2337,7 @@ async def create_help_request(
     # Override with request data if provided
     customer_username = request_data.get('username', customer_username)
     customer_phone = request_data.get('phone', customer_phone)
+    subject = request_data.get('subject')
     message = request_data.get('message', '')
     issue_type = request_data.get('issue_type', 'other')  # login, password, other, order, product
     
@@ -2340,17 +2350,28 @@ async def create_help_request(
         customer_name=customer_name,
         username=customer_username,
         phone=customer_phone,
+        subject=subject,
         message=message,
         issue_type=issue_type,
         status="pending"
     )
     db.add(help_request)
+    db.flush()
+
+    message_entry = HelpRequestMessage(
+        help_request_id=help_request.id,
+        sender_type="customer",
+        sender_id=customer_id,
+        message=message
+    )
+    db.add(message_entry)
     db.commit()
     db.refresh(help_request)
     
     print(f"[Help Request] Saved to database with ID {help_request.id}")
     
     # Format help request message
+    subject_line = f"Mavzu: {subject}" if subject else "Mavzu: -"
     help_message = f"""
 === YORDAM SO'ROVI ===
 ID: {help_request.id}
@@ -2360,6 +2381,7 @@ Mijoz ismi: {customer_name}
 Mijoz username: {customer_username}
 Telefon: {customer_phone}
 Muammo turi: {issue_type}
+{subject_line}
 Xabar: {message}
 """
     
@@ -2373,6 +2395,7 @@ Xabar: {message}
                 "customer_name": customer_name,
                 "username": customer_username,
                 "phone": customer_phone,
+                "subject": subject,
                 "message": message,
                 "issue_type": issue_type,
                 "status": "pending",
@@ -2434,6 +2457,7 @@ def get_help_requests(
                 "customer_name": req.customer_name,
                 "username": req.username,
                 "phone": req.phone,
+                "subject": req.subject,
                 "message": req.message,
                 "issue_type": req.issue_type,
                 "status": req.status,
@@ -2486,6 +2510,267 @@ def update_help_request(
         "notes": help_request.notes,
         "resolved_by": help_request.resolved_by,
         "resolved_at": to_uzbekistan_time(help_request.resolved_at).isoformat() if help_request.resolved_at else None
+    }
+
+
+# ==================== CONVERSATIONS (CHAT) ====================
+
+def _serialize_help_request_message(message: HelpRequestMessage):
+    return {
+        "id": message.id,
+        "sender_type": message.sender_type,
+        "sender_id": message.sender_id,
+        "message": message.message,
+        "created_at": to_uzbekistan_time(message.created_at).isoformat() if message.created_at else None
+    }
+
+
+def _serialize_conversation(help_request: HelpRequest, last_message: Optional[HelpRequestMessage] = None, message_count: Optional[int] = None):
+    last_message_obj = last_message or None
+    last_message_text = last_message_obj.message if last_message_obj else help_request.message
+    last_message_at = last_message_obj.created_at if last_message_obj else help_request.created_at
+
+    return {
+        "id": help_request.id,
+        "customer_id": help_request.customer_id,
+        "customer_name": help_request.customer_name,
+        "username": help_request.username,
+        "phone": help_request.phone,
+        "subject": help_request.subject,
+        "issue_type": help_request.issue_type,
+        "status": help_request.status,
+        "last_message": last_message_text,
+        "last_message_at": to_uzbekistan_time(last_message_at).isoformat() if last_message_at else None,
+        "message_count": message_count,
+        "created_at": to_uzbekistan_time(help_request.created_at).isoformat() if help_request.created_at else None,
+        "updated_at": to_uzbekistan_time(help_request.updated_at).isoformat() if help_request.updated_at else None,
+    }
+
+
+@app.post("/api/conversations")
+async def create_conversation(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Create a new conversation (customer only)"""
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Customer ID required")
+
+    try:
+        customer_id = int(x_customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    message = (payload.get("message") or "").strip()
+    subject = payload.get("subject")
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Xabar matnini kiriting")
+
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    help_request = HelpRequest(
+        customer_id=customer_id,
+        customer_name=customer.name or "Noma'lum",
+        username=customer.username or "Noma'lum",
+        phone=customer.phone or "Noma'lum",
+        subject=subject,
+        message=message,
+        issue_type="chat",
+        status="pending",
+    )
+
+    db.add(help_request)
+    db.flush()
+
+    message_entry = HelpRequestMessage(
+        help_request_id=help_request.id,
+        sender_type="customer",
+        sender_id=customer_id,
+        message=message
+    )
+    db.add(message_entry)
+
+    db.commit()
+    db.refresh(help_request)
+
+    try:
+        await manager.broadcast({
+            "type": "help_request",
+            "data": {
+                "id": help_request.id,
+                "customer_id": customer_id,
+                "customer_name": help_request.customer_name,
+                "username": help_request.username,
+                "phone": help_request.phone,
+                "subject": help_request.subject,
+                "message": message,
+                "issue_type": help_request.issue_type,
+                "status": help_request.status,
+                "timestamp": get_uzbekistan_now().isoformat()
+            }
+        })
+    except Exception as e:
+        print(f"Error broadcasting conversation: {e}")
+
+    return {
+        "id": help_request.id,
+        "subject": help_request.subject,
+        "status": help_request.status,
+        "created_at": to_uzbekistan_time(help_request.created_at).isoformat() if help_request.created_at else None
+    }
+
+
+@app.get("/api/conversations")
+def list_conversations(
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """List conversations (admin or customer)"""
+    from sqlalchemy import desc
+
+    requester_customer_id = None
+    if seller:
+        requester_customer_id = None
+    else:
+        if not x_customer_id:
+            raise HTTPException(status_code=401, detail="Customer ID required")
+        try:
+            requester_customer_id = int(x_customer_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    if requester_customer_id is not None:
+        customer_id = requester_customer_id
+
+    query = db.query(HelpRequest)
+    if status:
+        query = query.filter(HelpRequest.status == status)
+    if customer_id:
+        query = query.filter(HelpRequest.customer_id == customer_id)
+
+    total = query.count()
+    conversations = query.order_by(desc(HelpRequest.updated_at), desc(HelpRequest.created_at)).offset(skip).limit(limit).all()
+
+    results = []
+    for conversation in conversations:
+        last_message = db.query(HelpRequestMessage).filter(
+            HelpRequestMessage.help_request_id == conversation.id
+        ).order_by(HelpRequestMessage.created_at.desc()).first()
+        message_count = db.query(HelpRequestMessage).filter(
+            HelpRequestMessage.help_request_id == conversation.id
+        ).count()
+        results.append(_serialize_conversation(conversation, last_message=last_message, message_count=message_count))
+
+    return {"total": total, "conversations": results}
+
+
+@app.get("/api/conversations/{conversation_id}")
+def get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Get conversation details and messages"""
+    conversation = db.query(HelpRequest).filter(HelpRequest.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if not seller:
+        if not x_customer_id:
+            raise HTTPException(status_code=401, detail="Customer ID required")
+        try:
+            customer_id = int(x_customer_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid customer ID")
+        if conversation.customer_id != customer_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    messages = db.query(HelpRequestMessage).filter(
+        HelpRequestMessage.help_request_id == conversation.id
+    ).order_by(HelpRequestMessage.created_at.asc()).all()
+
+    return {
+        "conversation": _serialize_conversation(conversation),
+        "messages": [_serialize_help_request_message(message) for message in messages]
+    }
+
+
+@app.post("/api/conversations/{conversation_id}/messages")
+def create_conversation_message(
+    conversation_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
+):
+    """Add a message to a conversation (customer or admin)"""
+    conversation = db.query(HelpRequest).filter(HelpRequest.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    message_text = (payload.get("message") or "").strip()
+    status = payload.get("status")
+
+    if not message_text and not status:
+        raise HTTPException(status_code=400, detail="Xabar yoki holat kerak")
+
+    sender_type = None
+    sender_id = None
+    if seller:
+        sender_type = "admin"
+        sender_id = seller.id
+    elif x_customer_id:
+        try:
+            customer_id = int(x_customer_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid customer ID")
+        if conversation.customer_id != customer_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        sender_type = "customer"
+        sender_id = customer_id
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if sender_type == "customer" and message_text and conversation.status in ["resolved", "closed"]:
+        conversation.status = "pending"
+        conversation.resolved_by = None
+        conversation.resolved_at = None
+
+    if sender_type == "admin" and status:
+        conversation.status = status
+        if status in ["resolved", "closed"]:
+            conversation.resolved_by = seller.id
+            conversation.resolved_at = get_uzbekistan_now()
+
+    message_entry = None
+    if message_text:
+        message_entry = HelpRequestMessage(
+            help_request_id=conversation.id,
+            sender_type=sender_type,
+            sender_id=sender_id,
+            message=message_text
+        )
+        db.add(message_entry)
+
+    conversation.updated_at = get_uzbekistan_now()
+    db.commit()
+
+    if message_entry:
+        db.refresh(message_entry)
+
+    return {
+        "conversation": _serialize_conversation(conversation),
+        "message": _serialize_help_request_message(message_entry) if message_entry else None
     }
 
 

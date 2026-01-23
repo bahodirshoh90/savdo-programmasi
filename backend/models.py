@@ -479,6 +479,7 @@ class HelpRequest(Base):
     customer_name = Column(String(200), nullable=True)
     username = Column(String(100), nullable=True)
     phone = Column(String(50), nullable=True)
+    subject = Column(String(200), nullable=True)
     message = Column(Text, nullable=False)
     issue_type = Column(String(50), nullable=True)  # login, password, other, order, product
     status = Column(String(20), nullable=False, default="pending")  # pending, resolved, closed
@@ -493,6 +494,22 @@ class HelpRequest(Base):
     # Relationships
     customer = relationship("Customer")
     resolver = relationship("Seller", foreign_keys=[resolved_by])
+    messages = relationship("HelpRequestMessage", back_populates="help_request", cascade="all, delete-orphan")
+
+
+class HelpRequestMessage(Base):
+    """Messages within a help request conversation"""
+    __tablename__ = "help_request_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    help_request_id = Column(Integer, ForeignKey("help_requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_type = Column(String(20), nullable=False)  # customer, admin
+    sender_id = Column(Integer, nullable=True)
+    message = Column(Text, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    help_request = relationship("HelpRequest", back_populates="messages")
 
 
 class Favorite(Base):
