@@ -222,6 +222,11 @@ class Customer(Base):
     debt_balance = Column(Float, nullable=False, default=0.0)  # Joriy qarz balansi
     debt_limit = Column(Float, nullable=True)  # Qarz limiti (NULL = cheksiz)
     debt_due_date = Column(DateTime(timezone=True), nullable=True)  # Qarz muddati (ixtiyoriy)
+
+    # Referral & Loyalty
+    referral_code = Column(String(100), nullable=True, index=True)
+    referred_by_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    loyalty_points = Column(Integer, nullable=False, default=0)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -232,6 +237,7 @@ class Customer(Base):
     orders = relationship("Order", back_populates="customer")
     debt_history = relationship("DebtHistory", back_populates="customer")
     search_history = relationship("SearchHistory", back_populates="customer")
+    referrer = relationship("Customer", remote_side=[id], backref="referrals")
 
 
 class Seller(Base):

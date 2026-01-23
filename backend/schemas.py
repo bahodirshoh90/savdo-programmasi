@@ -38,6 +38,7 @@ class ProductUpdate(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
@@ -121,6 +122,9 @@ class CustomerBase(BaseModel):
     debt_limit: Optional[float] = Field(None, ge=0)  # Qarz limiti
     debt_due_date: Optional[datetime] = None  # Qarz muddati
     username: Optional[str] = Field(None, max_length=100)  # Login uchun username
+    referral_code: Optional[str] = Field(None, max_length=100)
+    referred_by_id: Optional[int] = None
+    loyalty_points: Optional[int] = Field(0, ge=0)
 
 
 class CustomerCreate(CustomerBase):
@@ -137,6 +141,9 @@ class CustomerUpdate(BaseModel):
     debt_due_date: Optional[datetime] = None  # Qarz muddati
     username: Optional[str] = Field(None, min_length=3, max_length=100)  # Login uchun username
     password: Optional[str] = Field(None, min_length=4)  # Parol (yangilash uchun)
+    referral_code: Optional[str] = Field(None, max_length=100)
+    referred_by_id: Optional[int] = None
+    loyalty_points: Optional[int] = Field(None, ge=0)
 
 
 class CustomerResponse(CustomerBase):

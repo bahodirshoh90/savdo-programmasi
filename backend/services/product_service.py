@@ -333,7 +333,7 @@ class ProductService:
             del update_data['location']
         
         # Handle other optional string fields - convert empty strings to None
-        for field in ['brand', 'supplier', 'barcode', 'image_url']:
+        for field in ['brand', 'category', 'supplier', 'barcode', 'image_url']:
             if field in update_data:
                 if update_data[field] == '':
                     setattr(db_product, field, None)
