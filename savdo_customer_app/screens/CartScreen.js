@@ -362,33 +362,16 @@ export default function CartScreen({ navigation }) {
                     const location = await Location.getCurrentPositionAsync({});
                     const { latitude, longitude } = location.coords;
 
-                    // Reverse geocoding to get address
-                    const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-                    if (geocode && geocode.length > 0) {
-                      const addr = geocode[0];
-                      const addressParts = [
-                        addr.street,
-                        addr.district,
-                        addr.city,
-                        addr.region,
-                        addr.country,
-                      ].filter(Boolean);
-                      const address = addressParts.join(', ');
-
-                      setSelectedLocation({
-                        address: address || `${latitude}, ${longitude}`,
-                        latitude,
-                        longitude,
-                      });
-                      Alert.alert('Muvaffaqiyatli', 'Joylashuv aniqlandi');
-                    } else {
-                      setSelectedLocation({
-                        address: `${latitude}, ${longitude}`,
-                        latitude,
-                        longitude,
-                      });
-                      Alert.alert('Muvaffaqiyatli', 'Joylashuv aniqlandi');
-                    }
+                    // Use coordinates directly (Geocoding API removed in SDK 49)
+                    // User can manually enter address or we can use coordinates
+                    const address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                    
+                    setSelectedLocation({
+                      address: address,
+                      latitude,
+                      longitude,
+                    });
+                    Alert.alert('Muvaffaqiyatli', 'Joylashuv aniqlandi. Iltimos, manzilni qo\'lda kiriting.');
                   } catch (error) {
                     console.error('Error getting location:', error);
                     Alert.alert('Xatolik', 'Joylashuvni aniqlashda xatolik');
@@ -465,6 +448,9 @@ const styles = StyleSheet.create({
   footer: {
     padding: 16,
     borderTopWidth: 1,
+    position: 'relative',
+    zIndex: 10,
+    backgroundColor: Colors.surface,
   },
   paymentMethodContainer: {
     marginBottom: 16,

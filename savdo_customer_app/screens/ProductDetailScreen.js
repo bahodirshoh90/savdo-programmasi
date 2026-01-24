@@ -185,14 +185,14 @@ export default function ProductDetailScreen({ route, navigation }) {
         });
 
         if (response.ok) {
+          const responseData = await response.json().catch(() => ({}));
           setIsFavorite(true);
-          showToast('Sevimlilar ro\'yxatiga qo\'shildi', 'success');
-        } else if (response.status === 404) {
-          // If endpoint not found, show error but don't crash
-          showToast('Sevimlilar funksiyasi hozircha mavjud emas', 'error');
+          showToast(responseData.message || 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
         } else {
           const errorData = await response.json().catch(() => ({ detail: 'Xatolik yuz berdi' }));
-          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik');
+          const errorMessage = errorData.detail || errorData.message || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik';
+          showToast(errorMessage, 'error');
+          console.error('Error adding to favorites:', errorData);
         }
       }
     } catch (error) {
