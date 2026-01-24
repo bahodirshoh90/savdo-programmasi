@@ -20,7 +20,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { WebSocketManager } from '../services/websocket';
+import websocketService from '../services/websocket';
 import Footer from '../components/Footer';
 
 export default function ChatScreen() {
@@ -38,6 +38,7 @@ export default function ChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef(null);
   const wsManagerRef = useRef(null);
+  const unsubscribeRef = useRef(null);
 
   useEffect(() => {
     if (conversationId) {
@@ -48,18 +49,22 @@ export default function ChatScreen() {
     }
     
     return () => {
-      if (wsManagerRef.current) {
-        wsManagerRef.current.disconnect();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
+      // Don't disconnect the shared websocket service, as it might be used by other screens
     };
   }, [conversationId]);
 
-  const setupWebSocket = () => {
+  const setupWebSocket = async () => {
     if (!conversationId) return;
     
-    wsManagerRef.current = new WebSocketManager();
+    // Connect to WebSocket service
+    await websocketService.connect();
+    wsManagerRef.current = websocketService;
     
-    wsManagerRef.current.on('new_chat_message', (data) => {
+    const unsubscribe = websocketService.on('new_chat_message', (data) => {
       if (data.conversation_id === conversationId) {
         // Add new message to list
         setMessages(prev => [...prev, {
@@ -81,7 +86,8 @@ export default function ChatScreen() {
       }
     });
     
-    wsManagerRef.current.connect();
+    // Save unsubscribe function for cleanup
+    unsubscribeRef.current = unsubscribe;
   };
 
   const loadConversation = async () => {
