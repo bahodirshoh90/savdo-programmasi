@@ -457,9 +457,15 @@ async function loadDashboard() {
                 console.log('Online orders count updated:', onlineOrdersCount);
             }
             
-            // Update total orders count (online + offline)
+            // Update total orders count
             if (document.getElementById('total-orders')) {
-                const totalOrdersCount = (stats.online_orders_count || 0) + (stats.offline_orders_count || 0);
+                // Try to get from stats.orders.total_orders first, then calculate from online + offline
+                let totalOrdersCount = 0;
+                if (stats.orders && stats.orders.total_orders !== undefined) {
+                    totalOrdersCount = stats.orders.total_orders;
+                } else {
+                    totalOrdersCount = (stats.online_orders_count || 0) + (stats.offline_orders_count || 0);
+                }
                 document.getElementById('total-orders').textContent = totalOrdersCount;
                 console.log('Total orders count updated:', totalOrdersCount);
             }
