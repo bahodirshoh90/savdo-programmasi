@@ -321,7 +321,7 @@
             <div id="categories" class="page">
                 <div class="page-header">
                     <h1><i class="fas fa-tags"></i> Kategoriyalar</h1>
-                    <button class="btn btn-primary" onclick="showAddCategoryModal()">
+                    <button class="btn btn-primary" onclick="if(typeof showAddCategoryModal === 'function') { showAddCategoryModal(); } else { console.error('showAddCategoryModal is not defined'); }">
                         <i class="fas fa-plus"></i> Yangi Kategoriya
                     </button>
                 </div>

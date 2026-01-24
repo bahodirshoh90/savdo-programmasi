@@ -4556,6 +4556,28 @@ function setupWebSocket() {
                 : `❌ Sotuv #${data.sale_id} rad etildi`;
             showToast(message);
         }
+        // Chat message from customer
+        if (data.type === 'new_chat_message' || data.type === 'chat_message') {
+            const messageData = data.message || data.data || {};
+            const customerName = messageData.sender_name || messageData.customer_name || 'Noma\'lum mijoz';
+            const messageText = messageData.message || '';
+            const conversationId = messageData.conversation_id || data.conversation_id;
+            
+            console.log('[WebSocket] New chat message received:', messageData);
+            
+            // Show toast notification
+            const toastMessage = `💬 ${customerName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
+            showToast(toastMessage, 'info', 10000);
+            
+            // Refresh conversations page if active
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'conversations' || activePage === 'chat') {
+                if (typeof loadConversations === 'function') {
+                    loadConversations();
+                }
+            }
+        }
+        
         // Mijozdan yordam so'rovi
         if (data.type === 'help_request') {
             const helpData = data.data || {};
@@ -6046,8 +6068,10 @@ function showAddCategoryModal() {
     document.getElementById('category-modal').style.display = 'block';
 }
 
-// Make function globally available
-window.showAddCategoryModal = showAddCategoryModal;
+// Make function globally available immediately
+if (typeof window !== 'undefined') {
+    window.showAddCategoryModal = showAddCategoryModal;
+}
 
 function editCategory(id) {
     const headers = getAuthHeaders();
