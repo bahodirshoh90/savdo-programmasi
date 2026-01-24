@@ -165,6 +165,10 @@ export default function ProductDetailScreen({ route, navigation }) {
         if (response.ok) {
           setIsFavorite(false);
           showToast('Sevimlilar ro\'yxatidan olib tashlandi', 'success');
+        } else if (response.status === 404) {
+          // If not found, just update local state
+          setIsFavorite(false);
+          showToast('Sevimlilar ro\'yxatidan olib tashlandi', 'success');
         } else {
           const errorData = await response.json().catch(() => ({ detail: 'Xatolik yuz berdi' }));
           throw new Error(errorData.detail || 'Sevimlilar ro\'yxatidan olib tashlashda xatolik');
@@ -183,6 +187,9 @@ export default function ProductDetailScreen({ route, navigation }) {
         if (response.ok) {
           setIsFavorite(true);
           showToast('Sevimlilar ro\'yxatiga qo\'shildi', 'success');
+        } else if (response.status === 404) {
+          // If endpoint not found, show error but don't crash
+          showToast('Sevimlilar funksiyasi hozircha mavjud emas', 'error');
         } else {
           const errorData = await response.json().catch(() => ({ detail: 'Xatolik yuz berdi' }));
           throw new Error(errorData.detail || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik');

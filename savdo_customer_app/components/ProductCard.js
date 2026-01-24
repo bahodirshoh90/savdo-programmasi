@@ -291,6 +291,9 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   addButton: {
     flex: 1,
@@ -298,17 +301,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     gap: 6,
+    minHeight: 44,
   },
   addButtonDisabled: {
     backgroundColor: Colors.border,
   },
   addButtonText: {
     color: Colors.surface,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   addButtonTextDisabled: {
     color: Colors.textLight,
@@ -366,30 +372,37 @@ const styles = StyleSheet.create({
   cartControlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     flex: 1,
+    width: '100%',
   },
   quantityControlButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.borderLight,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
   },
   quantityControlButtonDisabled: {
     backgroundColor: Colors.border,
     opacity: 0.5,
   },
   quantityControlText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: Colors.primary,
+    lineHeight: 22,
   },
   quantityControlTextDisabled: {
     color: Colors.textLight,
   },
   addButtonWithControls: {
     flex: 1,
+    minWidth: 80,
+    maxWidth: 120,
   },
 });

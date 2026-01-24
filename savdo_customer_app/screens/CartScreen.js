@@ -238,7 +238,7 @@ export default function CartScreen({ navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView 
         style={styles.scrollView} 
-        contentContainerStyle={[styles.content, { paddingBottom: 20 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 300 }]}
       >
         {cartItems.map((item) => (
           <CartItem

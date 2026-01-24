@@ -4610,11 +4610,20 @@ def get_favorites(
     from sqlalchemy.orm import joinedload
     products = []
     for fav in favorites:
-        product = db.query(Product).options(
-            joinedload(Product.sale_items)
-        ).filter(Product.id == fav.product_id).first()
-        if product:
-            products.append(ProductService.product_to_response(product))
+        try:
+            product = db.query(Product).options(
+                joinedload(Product.sale_items)
+            ).filter(Product.id == fav.product_id).first()
+            if product:
+                try:
+                    product_response = ProductService.product_to_response(product)
+                    products.append(product_response)
+                except Exception as e:
+                    print(f"Error converting product {fav.product_id} to response: {e}")
+                    continue
+        except Exception as e:
+            print(f"Error loading favorite product {fav.product_id}: {e}")
+            continue
     
     return {
         "total": len(products),
