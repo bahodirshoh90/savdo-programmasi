@@ -11,9 +11,11 @@ import {
   Alert,
 } from 'react-native';
 import Colors from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { getOrder } from '../services/orders';
 import OrderTrackingStepper from '../components/OrderTrackingStepper';
 import websocketService from '../services/websocket';
+import Footer from '../components/Footer';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -104,7 +106,8 @@ export default function OrderDetailScreen({ route }) {
     : null;
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Order Tracking Stepper */}
       <OrderTrackingStepper
         currentStatus={order.status}
@@ -163,7 +166,9 @@ export default function OrderDetailScreen({ route }) {
           </Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+      <Footer currentScreen="orders" />
+    </View>
   );
 }
 
@@ -171,6 +176,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,

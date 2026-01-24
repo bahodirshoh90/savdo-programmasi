@@ -76,6 +76,24 @@ class Permission(Base):
     roles = relationship("Role", secondary=role_permission, back_populates="permissions")
 
 
+class Category(Base):
+    """Product Category model"""
+    __tablename__ = "categories"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    icon = Column(String(100), nullable=True)  # Icon name for UI
+    display_order = Column(Integer, nullable=False, default=0)  # For sorting
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    products = relationship("Product", back_populates="category_obj")
+
+
 class Product(Base):
     """Product model"""
     __tablename__ = "products"
@@ -87,7 +105,8 @@ class Product(Base):
     
     # Brend va yetkazib beruvchi
     brand = Column(String(100), nullable=True, index=True)  # Brend nomi
-    category = Column(String(100), nullable=True, index=True)  # Kategoriya
+    category = Column(String(100), nullable=True, index=True)  # Kategoriya (legacy - for backward compatibility)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)  # New category reference
     supplier = Column(String(200), nullable=True)  # Kimdan kelgan (yetkazib beruvchi)
     received_date = Column(DateTime(timezone=True), nullable=True)  # Qachon kelgan
     
@@ -201,6 +220,48 @@ class Product(Base):
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     favorited_by = relationship("Favorite", back_populates="product")
     reviews = relationship("ProductReview", back_populates="product", cascade="all, delete-orphan")
+    variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+    category_obj = relationship("Category", back_populates="products")
+
+
+class ProductImage(Base):
+    """Product images (multiple images per product)"""
+    __tablename__ = "product_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    image_url = Column(String(500), nullable=False)
+    display_order = Column(Integer, nullable=False, default=0)  # Order for display
+    is_primary = Column(Boolean, nullable=False, default=False)  # Primary image flag
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    product = relationship("Product", back_populates="images")
+
+
+class ProductReview(Base):
+    """Product reviews and ratings"""
+    __tablename__ = "product_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+    customer_name = Column(String(200), nullable=False)  # Cached name for display
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    comment = Column(Text, nullable=True)
+    is_verified_purchase = Column(Boolean, nullable=False, default=False)
+    helpful_count = Column(Integer, nullable=False, default=0)
+    is_approved = Column(Boolean, nullable=False, default=True)  # Admin approval
+    is_deleted = Column(Boolean, nullable=False, default=False)  # Soft delete
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    product = relationship("Product", back_populates="reviews")
 
 
 class Customer(Base):
@@ -232,6 +293,26 @@ class Customer(Base):
     orders = relationship("Order", back_populates="customer")
     debt_history = relationship("DebtHistory", back_populates="customer")
     search_history = relationship("SearchHistory", back_populates="customer")
+    device_tokens = relationship("CustomerDeviceToken", back_populates="customer", cascade="all, delete-orphan")
+    # Referral system relationships
+    referals_sent = relationship(
+        "Referal",
+        foreign_keys="Referal.referrer_id",
+        back_populates="referrer",
+        cascade="all, delete-orphan",
+    )
+    referals_received = relationship(
+        "Referal",
+        foreign_keys="Referal.referred_id",
+        back_populates="referred",
+    )
+    # Loyalty program relationship (one account per customer)
+    loyalty_points = relationship(
+        "LoyaltyPoint",
+        back_populates="customer",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Seller(Base):
@@ -336,6 +417,11 @@ class Order(Base):
     # Offline support
     is_offline = Column(Boolean, nullable=False, default=False)
     synced_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Delivery location (for map selection)
+    delivery_address = Column(String(500), nullable=True)  # Text address
+    delivery_latitude = Column(Float, nullable=True)  # GPS latitude
+    delivery_longitude = Column(Float, nullable=True)  # GPS longitude
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -632,4 +718,165 @@ class OtpCode(Base):
     __table_args__ = (
         {'sqlite_autoincrement': True},
     )
+
+
+class CustomerDeviceToken(Base):
+    """Device token for push notifications (Expo Push Token)"""
+    __tablename__ = "customer_device_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    token = Column(String(500), nullable=False, unique=True, index=True)  # Expo push token
+    device_id = Column(String(200), nullable=True)  # Device identifier (optional)
+    platform = Column(String(50), nullable=True)  # "ios", "android", "web"
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    customer = relationship("Customer", back_populates="device_tokens")
+
+
+class SearchHistory(Base):
+    """Search history for customers"""
+    __tablename__ = "search_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+    search_query = Column(String(500), nullable=False)
+    result_count = Column(Integer, nullable=True)  # Number of results found
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    customer = relationship("Customer", back_populates="search_history")
+
+
+class Conversation(Base):
+    """Chat conversation between customer and admin"""
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    seller_id = Column(Integer, ForeignKey("sellers.id"), nullable=True, index=True)  # Admin/seller handling the conversation
+    subject = Column(String(200), nullable=True)  # Conversation subject/title
+    status = Column(String(20), nullable=False, default="open")  # open, closed, resolved
+    is_customer_archived = Column(Boolean, nullable=False, default=False)
+    is_admin_archived = Column(Boolean, nullable=False, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_message_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    
+    # Relationships
+    customer = relationship("Customer")
+    seller = relationship("Seller")
+    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+
+
+class ChatMessage(Base):
+    """Individual chat message in a conversation"""
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    sender_type = Column(String(20), nullable=False)  # "customer" or "admin"
+    sender_id = Column(Integer, nullable=False)  # customer_id or seller_id depending on sender_type
+    sender_name = Column(String(200), nullable=False)  # Cached sender name for display
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+
+
+class Referal(Base):
+    """Referal/Invite system model"""
+    __tablename__ = "referals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    referrer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)  # Who invited
+    referred_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)  # Who was invited (null if not registered yet)
+    referal_code = Column(String(20), nullable=False, unique=True, index=True)  # Unique referal code
+    phone = Column(String(20), nullable=True)  # Phone number of invited person (if not registered yet)
+    status = Column(String(20), nullable=False, default="pending")  # pending, registered, completed
+    bonus_given = Column(Boolean, nullable=False, default=False)  # Whether bonus was given to referrer
+    bonus_amount = Column(Float, nullable=True, default=0)  # Bonus amount given
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    referrer = relationship("Customer", foreign_keys=[referrer_id], back_populates="referals_sent")
+    referred = relationship("Customer", foreign_keys=[referred_id], back_populates="referals_received")
+
+
+class LoyaltyPoint(Base):
+    """Loyalty points/bonus system model"""
+    __tablename__ = "loyalty_points"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    points = Column(Integer, nullable=False, default=0)  # Current points balance
+    total_earned = Column(Integer, nullable=False, default=0)  # Total points ever earned
+    total_spent = Column(Integer, nullable=False, default=0)  # Total points ever spent
+    vip_level = Column(String(20), nullable=False, default="bronze")  # bronze, silver, gold, platinum
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    customer = relationship("Customer", back_populates="loyalty_points")
+    transactions = relationship("LoyaltyTransaction", back_populates="loyalty_account", cascade="all, delete-orphan")
+
+
+class LoyaltyTransaction(Base):
+    """Loyalty points transaction history"""
+    __tablename__ = "loyalty_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    loyalty_point_id = Column(Integer, ForeignKey("loyalty_points.id"), nullable=False, index=True)
+    transaction_type = Column(String(20), nullable=False)  # earned, spent, expired, bonus
+    points = Column(Integer, nullable=False)  # Positive for earned, negative for spent
+    description = Column(String(500), nullable=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)  # Related order if applicable
+    referal_id = Column(Integer, ForeignKey("referals.id"), nullable=True)  # Related referal if applicable
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # When points expire (if applicable)
+    
+    # Relationships
+    loyalty_account = relationship("LoyaltyPoint", back_populates="transactions")
+    order = relationship("Order")
+    referal = relationship("Referal")
+
+
+class ProductVariant(Base):
+    """Product variants (size, color, etc.)"""
+    __tablename__ = "product_variants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    variant_type = Column(String(50), nullable=False)  # size, color, material, etc.
+    variant_value = Column(String(100), nullable=False)  # XL, Red, Cotton, etc.
+    sku = Column(String(100), nullable=True, unique=True)  # Stock Keeping Unit
+    price_modifier = Column(Float, nullable=True, default=0)  # Price difference from base product
+    stock_quantity = Column(Integer, nullable=True)  # Stock for this variant
+    is_default = Column(Boolean, nullable=False, default=False)  # Is this the default variant?
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    product = relationship("Product", back_populates="variants")
 

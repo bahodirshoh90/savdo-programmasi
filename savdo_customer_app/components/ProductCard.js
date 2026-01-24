@@ -1,249 +1,395 @@
 /**
- * Product Card Component for Customer App
+ * Product Card Component - Optimized with animations and image optimization
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
-import API_CONFIG from '../config/api';
+import AnimatedView from './AnimatedView';
+import OptimizedImage from './OptimizedImage';
+import AnimatedButton from './AnimatedButton';
 
-export default function ProductCard({ product, onPress, onAdd, quantity = 0, style, onCompare = null, isInCompare = false }) {
-  if (!product) return null;
-
-  const displayPrice = product.retail_price || product.regular_price || 0;
+export default function ProductCard({
+  product,
+  onPress,
+  onAddToCart,
+  onCompare,
+  onFavorite,
+  isInCompare = false,
+  isFavorite = false,
+  quantity = 0,
+  index = 0,
+}) {
+  const price = product.retail_price || product.regular_price || 0;
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
-  const isInCart = quantity > 0;
-
-  const getImageUrl = () => {
-    if (!product.image_url) return null;
-    
-    if (product.image_url.startsWith('http')) {
-      return product.image_url.replace('http://', 'https://');
-    }
-    
-    let baseUrl = API_CONFIG.BASE_URL;
-    if (baseUrl.endsWith('/api')) {
-      baseUrl = baseUrl.replace('/api', '');
-    }
-    
-    const imagePath = product.image_url.startsWith('/') ? product.image_url : `/${product.image_url}`;
-    return `${baseUrl}${imagePath}`.replace('http://', 'https://');
-  };
-
-  const imageUrl = getImageUrl();
 
   return (
-    <View style={[styles.card, isInCart && styles.cardInCart, isOutOfStock && styles.cardOutOfStock, style]}>
-      {isInCart && (
-        <View style={styles.quantityBadge}>
-          <Text style={styles.quantityBadgeText}>{quantity}</Text>
-        </View>
-      )}
-      
-      {isOutOfStock && (
-        <View style={styles.outOfStockBadge}>
-          <Text style={styles.outOfStockBadgeText}>Yo'q</Text>
-        </View>
-      )}
-
+    <AnimatedView
+      animationType="slideUp"
+      delay={index * 50}
+      duration={300}
+      style={styles.container}
+    >
       <TouchableOpacity
+        style={styles.card}
         onPress={() => onPress && onPress(product)}
         activeOpacity={0.7}
       >
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>📦</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={2}>
-          {product.name}
-        </Text>
-
-        <Text style={styles.price}>
-          {displayPrice.toLocaleString('uz-UZ')} so'm
-        </Text>
-
-        {product.total_pieces !== undefined && product.total_pieces !== null && (
-          <Text style={[styles.stockInfo, isOutOfStock && styles.stockInfoOutOfStock]}>
-            {isOutOfStock ? 'Omborda yo\'q' : `Omborda: ${product.total_pieces} dona`}
-          </Text>
-        )}
-
-        {/* Quantity Controls and Add Button */}
-        <View style={styles.actionsContainer}>
-          {isInCart ? (
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => onAdd && onAdd(product, -1)}
-              >
-                <Text style={styles.quantityButtonText}>-</Text>
-              </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => onAdd && onAdd(product, 1)}
-                disabled={isOutOfStock}
-              >
-                <Text style={styles.quantityButtonText}>+</Text>
-              </TouchableOpacity>
+        {/* Product Image */}
+        <View style={styles.imageContainer}>
+          <OptimizedImage
+            source={product.image_url}
+            style={styles.image}
+            resizeMode="cover"
+            placeholder={
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={40} color={Colors.textLight} />
+              </View>
+            }
+          />
+          {isOutOfStock && (
+            <View style={styles.outOfStockOverlay}>
+              <Text style={styles.outOfStockText}>Omborda yo'q</Text>
             </View>
-          ) : (
-            onAdd && (
-              <TouchableOpacity
-                style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
-                onPress={() => !isOutOfStock && onAdd(product, 1)}
-                disabled={isOutOfStock}
-              >
-                <Text style={[styles.addButtonText, isOutOfStock && styles.addButtonTextDisabled]}>
-                  {isOutOfStock ? 'Yo\'q' : 'Savatchaga'}
-                </Text>
-              </TouchableOpacity>
-            )
+          )}
+          {isInCompare && (
+            <View style={styles.compareBadge}>
+              <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+            </View>
+          )}
+          {/* Favorite Button */}
+          {onFavorite && (
+            <TouchableOpacity
+              style={styles.favoriteButton}
+              onPress={() => {
+                onFavorite(product);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isFavorite ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isFavorite ? '#ff3b30' : Colors.surface}
+              />
+            </TouchableOpacity>
+          )}
+          {/* Quantity Badge */}
+          {quantity > 0 && (
+            <View style={styles.quantityBadge}>
+              <Text style={styles.quantityBadgeText}>{quantity}</Text>
+            </View>
           )}
         </View>
-      </View>
-    </View>
+
+        {/* Product Info */}
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={2}>
+            {product.name}
+          </Text>
+          
+          {product.category && (
+            <Text style={styles.category} numberOfLines={1}>
+              {product.category}
+            </Text>
+          )}
+
+          <Text style={styles.price}>
+            {price.toLocaleString('uz-UZ')} so'm
+          </Text>
+
+          {product.total_pieces !== undefined && product.total_pieces !== null && (
+            <Text style={[styles.stock, isOutOfStock && styles.stockOut]}>
+              {isOutOfStock ? 'Omborda yo\'q' : `Omborda: ${product.total_pieces} dona`}
+            </Text>
+          )}
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            {quantity > 0 ? (
+              <View style={styles.cartControlsContainer}>
+                <TouchableOpacity
+                  style={[styles.quantityControlButton, (isOutOfStock || quantity <= 1) && styles.quantityControlButtonDisabled]}
+                  onPress={() => {
+                    if (onAddToCart && quantity > 1) {
+                      onAddToCart(product, -1);
+                    }
+                  }}
+                  disabled={isOutOfStock || quantity <= 1}
+                >
+                  <Text style={[styles.quantityControlText, (isOutOfStock || quantity <= 1) && styles.quantityControlTextDisabled]}>-</Text>
+                </TouchableOpacity>
+                <AnimatedButton
+                  onPress={() => {
+                    // Just show quantity, no action needed
+                  }}
+                  disabled={true}
+                  style={[
+                    styles.addButton,
+                    styles.addButtonWithControls,
+                    isOutOfStock && styles.addButtonDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.addButtonText,
+                      isOutOfStock && styles.addButtonTextDisabled,
+                    ]}
+                  >
+                    {quantity}
+                  </Text>
+                </AnimatedButton>
+                <TouchableOpacity
+                  style={[styles.quantityControlButton, isOutOfStock && styles.quantityControlButtonDisabled]}
+                  onPress={() => {
+                    if (onAddToCart) {
+                      onAddToCart(product, 1);
+                    }
+                  }}
+                  disabled={isOutOfStock}
+                >
+                  <Text style={[styles.quantityControlText, isOutOfStock && styles.quantityControlTextDisabled]}>+</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <AnimatedButton
+                onPress={() => {
+                  if (onAddToCart) {
+                    onAddToCart(product, 1);
+                  }
+                }}
+                disabled={isOutOfStock}
+                style={[
+                  styles.addButton,
+                  isOutOfStock && styles.addButtonDisabled,
+                ]}
+                haptic={true}
+              >
+                <Ionicons
+                  name={isOutOfStock ? 'close-circle' : 'cart'}
+                  size={18}
+                  color={isOutOfStock ? Colors.textLight : Colors.surface}
+                />
+                <Text
+                  style={[
+                    styles.addButtonText,
+                    isOutOfStock && styles.addButtonTextDisabled,
+                  ]}
+                >
+                  {isOutOfStock ? 'Yo\'q' : 'Savatchaga'}
+                </Text>
+              </AnimatedButton>
+            )}
+
+            {onCompare && (
+              <AnimatedButton
+                onPress={() => onCompare(product)}
+                style={[
+                  styles.compareButton,
+                  isInCompare && styles.compareButtonActive,
+                ]}
+                haptic={true}
+              >
+                <Ionicons
+                  name={isInCompare ? 'checkmark-circle' : 'git-compare-outline'}
+                  size={18}
+                  color={isInCompare ? Colors.primary : Colors.text}
+                />
+              </AnimatedButton>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </AnimatedView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    marginBottom: 12,
+  },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 180,
     position: 'relative',
-  },
-  cardInCart: {
-    borderColor: Colors.primary,
-    borderWidth: 2,
-  },
-  cardOutOfStock: {
-    opacity: 0.6,
-  },
-  quantityBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: Colors.primary,
-    borderRadius: 20,
-    minWidth: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    paddingHorizontal: 6,
-  },
-  quantityBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  outOfStockBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: Colors.danger,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    zIndex: 10,
-  },
-  outOfStockBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
+    backgroundColor: Colors.background,
   },
   image: {
     width: '100%',
-    height: 150,
-    backgroundColor: Colors.borderLight,
+    height: '100%',
   },
   imagePlaceholder: {
     width: '100%',
-    height: 150,
-    backgroundColor: Colors.borderLight,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  outOfStockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imagePlaceholderText: {
-    fontSize: 48,
+  outOfStockText: {
+    color: Colors.surface,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  content: {
+  compareBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 4,
+  },
+  info: {
     padding: 12,
   },
   name: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textDark,
+    color: Colors.text,
+    marginBottom: 4,
+    minHeight: 40,
+  },
+  category: {
+    fontSize: 12,
+    color: Colors.textLight,
     marginBottom: 8,
   },
   price: {
     fontSize: 18,
     fontWeight: 'bold',
     color: Colors.primary,
-    marginBottom: 4,
-  },
-  stockInfo: {
-    fontSize: 12,
-    color: Colors.success,
     marginBottom: 8,
   },
-  stockInfoOutOfStock: {
+  stock: {
+    fontSize: 12,
+    color: Colors.success,
+    marginBottom: 12,
+  },
+  stockOut: {
     color: Colors.danger,
   },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   addButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.primary,
     paddingVertical: 10,
     borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 4,
+    gap: 6,
   },
   addButtonDisabled: {
     backgroundColor: Colors.border,
   },
   addButtonText: {
     color: Colors.surface,
-    fontWeight: '600',
     fontSize: 14,
+    fontWeight: '600',
   },
   addButtonTextDisabled: {
     color: Colors.textLight,
   },
-  actionsContainer: {
-    marginTop: 8,
-  },
-  quantityControls: {
-    flexDirection: 'row',
+  compareButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  quantityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  compareButtonActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quantityBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
     backgroundColor: Colors.primary,
-    justifyContent: 'center',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
-  quantityButtonText: {
+  quantityBadgeText: {
     color: Colors.surface,
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: 'bold',
   },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textDark,
-    minWidth: 30,
-    textAlign: 'center',
+  addButtonWithQuantity: {
+    backgroundColor: Colors.success || '#4CAF50',
+  },
+  cartControlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  quantityControlButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityControlButtonDisabled: {
+    backgroundColor: Colors.border,
+    opacity: 0.5,
+  },
+  quantityControlText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  quantityControlTextDisabled: {
+    color: Colors.textLight,
+  },
+  addButtonWithControls: {
+    flex: 1,
   },
 });

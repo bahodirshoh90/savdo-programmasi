@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
+import Footer from '../components/Footer';
 
 export default function FavoritesScreen({ navigation }) {
   const [favorites, setFavorites] = useState([]);
@@ -36,7 +37,11 @@ export default function FavoritesScreen({ navigation }) {
         return;
       }
 
-      const response = await fetch(`${API_ENDPOINTS.BASE_URL}/favorites`, {
+      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
+        ? API_ENDPOINTS.BASE_URL 
+        : `${API_ENDPOINTS.BASE_URL}/api`;
+      
+      const response = await fetch(`${baseUrl}/favorites`, {
         headers: {
           'X-Customer-ID': customerId,
         },
@@ -76,8 +81,12 @@ export default function FavoritesScreen({ navigation }) {
 
       if (isFavorite) {
         // Remove from favorites
+        const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
+          ? API_ENDPOINTS.BASE_URL 
+          : `${API_ENDPOINTS.BASE_URL}/api`;
+        
         const response = await fetch(
-          `${API_ENDPOINTS.BASE_URL}/favorites/${product.id}`,
+          `${baseUrl}/favorites/${product.id}`,
           {
             method: 'DELETE',
             headers: {
@@ -87,14 +96,19 @@ export default function FavoritesScreen({ navigation }) {
         );
 
         if (response.ok) {
-          setFavorites(favorites.filter(fav => fav.id !== product.id));
-          setFavoriteStatus({ ...favoriteStatus, [product.id]: false });
+          setFavorites(prev => prev.filter(fav => fav.id !== product.id));
+          setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
         } else {
-          throw new Error('Sevimlilar ro\'yxatidan olib tashlashda xatolik');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatidan olib tashlashda xatolik');
         }
       } else {
         // Add to favorites
-        const response = await fetch(`${API_ENDPOINTS.BASE_URL}/favorites`, {
+        const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
+          ? API_ENDPOINTS.BASE_URL 
+          : `${API_ENDPOINTS.BASE_URL}/api`;
+        
+        const response = await fetch(`${baseUrl}/favorites`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -108,9 +122,10 @@ export default function FavoritesScreen({ navigation }) {
           if (!favorites.find(fav => fav.id === product.id)) {
             setFavorites([product, ...favorites]);
           }
-          setFavoriteStatus({ ...favoriteStatus, [product.id]: true });
+          setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
         } else {
-          throw new Error('Sevimlilar ro\'yxatiga qo\'shishda xatolik');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik');
         }
       }
     } catch (error) {
@@ -119,32 +134,41 @@ export default function FavoritesScreen({ navigation }) {
     }
   };
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('uz-UZ', {
-      style: 'currency',
-      currency: 'UZS',
-      minimumFractionDigits: 0,
-    }).format(price);
+
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl || !imageUrl.trim()) return null;
+    
+    if (imageUrl.startsWith('http')) {
+      return imageUrl.replace('http://', 'https://');
+    }
+    
+    const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
+      ? API_ENDPOINTS.BASE_URL.replace('/api', '') 
+      : API_ENDPOINTS.BASE_URL.replace('/api', '');
+    
+    const imagePath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+    return `${baseUrl}${imagePath}`.replace('http://', 'https://');
   };
 
   const renderProduct = ({ item }) => {
     const isFavorite = favoriteStatus[item.id] || false;
-    const hasImage = item.image_url && item.image_url.trim() !== '';
+    const imageUrl = getImageUrl(item.image_url);
+    const price = item.retail_price || item.regular_price || item.wholesale_price || 0;
+    const isOutOfStock = item.total_pieces !== undefined && item.total_pieces !== null && item.total_pieces <= 0;
 
     return (
       <TouchableOpacity
         style={styles.productCard}
-        onPress={() => navigation.navigate('ProductDetail', { product: item })}
+        onPress={() => navigation.navigate('ProductDetail', { product: item, productId: item.id })}
         activeOpacity={0.7}
       >
-        {hasImage && (
+        {imageUrl ? (
           <Image
-            source={{ uri: item.image_url }}
+            source={{ uri: imageUrl }}
             style={styles.productImage}
             resizeMode="cover"
           />
-        )}
-        {!hasImage && (
+        ) : (
           <View style={styles.productImagePlaceholder}>
             <Ionicons name="cube-outline" size={40} color={Colors.textLight} />
           </View>
@@ -163,7 +187,7 @@ export default function FavoritesScreen({ navigation }) {
 
           <View style={styles.productFooter}>
             <Text style={styles.productPrice}>
-              {formatPrice(item.package_price)}
+              {price.toLocaleString('uz-UZ')} so'm
             </Text>
             <TouchableOpacity
               onPress={(e) => {
@@ -180,7 +204,7 @@ export default function FavoritesScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {item.stock_packages === 0 && item.stock_pieces === 0 && (
+          {isOutOfStock && (
             <View style={styles.outOfStockBadge}>
               <Text style={styles.outOfStockText}>Tugagan</Text>
             </View>
@@ -201,18 +225,21 @@ export default function FavoritesScreen({ navigation }) {
 
   if (favorites.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="heart-outline" size={80} color={Colors.textLight} />
-        <Text style={styles.emptyTitle}>Sevimli mahsulotlar yo'q</Text>
-        <Text style={styles.emptyText}>
-          Mahsulotlar sahifasidan sevimli mahsulotlarni qo'shing
-        </Text>
-        <TouchableOpacity
-          style={styles.browseButton}
-          onPress={() => navigation.navigate('Products')}
-        >
-          <Text style={styles.browseButtonText}>Mahsulotlarni ko'rish</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="heart-outline" size={80} color={Colors.textLight} />
+          <Text style={styles.emptyTitle}>Sevimli mahsulotlar yo'q</Text>
+          <Text style={styles.emptyText}>
+            Mahsulotlar sahifasidan sevimli mahsulotlarni qo'shing
+          </Text>
+          <TouchableOpacity
+            style={styles.browseButton}
+            onPress={() => navigation.navigate('Products')}
+          >
+            <Text style={styles.browseButtonText}>Mahsulotlarni ko'rish</Text>
+          </TouchableOpacity>
+        </View>
+        <Footer currentScreen="favorites" />
       </View>
     );
   }
@@ -244,6 +271,7 @@ export default function FavoritesScreen({ navigation }) {
           />
         }
       />
+      <Footer currentScreen="favorites" />
     </View>
   );
 }

@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import StarRating from '../components/StarRating';
+import Footer from '../components/Footer';
 
 export default function CompareProductsScreen({ route, navigation }) {
   const { productIds } = route.params || { productIds: [] };
@@ -120,14 +122,15 @@ export default function CompareProductsScreen({ route, navigation }) {
   ];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mahsulotlarni Taqqoslash</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Mahsulotlarni Taqqoslash</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
       {/* Products Grid */}
       <View style={styles.productsContainer}>
@@ -202,7 +205,9 @@ export default function CompareProductsScreen({ route, navigation }) {
           <Text style={styles.addProductText}>Yana mahsulot qo'shish</Text>
         </TouchableOpacity>
       )}
-    </ScrollView>
+      </ScrollView>
+      <Footer currentScreen="products" />
+    </View>
   );
 }
 

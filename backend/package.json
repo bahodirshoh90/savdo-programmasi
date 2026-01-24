@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "expo-location": "~19.0.8"
+  }
+}

@@ -21,7 +21,7 @@ import os
 from utils import get_uzbekistan_now, to_uzbekistan_time
 
 from database import SessionLocal, engine, init_db
-from models import Base, Product, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag, OtpCode
+from models import Base, Product, ProductImage, ProductReview, Seller, Sale, SaleItem, Order, Customer, Banner, HelpRequest, Favorite, PriceAlert, CustomerProductTag, OtpCode, CustomerDeviceToken, Conversation, ChatMessage, SearchHistory, Referal, LoyaltyPoint, LoyaltyTransaction, ProductVariant, Category, Role
 from schemas import (
     ProductCreate, ProductUpdate, ProductResponse,
     ProductImageResponse, ProductImageCreate,
@@ -33,15 +33,25 @@ from schemas import (
     LocationUpdate, RoleCreate, RoleUpdate, RoleResponse, PermissionResponse,
     DebtHistoryResponse, LoginRequest, LoginResponse,
     SendOtpRequest, VerifyOtpRequest, SocialLoginRequest, ScanCodeRequest,
+    DeviceTokenRequest, SendNotificationRequest,
+    ChatMessageCreate, ChatMessageResponse, ConversationResponse,
+    ConversationListResponse, ChatMessageListResponse,
+    SearchHistoryCreate, SearchHistoryResponse,
     SettingsUpdate, SettingsResponse,
     BannerCreate, BannerUpdate, BannerResponse,
     PriceAlertCreate, PriceAlertUpdate, PriceAlertResponse,
     ProductTagCreate, ProductTagResponse,
+    ReferalCreate, ReferalResponse, ReferalListResponse,
+    LoyaltyPointResponse, LoyaltyTransactionResponse, LoyaltyTransactionCreate,
+    ProductVariantCreate, ProductVariantUpdate, ProductVariantResponse,
+    PaymentInitiateRequest, PaymentInitiateResponse, PaymentVerifyRequest, PaymentVerifyResponse,
+    CategoryCreate, CategoryUpdate, CategoryResponse,
 )
 from services import (
     ProductService, CustomerService, SaleService,
     SellerService, OrderService, CalculationService,
-    PDFService, ExcelService, BarcodeService, RoleService
+    PDFService, ExcelService, BarcodeService, RoleService,
+    NotificationService
 )
 from services.settings_service import SettingsService
 from services.audit_service import AuditService
@@ -49,6 +59,7 @@ from services.debt_service import DebtService
 from services.auth_service import AuthService
 from websocket_manager import ConnectionManager
 from auth import PERMISSIONS, require_permission, get_seller_from_header
+from customer_auth import get_customer_from_header
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -57,64 +68,144 @@ Base.metadata.create_all(bind=engine)
 try:
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('settings')]
     
-    with engine.connect() as conn:
+    # Use begin() for proper transaction handling in SQLAlchemy 2.0
+    with engine.begin() as conn:
+        # Check if settings table exists
+        try:
+            columns = [col['name'] for col in inspector.get_columns('settings')]
+        except Exception:
+            columns = []
+        
         if 'work_start_time' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_start_time VARCHAR(10)"))
             conn.execute(text("UPDATE settings SET work_start_time = '09:00' WHERE work_start_time IS NULL"))
-            conn.commit()
         
         if 'work_end_time' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_end_time VARCHAR(10)"))
             conn.execute(text("UPDATE settings SET work_end_time = '18:00' WHERE work_end_time IS NULL"))
-            conn.commit()
         
         if 'work_days' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
-            conn.commit()
         
         # Migrate sellers table to add image_url column if it doesn't exist
-        sellers_columns = [col['name'] for col in inspector.get_columns('sellers')]
+        try:
+            sellers_columns = [col['name'] for col in inspector.get_columns('sellers')]
+        except Exception:
+            sellers_columns = []
         if 'image_url' not in sellers_columns:
             conn.execute(text("ALTER TABLE sellers ADD COLUMN image_url VARCHAR(500)"))
-            conn.commit()
         
         # Migrate customers table to add username and password_hash columns if they don't exist
         try:
-            customers_columns = [col['name'] for col in inspector.get_columns('customers')]
+            try:
+                customers_columns = [col['name'] for col in inspector.get_columns('customers')]
+            except Exception:
+                customers_columns = []
+            
+            # Add username column (without UNIQUE constraint first, then create index)
             if 'username' not in customers_columns:
-                conn.execute(text("ALTER TABLE customers ADD COLUMN username VARCHAR(100) UNIQUE"))
-                conn.commit()
+                print("Adding username column to customers table...")
+                # SQLite doesn't support adding UNIQUE column directly, so we:
+                # 1. Add column without constraint
+                conn.execute(text("ALTER TABLE customers ADD COLUMN username VARCHAR(100)"))
+                print("✓ Added username column")
+                
+                # 2. Create unique index (allows NULL values, only enforces uniqueness for non-NULL)
+                try:
+                    # Check if index already exists
+                    index_exists = conn.execute(text("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='index' AND name='ix_customers_username'
+                    """)).fetchone()
+                    
+                    if not index_exists:
+                        conn.execute(text("""
+                            CREATE UNIQUE INDEX ix_customers_username 
+                            ON customers(username) 
+                            WHERE username IS NOT NULL
+                        """))
+                        print("✓ Created unique index on username")
+                    else:
+                        print("✓ Unique index on username already exists")
+                except Exception as idx_error:
+                    print(f"Warning: Could not create unique index on username: {idx_error}")
+            
+            # Add password_hash column
             if 'password_hash' not in customers_columns:
+                print("Adding password_hash column to customers table...")
                 conn.execute(text("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255)"))
-                conn.commit()
+                print("✓ Added password_hash column")
         except Exception as e:
             print(f"Warning: Error migrating customers table: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Migrate products table to add category column if it doesn't exist
+        try:
+            try:
+                products_columns = [col['name'] for col in inspector.get_columns('products')]
+            except Exception:
+                products_columns = []
+            if 'category' not in products_columns:
+                print("Adding category column to products table...")
+                conn.execute(text("ALTER TABLE products ADD COLUMN category VARCHAR(100)"))
+                print("✓ Added category column to products table")
+        except Exception as e:
+            print(f"Warning: Error migrating products table (category): {e}")
+            import traceback
+            traceback.print_exc()
         
         # Migrate banners table to add rotation_interval column if it doesn't exist
         try:
-            banners_columns = [col['name'] for col in inspector.get_columns('banners')]
+            try:
+                banners_columns = [col['name'] for col in inspector.get_columns('banners')]
+            except Exception:
+                banners_columns = []
             if 'rotation_interval' not in banners_columns:
                 conn.execute(text("ALTER TABLE banners ADD COLUMN rotation_interval INTEGER NOT NULL DEFAULT 3000"))
-                conn.commit()
                 print("✓ Added rotation_interval column to banners table")
         except Exception as e:
             print(f"Warning: Error migrating banners table: {e}")
-            print(f"Warning: Could not migrate customers table: {e}")
         
         # Migrate products table to add item_number column if it doesn't exist
         try:
-            products_columns = [col['name'] for col in inspector.get_columns('products')]
+            try:
+                products_columns = [col['name'] for col in inspector.get_columns('products')]
+            except Exception:
+                products_columns = []
             if 'item_number' not in products_columns:
                 conn.execute(text("ALTER TABLE products ADD COLUMN item_number VARCHAR(100)"))
-                conn.commit()
                 print("✓ Added item_number column to products table")
         except Exception as e:
-            print(f"Warning: Error migrating products table: {e}")
+            print(f"Warning: Error migrating products table (item_number): {e}")
+        
+        # Migrate products table to add category_id column if it doesn't exist
+        try:
+            try:
+                products_columns = [col['name'] for col in inspector.get_columns('products')]
+            except Exception:
+                products_columns = []
+            if 'category_id' not in products_columns:
+                print("Adding category_id column to products table...")
+                conn.execute(text("ALTER TABLE products ADD COLUMN category_id INTEGER"))
+                # Create index for better performance
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_category_id ON products(category_id)"))
+                except Exception as idx_error:
+                    print(f"Warning: Could not create index on category_id: {idx_error}")
+                print("✓ Added category_id column to products table")
+            else:
+                print("✓ category_id column already exists in products table")
+        except Exception as e:
+            print(f"Warning: Error migrating products table (category_id): {e}")
+            import traceback
+            traceback.print_exc()
 except Exception as e:
     print(f"Warning: Could not migrate database: {e}")
+    import traceback
+    traceback.print_exc()
     # Continue anyway - the code will handle missing columns gracefully
 
 app = FastAPI(title="Inventory & Sales Management API", version="1.0.0")
@@ -171,16 +262,16 @@ is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
 base_origins = [
     "https://uztoysavdo.uz",
     "https://www.uztoysavdo.uz",
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://localhost:8081",
-    "http://localhost:19006",
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8081",
+        "http://localhost:19006",
     "http://127.0.0.1:8081",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
     "http://127.0.0.1:19006",
-    "capacitor://localhost",
-    "ionic://localhost",
+        "capacitor://localhost",
+        "ionic://localhost",
 ]
 
 if allowed_origins_env:
@@ -229,15 +320,241 @@ def get_db():
         db.close()
 
 
+# ==================== CATEGORIES ====================
+
+@app.get("/api/categories", response_model=List[CategoryResponse])
+def get_categories(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Get all categories"""
+    categories = db.query(Category).order_by(Category.display_order, Category.name).offset(skip).limit(limit).all()
+    return categories
+
+
+@app.get("/api/categories/{category_id}", response_model=CategoryResponse)
+def get_category(
+    category_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific category"""
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Kategoriya topilmadi")
+    return category
+
+
+def is_admin_seller(db: Session, seller: Seller) -> bool:
+    """Check if seller is an admin (has admin role or admin permissions)"""
+    if not seller:
+        return False
+    
+    # If seller has role_id, load the role with permissions
+    if seller.role_id:
+        from sqlalchemy.orm import joinedload
+        seller_with_role = db.query(Seller).options(joinedload(Seller.role)).filter(Seller.id == seller.id).first()
+        if seller_with_role and seller_with_role.role:
+            # Check if role name contains "admin", "direktor", or "director"
+            if seller_with_role.role.name:
+                role_name_lower = seller_with_role.role.name.lower()
+                if 'admin' in role_name_lower or 'direktor' in role_name_lower or 'director' in role_name_lower:
+                    return True
+            
+            # Check if seller has any admin permission
+            from auth import has_permission
+            admin_permissions = ["admin.sellers", "admin.roles", "admin.permissions", "admin.settings"]
+            for perm_code in admin_permissions:
+                if has_permission(db, seller_with_role, perm_code):
+                    return True
+    
+    # Fallback: check if seller has role relationship loaded
+    if hasattr(seller, 'role') and seller.role:
+        # Check if role name contains "admin"
+        if seller.role.name:
+            role_name_lower = seller.role.name.lower()
+            if 'admin' in role_name_lower or 'direktor' in role_name_lower or 'director' in role_name_lower:
+                return True
+        
+        # Check if seller has any admin permission
+        from auth import has_permission
+        admin_permissions = ["admin.sellers", "admin.roles", "admin.permissions", "admin.settings"]
+        for perm_code in admin_permissions:
+            if has_permission(db, seller, perm_code):
+                return True
+    
+    # Additional check: if seller can access admin panel (has admin permissions via role)
+    try:
+        from auth import has_permission
+        # Check if seller has any admin permission directly
+        admin_permissions = ["admin.sellers", "admin.roles", "admin.permissions", "admin.settings"]
+        for perm_code in admin_permissions:
+            if has_permission(db, seller, perm_code):
+                return True
+    except Exception as e:
+        print(f"[is_admin_seller] Error checking permissions: {e}")
+    
+    return False
+
+@app.post("/api/categories", response_model=CategoryResponse)
+def create_category(
+    category: CategoryCreate,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Create a new category"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Check if seller has products.create permission OR is an admin
+    from auth import has_permission
+    has_products_create = has_permission(db, seller, "products.create")
+    is_admin = is_admin_seller(db, seller)
+    
+    # Debug logging
+    print(f"[CREATE CATEGORY] Seller ID: {seller.id}, Name: {seller.name}")
+    print(f"[CREATE CATEGORY] Has products.create: {has_products_create}, Is admin: {is_admin}")
+    if seller.role_id:
+        role = db.query(Role).filter(Role.id == seller.role_id).first()
+        if role:
+            print(f"[CREATE CATEGORY] Role: {role.name}")
+            # If role name contains admin, allow access
+            if role.name and ('admin' in role.name.lower() or 'direktor' in role.name.lower() or 'director' in role.name.lower()):
+                print(f"[CREATE CATEGORY] Allowing access based on role name")
+                is_admin = True
+    
+    # Allow if seller has products.create OR is admin OR has admin role
+    if not has_products_create and not is_admin:
+        print(f"[CREATE CATEGORY] Permission denied for seller {seller.id}")
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied: products.create permission or admin access required"
+        )
+    
+    print(f"[CREATE CATEGORY] Permission granted for seller {seller.id}")
+    # Check if category with same name already exists
+    existing = db.query(Category).filter(Category.name == category.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Bu nomdagi kategoriya allaqachon mavjud")
+    
+    db_category = Category(
+        name=category.name,
+        description=category.description,
+        icon=category.icon,
+        display_order=category.display_order or 0
+    )
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    return db_category
+
+
+@app.put("/api/categories/{category_id}", response_model=CategoryResponse)
+def update_category(
+    category_id: int,
+    category: CategoryUpdate,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Update a category"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Check if seller has products.update permission OR is an admin
+    from auth import has_permission
+    has_products_update = has_permission(db, seller, "products.update")
+    is_admin = is_admin_seller(db, seller)
+    
+    if not has_products_update and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied: products.update permission or admin access required"
+        )
+    db_category = db.query(Category).filter(Category.id == category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Kategoriya topilmadi")
+    
+    if category.name is not None:
+        # Check if another category with same name exists
+        existing = db.query(Category).filter(Category.name == category.name, Category.id != category_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Bu nomdagi kategoriya allaqachon mavjud")
+        db_category.name = category.name
+    
+    if category.description is not None:
+        db_category.description = category.description
+    if category.icon is not None:
+        db_category.icon = category.icon
+    if category.display_order is not None:
+        db_category.display_order = category.display_order
+    
+    db_category.updated_at = datetime.now()
+    db.commit()
+    db.refresh(db_category)
+    return db_category
+
+
+@app.delete("/api/categories/{category_id}")
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Delete a category"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Check if seller has products.delete permission OR is an admin
+    from auth import has_permission
+    has_products_delete = has_permission(db, seller, "products.delete")
+    is_admin = is_admin_seller(db, seller)
+    
+    if not has_products_delete and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied: products.delete permission or admin access required"
+        )
+    db_category = db.query(Category).filter(Category.id == category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Kategoriya topilmadi")
+    
+    # Check if category has products
+    product_count = db.query(Product).filter(Product.category_id == category_id).count()
+    if product_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Bu kategoriyada {product_count} ta mahsulot mavjud. Avval mahsulotlarni boshqa kategoriyaga ko'chiring yoki kategoriyani o'chiring."
+        )
+    
+    db.delete(db_category)
+    db.commit()
+    return {"message": "Kategoriya muvaffaqiyatli o'chirildi"}
+
+
 # ==================== PRODUCTS ====================
 
 @app.post("/api/products/upload-image")
 async def upload_product_image_temporary(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    seller: Seller = Depends(require_permission("products.create"))
+    seller: Optional[Seller] = Depends(get_seller_from_header)
 ):
     """Upload product image file (for new products - doesn't require product_id)"""
+    # Check permission but allow if seller is authenticated (even without explicit permission)
+    # This allows image upload before product creation
+    if not seller:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Optional: Check if seller has permission (but don't block if they don't)
+    # The actual product creation will check permission
+    try:
+        from auth import has_permission
+        if not has_permission(db, seller, "products.create"):
+            # Log warning but allow upload (permission will be checked on product creation)
+            print(f"[UPLOAD IMAGE] Warning: Seller {seller.id} doesn't have products.create permission, but allowing upload")
+    except Exception as e:
+        print(f"[UPLOAD IMAGE] Error checking permission: {e}")
+        # Continue anyway - permission will be checked on product creation
     import os
     import uuid
     from pathlib import Path
@@ -267,15 +584,14 @@ async def upload_product_image_temporary(
         uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "products")
         os.makedirs(uploads_dir, exist_ok=True)
         file_path = os.path.join(uploads_dir, unique_filename)
-        
+
         # Save file
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
-        
+
         # Return image URL (without updating product - will be saved when product is created)
         image_url = f"/uploads/products/{unique_filename}"
-        
         return {"url": image_url, "filename": unique_filename, "success": True}
     except Exception as e:
         import traceback
@@ -361,17 +677,19 @@ async def create_product(
         try:
             product_dict = product.model_dump() if hasattr(product, 'model_dump') else product.dict()
             print(f"[CREATE PRODUCT] Received data: {json.dumps(product_dict, indent=2, default=str)}")
+            print(f"[CREATE PRODUCT] Category in received data: '{product_dict.get('category')}'")
+            print(f"[CREATE PRODUCT] Category type in received data: {type(product_dict.get('category'))}")
         except Exception as log_error:
             print(f"[CREATE PRODUCT] Error logging product data: {log_error}")
             import traceback
             traceback.print_exc()
-        
+
         # Validate pieces_per_package before creating
         if product.pieces_per_package is None or product.pieces_per_package <= 0:
             error_msg = f"pieces_per_package 0 dan katta bo'lishi kerak. Olingan qiymat: {product.pieces_per_package}"
             print(f"[CREATE PRODUCT] Validation error: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
-        
+
         # Validate prices are not negative
         if product.cost_price is not None and product.cost_price < 0:
             raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (cost_price)")
@@ -381,52 +699,58 @@ async def create_product(
             raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (retail_price)")
         if product.regular_price is not None and product.regular_price < 0:
             raise HTTPException(status_code=400, detail="Narx manfiy bo'lishi mumkin emas (regular_price)")
-        
+
         print(f"[CREATE PRODUCT] Calling ProductService.create_product...")
+        print(f"[CREATE PRODUCT] Product category before service call: '{product.category}'")
+        print(f"[CREATE PRODUCT] Product category type: {type(product.category)}")
+        print(f"[CREATE PRODUCT] Product category is None: {product.category is None}")
+        print(f"[CREATE PRODUCT] Product category == '': {product.category == ''}")
         created = ProductService.create_product(db, product)
         print(f"[CREATE PRODUCT] Product created with ID: {created.id}")
-        
+        print(f"[CREATE PRODUCT] Product category after creation: '{created.category}'")
+        print(f"[CREATE PRODUCT] Product category after creation is None: {created.category is None}")
+
         # Ensure computed properties are available
         # Refresh to get all database-computed values
         db.refresh(created)
-        
+
         # Calculate computed properties safely
         try:
             total_pieces = created.total_pieces
         except Exception:
             total_pieces = (created.packages_in_stock or 0) * (created.pieces_per_package or 1) + (created.pieces_in_stock or 0)
-        
+
         try:
             total_value = created.total_value
         except Exception:
             avg_price = ((created.wholesale_price or 0.0) + (created.retail_price or 0.0) + (created.regular_price or 0.0)) / 3
             total_value = total_pieces * avg_price
-        
+
         try:
             total_value_cost = created.total_value_cost
         except Exception:
             total_value_cost = total_pieces * (created.cost_price or 0.0)
-        
+
         try:
             total_value_wholesale = created.total_value_wholesale
         except Exception:
             total_value_wholesale = total_pieces * (created.wholesale_price or 0.0)
-        
+
         try:
             last_sold_date = created.last_sold_date
         except Exception:
             last_sold_date = None
-        
+
         try:
             days_since_last_sale = created.days_since_last_sale
         except Exception:
             days_since_last_sale = None
-        
+
         try:
             is_slow_moving = created.is_slow_moving
         except Exception:
             is_slow_moving = False
-        
+
     except HTTPException as http_exc:
         # Re-raise HTTPExceptions as-is (they will be handled by exception handler)
         print(f"[CREATE PRODUCT] HTTPException raised: {http_exc.detail}")
@@ -456,7 +780,9 @@ async def create_product(
     product_dict = {
         "id": created.id,
         "name": created.name,
+        "item_number": created.item_number,
         "barcode": created.barcode,
+        "category": created.category,
         "brand": created.brand,
         "supplier": created.supplier,
         "received_date": created.received_date,
@@ -499,6 +825,15 @@ async def create_product(
                 print(f"[CREATE PRODUCT] WebSocket broadcast sent for product {created.id}")
             except Exception as ws_error:
                 print(f"[CREATE PRODUCT] WebSocket broadcast error: {ws_error}")
+            
+            # Send push notification to all customers
+            try:
+                NotificationService.send_new_product_notification(
+                    db, created.id, created.name
+                )
+                print(f"[CREATE PRODUCT] Push notification sent for product {created.id}")
+            except Exception as notif_error:
+                print(f"[CREATE PRODUCT] Push notification error: {notif_error}")
             
             return response_obj
         except AttributeError:
@@ -559,6 +894,15 @@ async def create_product(
             except Exception as ws_error:
                 print(f"[CREATE PRODUCT] WebSocket broadcast error: {ws_error}")
             
+            # Send push notification to all customers
+            try:
+                NotificationService.send_new_product_notification(
+                    db, created.id, created.name
+                )
+                print(f"[CREATE PRODUCT] Push notification sent for product {created.id}")
+            except Exception as notif_error:
+                print(f"[CREATE PRODUCT] Push notification error: {notif_error}")
+            
             return response_obj
         except Exception as retry_error:
             print(f"[CREATE PRODUCT] Retry also failed: {retry_error}")
@@ -592,7 +936,7 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, supplier=supplier, location=location,
+                                      brand=brand, category=category, supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -613,7 +957,9 @@ def get_products(
             product_dict = {
                 "id": p.id,
                 "name": p.name,
+                "item_number": p.item_number,
                 "barcode": p.barcode,
+                "category": p.category,
                 "brand": p.brand,
                 "supplier": p.supplier,
                 "received_date": p.received_date,
@@ -634,8 +980,8 @@ def get_products(
                 "last_sold_date": last_sold,
                 "days_since_last_sale": days_since,
                 "is_slow_moving": is_slow,
-                "created_at": p.created_at,
-                "updated_at": p.updated_at
+                "created_at": p.created_at if p.created_at is not None else datetime.now(),
+                "updated_at": p.updated_at if p.updated_at is not None else datetime.now()
             }
             result.append(ProductResponse.model_validate(product_dict))
         except Exception as e:
@@ -716,7 +1062,9 @@ def get_low_stock_products(min_stock: int = 10, db: Session = Depends(get_db)):
             product_dict = {
                 "id": p.id,
                 "name": p.name,
+                "item_number": p.item_number,
                 "barcode": p.barcode,
+                "category": p.category,
                 "brand": p.brand,
                 "supplier": p.supplier,
                 "received_date": p.received_date,
@@ -736,8 +1084,8 @@ def get_low_stock_products(min_stock: int = 10, db: Session = Depends(get_db)):
                 "last_sold_date": last_sold,
                 "days_since_last_sale": days_since,
                 "is_slow_moving": is_slow,
-                "created_at": p.created_at,
-                "updated_at": p.updated_at
+                "created_at": p.created_at if p.created_at is not None else datetime.now(),
+                "updated_at": p.updated_at if p.updated_at is not None else datetime.now()
             }
             result.append(ProductResponse.model_validate(product_dict))
         except Exception as e:
@@ -786,7 +1134,9 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     product_dict = {
         "id": product.id,
         "name": product.name,
+        "item_number": product.item_number,
         "barcode": product.barcode,
+        "category": product.category,
         "brand": product.brand,
         "supplier": product.supplier,
         "received_date": product.received_date,
@@ -807,8 +1157,8 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         "last_sold_date": last_sold,
         "days_since_last_sale": days_since,
         "is_slow_moving": is_slow,
-        "created_at": product.created_at,
-        "updated_at": product.updated_at
+        "created_at": product.created_at if product.created_at is not None else datetime.now(),
+        "updated_at": product.updated_at if product.updated_at is not None else datetime.now()
     }
     return ProductResponse.model_validate(product_dict)
 
@@ -838,7 +1188,9 @@ def update_product(product_id: int, product: ProductUpdate, db: Session = Depend
     product_dict = {
         "id": product_full.id,
         "name": product_full.name,
+        "item_number": product_full.item_number,
         "barcode": product_full.barcode,
+        "category": product_full.category,
         "brand": product_full.brand,
         "supplier": product_full.supplier,
         "received_date": product_full.received_date,
@@ -1076,6 +1428,62 @@ def get_product_images(
         }
         for img in images
     ]
+
+
+@app.post("/api/products/{product_id}/images/from-url", response_model=ProductImageResponse)
+def add_product_image_from_url(
+    product_id: int,
+    image_data: ProductImageCreate,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
+):
+    """Add product image from URL (for images already uploaded)"""
+    from models import ProductImage
+    
+    # Verify product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+    
+    # Verify product_id matches
+    if image_data.product_id != product_id:
+        raise HTTPException(status_code=400, detail="product_id mos kelmayapti")
+    
+    try:
+        # If this is marked as primary, unset other primary images
+        if image_data.is_primary:
+            db.query(ProductImage).filter(
+                ProductImage.product_id == product_id,
+                ProductImage.is_primary == True
+            ).update({"is_primary": False})
+        
+        # Create ProductImage record
+        product_image = ProductImage(
+            product_id=product_id,
+            image_url=image_data.image_url,
+            display_order=image_data.display_order or 0,
+            is_primary=image_data.is_primary or False
+        )
+        
+        db.add(product_image)
+        db.commit()
+        db.refresh(product_image)
+        
+        return {
+            "id": product_image.id,
+            "product_id": product_image.product_id,
+            "image_url": product_image.image_url,
+            "display_order": product_image.display_order,
+            "is_primary": product_image.is_primary,
+            "created_at": product_image.created_at
+        }
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error creating product image from URL: {e}")
+        print(f"Traceback: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Rasm yaratishda xatolik: {str(e)}")
 
 
 @app.delete("/api/products/{product_id}/images/{image_id}")
@@ -1471,10 +1879,21 @@ def create_search_history(
 def get_search_history(
     limit: int = Query(20, le=50, ge=1),
     db: Session = Depends(get_db),
-    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
 ):
     """Get recent search history for customer"""
     from models import SearchHistory
+    
+    # Convert customer_id from header string to int
+    customer_id = None
+    if x_customer_id:
+        try:
+            customer_id = int(x_customer_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    if not customer_id:
+        return []
     
     try:
         query = db.query(SearchHistory).filter(
@@ -1629,12 +2048,30 @@ def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/api/customers/{customer_id}", response_model=CustomerResponse)
-def update_customer(customer_id: int, customer: CustomerUpdate, db: Session = Depends(get_db)):
+async def update_customer(customer_id: int, customer: CustomerUpdate, db: Session = Depends(get_db)):
     """Update a customer"""
+    # Get old customer data to check if customer_type changed
+    old_customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    old_customer_type = old_customer.customer_type if old_customer else None
+    
     updated = CustomerService.update_customer(db, customer_id, customer)
     if not updated:
         raise HTTPException(status_code=404, detail="Customer not found")
-    return updated
+    
+    # If customer type changed, notify customer app via WebSocket
+    if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
+        try:
+            await manager.send_to_customer(customer_id, {
+                "type": "customer_type_changed",
+                "customer_id": customer_id,
+                "old_type": old_customer_type,
+                "new_type": customer.customer_type
+            })
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
+        except Exception as e:
+            print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
+    
+    return CustomerService.customer_to_response(updated)
 
 
 @app.delete("/api/customers/{customer_id}")
@@ -2214,10 +2651,124 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
     otp.is_used = True
     db.commit()
 
-    return {
-        "success": True,
-        "message": "Telefon raqami muvaffaqiyatli tasdiqlandi (test rejimi, holat bazada alohida saqlanmaydi).",
+    # Generate token for login (similar to social-login)
+    token = AuthService.generate_token()
+
+    # Return token and user data for login
+    user_payload = {
+        "customer_id": customer.id,
+        "name": customer.name,
+        "phone": customer.phone,
     }
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "token": token,
+            "user": user_payload,
+            "customer_id": customer.id,
+            "user_type": "customer",
+            "message": "Telefon raqami muvaffaqiyatli tasdiqlandi va kirildi.",
+        },
+    )
+
+
+# ==================== PUSH NOTIFICATIONS ====================
+
+@app.post("/api/notifications/register-token")
+def register_device_token(
+    request: DeviceTokenRequest,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Register or update device token for push notifications"""
+    if not customer_id:
+        raise HTTPException(status_code=401, detail="Mijoz ID talab qilinadi")
+    
+    # Check if token already exists
+    existing_token = db.query(CustomerDeviceToken).filter(
+        CustomerDeviceToken.token == request.token
+    ).first()
+    
+    if existing_token:
+        # Update existing token
+        existing_token.customer_id = customer_id
+        existing_token.device_id = request.device_id
+        existing_token.platform = request.platform
+        existing_token.is_active = True
+        db.commit()
+        db.refresh(existing_token)
+        return {
+            "success": True,
+            "message": "Token yangilandi",
+            "token_id": existing_token.id
+        }
+    else:
+        # Create new token
+        device_token = CustomerDeviceToken(
+            customer_id=customer_id,
+            token=request.token,
+            device_id=request.device_id,
+            platform=request.platform,
+            is_active=True
+        )
+        db.add(device_token)
+        db.commit()
+        db.refresh(device_token)
+        return {
+            "success": True,
+            "message": "Token ro'yxatdan o'tkazildi",
+            "token_id": device_token.id
+        }
+
+
+@app.delete("/api/notifications/unregister-token")
+def unregister_device_token(
+    token: str = Query(..., description="Device token to unregister"),
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Unregister device token"""
+    if not customer_id:
+        raise HTTPException(status_code=401, detail="Mijoz ID talab qilinadi")
+    
+    device_token = db.query(CustomerDeviceToken).filter(
+        CustomerDeviceToken.token == token,
+        CustomerDeviceToken.customer_id == customer_id
+    ).first()
+    
+    if not device_token:
+        raise HTTPException(status_code=404, detail="Token topilmadi")
+    
+    device_token.is_active = False
+    db.commit()
+    
+    return {"success": True, "message": "Token o'chirildi"}
+
+
+@app.post("/api/notifications/send")
+def send_notification(
+    request: SendNotificationRequest,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("notifications.send"))
+):
+    """Send push notification to customers (admin only)"""
+    if request.customer_ids:
+        # Send to specific customers
+        results = []
+        for customer_id in request.customer_ids:
+            result = NotificationService.send_to_customer(
+                db, customer_id, request.title, request.body, request.data
+            )
+            results.append({"customer_id": customer_id, **result})
+        return {"success": True, "results": results}
+    else:
+        # Send to all customers
+        result = NotificationService.send_to_all_customers(
+            db, request.title, request.body, request.data
+        )
+        return result
 
 
 @app.post("/api/auth/social-login")
@@ -2285,7 +2836,7 @@ def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/api/help-request")
+@app.post("/api/help-requests")
 async def create_help_request(
     request_data: dict = Body(...),
     db: Session = Depends(get_db),
@@ -2473,6 +3024,434 @@ def update_help_request(
         "resolved_by": help_request.resolved_by,
         "resolved_at": to_uzbekistan_time(help_request.resolved_at).isoformat() if help_request.resolved_at else None
     }
+
+
+# ==================== CHAT/SUPPORT ====================
+
+@app.get("/api/conversations", response_model=ConversationListResponse)
+def get_conversations(
+    skip: int = 0,
+    limit: int = 50,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get conversations list (for customer or admin)"""
+    from models import Conversation, ChatMessage
+    
+    query = db.query(Conversation)
+    
+    # Filter by customer or admin
+    if customer_id:
+        # Customer view: only their conversations, not archived
+        query = query.filter(
+            Conversation.customer_id == customer_id,
+            Conversation.is_customer_archived == False
+        )
+    elif seller:
+        # Admin view: all conversations, optionally filter by status
+        if status:
+            query = query.filter(Conversation.status == status)
+        query = query.filter(Conversation.is_admin_archived == False)
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Order by last message time
+    query = query.order_by(Conversation.last_message_at.desc().nullslast(), Conversation.created_at.desc())
+    
+    total = query.count()
+    conversations = query.offset(skip).limit(limit).all()
+    
+    # Build response with unread count and last message
+    conversation_responses = []
+    for conv in conversations:
+        # Get unread count
+        unread_query = db.query(ChatMessage).filter(
+            ChatMessage.conversation_id == conv.id,
+            ChatMessage.is_read == False
+        )
+        if customer_id:
+            unread_query = unread_query.filter(ChatMessage.sender_type == "admin")
+        elif seller:
+            unread_query = unread_query.filter(ChatMessage.sender_type == "customer")
+        
+        unread_count = unread_query.count()
+        
+        # Get last message
+        last_message = db.query(ChatMessage).filter(
+            ChatMessage.conversation_id == conv.id
+        ).order_by(ChatMessage.created_at.desc()).first()
+        
+        last_message_response = None
+        if last_message:
+            last_message_response = ChatMessageResponse(
+                id=last_message.id,
+                conversation_id=last_message.conversation_id,
+                sender_type=last_message.sender_type,
+                sender_id=last_message.sender_id,
+                sender_name=last_message.sender_name,
+                message=last_message.message,
+                is_read=last_message.is_read,
+                read_at=last_message.read_at,
+                created_at=last_message.created_at
+            )
+        
+        # Get customer and seller names
+        customer_name = conv.customer.name if conv.customer else None
+        seller_name = conv.seller.name if conv.seller else None
+        
+        conversation_responses.append(ConversationResponse(
+            id=conv.id,
+            customer_id=conv.customer_id,
+            customer_name=customer_name,
+            seller_id=conv.seller_id,
+            seller_name=seller_name,
+            subject=conv.subject,
+            status=conv.status,
+            is_customer_archived=conv.is_customer_archived,
+            is_admin_archived=conv.is_admin_archived,
+            unread_count=unread_count,
+            last_message=last_message_response,
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            last_message_at=conv.last_message_at
+        ))
+    
+    return ConversationListResponse(
+        conversations=conversation_responses,
+        total=total,
+        skip=skip,
+        limit=limit
+    )
+
+
+@app.get("/api/conversations/{conversation_id}/messages", response_model=ChatMessageListResponse)
+def get_conversation_messages(
+    conversation_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get messages in a conversation"""
+    from models import Conversation, ChatMessage
+    
+    # Verify conversation exists and user has access
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if customer_id and conversation.customer_id != customer_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get messages
+    messages_query = db.query(ChatMessage).filter(
+        ChatMessage.conversation_id == conversation_id
+    ).order_by(ChatMessage.created_at.asc())
+    
+    total = messages_query.count()
+    messages = messages_query.offset(skip).limit(limit).all()
+    
+    # Mark messages as read
+    if customer_id:
+        # Mark admin messages as read
+        db.query(ChatMessage).filter(
+            ChatMessage.conversation_id == conversation_id,
+            ChatMessage.sender_type == "admin",
+            ChatMessage.is_read == False
+        ).update({
+            "is_read": True,
+            "read_at": get_uzbekistan_now()
+        })
+    elif seller:
+        # Mark customer messages as read
+        db.query(ChatMessage).filter(
+            ChatMessage.conversation_id == conversation_id,
+            ChatMessage.sender_type == "customer",
+            ChatMessage.is_read == False
+        ).update({
+            "is_read": True,
+            "read_at": get_uzbekistan_now()
+        })
+    db.commit()
+    
+    # Build response
+    message_responses = [
+        ChatMessageResponse(
+            id=msg.id,
+            conversation_id=msg.conversation_id,
+            sender_type=msg.sender_type,
+            sender_id=msg.sender_id,
+            sender_name=msg.sender_name,
+            message=msg.message,
+            is_read=msg.is_read,
+            read_at=msg.read_at,
+            created_at=msg.created_at
+        )
+        for msg in messages
+    ]
+    
+    # Get conversation details
+    customer_name = conversation.customer.name if conversation.customer else None
+    seller_name = conversation.seller.name if conversation.seller else None
+    
+    conversation_response = ConversationResponse(
+        id=conversation.id,
+        customer_id=conversation.customer_id,
+        customer_name=customer_name,
+        seller_id=conversation.seller_id,
+        seller_name=seller_name,
+        subject=conversation.subject,
+        status=conversation.status,
+        is_customer_archived=conversation.is_customer_archived,
+        is_admin_archived=conversation.is_admin_archived,
+        unread_count=0,  # Already marked as read
+        last_message=None,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        last_message_at=conversation.last_message_at
+    )
+    
+    return ChatMessageListResponse(
+        messages=message_responses,
+        conversation=conversation_response,
+        total=total,
+        skip=skip,
+        limit=limit
+    )
+
+
+@app.post("/api/conversations/{conversation_id}/messages", response_model=ChatMessageResponse)
+async def send_message(
+    conversation_id: int,
+    message_data: ChatMessageCreate,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Send a message in a conversation"""
+    from models import Conversation, ChatMessage, Customer
+    
+    # Get or create conversation
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify access
+    if customer_id and conversation.customer_id != customer_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Determine sender
+    if customer_id:
+        sender_type = "customer"
+        sender_id = customer_id
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        sender_name = customer.name if customer else "Mijoz"
+    elif seller:
+        sender_type = "admin"
+        sender_id = seller.id
+        sender_name = seller.name
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Create message
+    chat_message = ChatMessage(
+        conversation_id=conversation_id,
+        sender_type=sender_type,
+        sender_id=sender_id,
+        sender_name=sender_name,
+        message=message_data.message,
+        is_read=False
+    )
+    
+    # If admin sends first message, assign conversation to admin
+    if seller and not conversation.seller_id:
+        conversation.seller_id = seller.id
+    
+    # Update conversation
+    conversation.last_message_at = get_uzbekistan_now()
+    conversation.status = "open"  # Reopen if closed
+    
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+    
+    # Send WebSocket notification
+    try:
+        if customer_id:
+            # Notify admin
+            await manager.broadcast({
+                "type": "new_chat_message",
+                "data": {
+                    "conversation_id": conversation_id,
+                    "customer_id": customer_id,
+                    "message": {
+                        "id": chat_message.id,
+                        "sender_type": sender_type,
+                        "sender_name": sender_name,
+                        "message": message_data.message,
+                        "created_at": chat_message.created_at.isoformat()
+                    }
+                }
+            })
+        elif seller:
+            # Notify customer
+            await manager.send_to_customer(conversation.customer_id, {
+                "type": "new_chat_message",
+                "data": {
+                    "conversation_id": conversation_id,
+                    "message": {
+                        "id": chat_message.id,
+                        "sender_type": sender_type,
+                        "sender_name": sender_name,
+                        "message": message_data.message,
+                        "created_at": chat_message.created_at.isoformat()
+                    }
+                }
+            })
+    except Exception as e:
+        print(f"Error sending WebSocket notification: {e}")
+    
+    return ChatMessageResponse(
+        id=chat_message.id,
+        conversation_id=chat_message.conversation_id,
+        sender_type=chat_message.sender_type,
+        sender_id=chat_message.sender_id,
+        sender_name=chat_message.sender_name,
+        message=chat_message.message,
+        is_read=chat_message.is_read,
+        read_at=chat_message.read_at,
+        created_at=chat_message.created_at
+    )
+
+
+@app.post("/api/conversations", response_model=ConversationResponse)
+async def create_conversation(
+    message_data: ChatMessageCreate,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID")
+):
+    """Create a new conversation (customer only)"""
+    from models import Conversation, ChatMessage, Customer
+    
+    if not customer_id:
+        raise HTTPException(status_code=401, detail="Customer authentication required")
+    
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Create conversation
+    conversation = Conversation(
+        customer_id=customer_id,
+        subject=message_data.subject or "Yangi suhbat",
+        status="open"
+    )
+    
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+    
+    # Create first message
+    chat_message = ChatMessage(
+        conversation_id=conversation.id,
+        sender_type="customer",
+        sender_id=customer_id,
+        sender_name=customer.name or "Mijoz",
+        message=message_data.message,
+        is_read=False
+    )
+    
+    conversation.last_message_at = get_uzbekistan_now()
+    
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+    
+    # Notify admin via WebSocket
+    try:
+        await manager.broadcast({
+            "type": "new_conversation",
+            "data": {
+                "conversation_id": conversation.id,
+                "customer_id": customer_id,
+                "customer_name": customer.name,
+                "subject": conversation.subject,
+                "message": message_data.message
+            }
+        })
+    except Exception as e:
+        print(f"Error sending WebSocket notification: {e}")
+    
+    return ConversationResponse(
+        id=conversation.id,
+        customer_id=conversation.customer_id,
+        customer_name=customer.name,
+        seller_id=conversation.seller_id,
+            seller_name=None,
+        subject=conversation.subject,
+        status=conversation.status,
+        is_customer_archived=conversation.is_customer_archived,
+        is_admin_archived=conversation.is_admin_archived,
+        unread_count=0,
+        last_message=None,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        last_message_at=conversation.last_message_at
+    )
+
+
+@app.put("/api/conversations/{conversation_id}/archive")
+def archive_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    customer_id: Optional[int] = Header(None, alias="X-Customer-ID"),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Archive a conversation"""
+    from models import Conversation
+    
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if customer_id:
+        if conversation.customer_id != customer_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        conversation.is_customer_archived = True
+    elif seller:
+        conversation.is_admin_archived = True
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    db.commit()
+    
+    return {"success": True, "message": "Conversation archived"}
+
+
+@app.put("/api/conversations/{conversation_id}/status")
+def update_conversation_status(
+    conversation_id: int,
+    status: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("orders.update"))
+):
+    """Update conversation status (admin only)"""
+    from models import Conversation
+    
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if status not in ["open", "closed", "resolved"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    conversation.status = status
+    db.commit()
+    
+    return {"success": True, "message": f"Conversation status updated to {status}"}
 
 
 @app.post("/api/auth/reset-password")
@@ -2855,13 +3834,13 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         print(f"[CREATE ORDER] Received order request: customer_id={order.customer_id}, seller_id={order.seller_id}, items={len(order.items)}")
         print(f"[CREATE ORDER] Payment method: {order.payment_method}")
         print(f"[CREATE ORDER] Order data: {order.dict()}")
-        
+
         # Check customer debt limit before creating order
         from models import Customer
         customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
         if not customer:
             raise HTTPException(status_code=404, detail=f"Customer not found (ID: {order.customer_id})")
-        
+
         # Check debt limit only if payment method is debt
         if order.payment_method and order.payment_method.lower() == 'debt':
             print(f"[CREATE ORDER] Payment method is debt, checking debt limit...")
@@ -2872,29 +3851,29 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
                 print(f"[CREATE ORDER] Debt limit check failed: {error}")
                 raise HTTPException(status_code=400, detail=error)
             print(f"[CREATE ORDER] Debt limit check passed")
-        
+
         print(f"[CREATE ORDER] Creating order via OrderService...")
         order_result = OrderService.create_order(db, order)
         print(f"[CREATE ORDER] Order created successfully: order_id={order_result.id}")
-        
+
         # Reload with relations for WebSocket notification
         from sqlalchemy.orm import joinedload
         from models import OrderItem
-        
+
         db.refresh(order_result)
         order_with_relations = db.query(Order).options(
             joinedload(Order.customer),
             joinedload(Order.seller),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).filter(Order.id == order_result.id).first()
-        
+
         if not order_with_relations:
             raise HTTPException(status_code=500, detail="Order created but could not be reloaded")
-        
+
         print(f"[CREATE ORDER] Converting order to response...")
         order_response = OrderService.order_to_response(order_with_relations)
         print(f"[CREATE ORDER] Order response created successfully")
-        
+
         # Notify admin panel via WebSocket
         try:
             await manager.broadcast({
@@ -2905,7 +3884,7 @@ async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         except Exception as ws_error:
             print(f"[CREATE ORDER] WebSocket notification error: {ws_error}")
             # Don't fail the request if WebSocket fails
-        
+
         return order_response
     except HTTPException:
         raise
@@ -3160,6 +4139,15 @@ async def update_order_status(
         except Exception as e:
             print(f"[Order Status Update] Error sending notification to customer {order.customer_id}: {e}")
     
+    # Send push notification to customer
+    if order.customer_id:
+        try:
+            NotificationService.send_order_status_update(
+                db, order.customer_id, order_id, status, order.total_amount
+            )
+        except Exception as e:
+            print(f"[Order Status Update] Error sending push notification: {e}")
+    
     return order_response
 
 
@@ -3364,13 +4352,31 @@ def get_statistics(
                     start_date = (now - timedelta(days=30)).isoformat()
                 if not end_date:
                     end_date = now.isoformat()
-        
-        stats = SaleService.get_statistics(db, start_date, end_date, seller_id=seller_id)
-        
+
+        # Get sales statistics first
+        try:
+            stats = SaleService.get_statistics(db, start_date, end_date, seller_id=seller_id)
+        except Exception as stats_error:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"[STATISTICS] Error getting sales statistics: {stats_error}")
+            print(f"[STATISTICS] Traceback:\n{error_details}")
+            # Return empty stats if there's an error
+            stats = {
+                "total_sales": 0,
+                "total_amount": 0.0,
+                "total_profit": 0.0,
+                "average_sale": 0.0,
+                "daily_stats": {},
+                "top_products": [],
+                "top_customers": [],
+                "payment_methods": {}
+            }
+
         # Add order statistics (online orders)
         from models import Order, OrderStatus
         from sqlalchemy import func
-        
+
         # Filter orders by date range if provided
         orders_query = db.query(Order)
         if start_date:
@@ -3462,7 +4468,7 @@ def get_statistics(
         except Exception as e:
             print(f"Error getting inventory statistics: {e}")
             stats["inventory"] = {"total_value": 0, "total_packages": 0, "total_pieces": 0}
-        
+
         try:
             # Add total debt statistics
             total_debt = DebtService.get_total_debt(db)
@@ -3470,13 +4476,33 @@ def get_statistics(
         except Exception as e:
             print(f"Error getting debt statistics: {e}")
             stats["total_debt"] = 0
-        
+
         return stats
     except Exception as e:
         print(f"Error in get_statistics: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error getting statistics: {str(e)}")
+        # Return empty stats instead of raising exception to prevent frontend errors
+        return {
+            "total_sales": 0,
+            "total_amount": 0.0,
+            "total_profit": 0.0,
+            "average_sale": 0.0,
+            "daily_stats": {},
+            "top_products": [],
+            "top_customers": [],
+            "payment_methods": {},
+            "orders": {
+                "total_orders": 0,
+                "online_orders_count": 0,
+                "offline_orders_count": 0,
+                "orders_by_status": {},
+                "total_orders_amount": 0,
+                "online_orders_amount": 0
+            },
+            "inventory": {"total_value": 0, "total_packages": 0, "total_pieces": 0},
+            "total_debt": 0
+        }
 
 
 @app.get("/api/inventory/value")
@@ -3598,7 +4624,7 @@ def get_favorites(
 
 @app.post("/api/favorites")
 def add_favorite(
-    product_id: int = Body(...),
+    request_data: dict = Body(...),
     db: Session = Depends(get_db),
     x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID")
 ):
@@ -3610,6 +4636,16 @@ def add_favorite(
         customer_id = int(x_customer_id)
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    # Get product_id from request data
+    product_id = request_data.get('product_id')
+    if not product_id:
+        raise HTTPException(status_code=400, detail="product_id is required")
+    
+    try:
+        product_id = int(product_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid product_id")
     
     # Check if product exists
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -4392,6 +5428,385 @@ async def upload_banner_image(
 
 
 # ==================== INITIALIZE ====================
+
+# ==================== REFERAL ENDPOINTS ====================
+
+@app.get("/api/referals/my-code", response_model=dict)
+def get_my_referal_code(
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Get customer's referal code"""
+    from models import Referal, Customer
+    import secrets
+    
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Check if customer already has a referal code
+    existing_referal = db.query(Referal).filter(
+        Referal.referrer_id == customer_id
+    ).first()
+    
+    if existing_referal:
+        return {
+            "referal_code": existing_referal.referal_code,
+            "total_referals": db.query(Referal).filter(Referal.referrer_id == customer_id).count(),
+            "total_bonus": sum([r.bonus_amount or 0 for r in db.query(Referal).filter(Referal.referrer_id == customer_id).all()])
+        }
+    
+    # Generate new referal code
+    referal_code = f"REF{customer.id}{secrets.token_hex(3).upper()}"
+    
+    # Create referal record
+    new_referal = Referal(
+        referrer_id=customer_id,
+        referal_code=referal_code,
+        status="pending"
+    )
+    db.add(new_referal)
+    db.commit()
+    
+    return {
+        "referal_code": referal_code,
+        "total_referals": 0,
+        "total_bonus": 0
+    }
+
+
+@app.post("/api/referals/invite", response_model=dict)
+def invite_friend(
+    referal_data: ReferalCreate,
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Invite a friend using referal code"""
+    from models import Referal, Customer
+    
+    # Get customer's referal code
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    existing_referal = db.query(Referal).filter(
+        Referal.referrer_id == customer_id
+    ).first()
+    
+    if not existing_referal:
+        raise HTTPException(status_code=400, detail="Referal code not found. Please generate one first.")
+    
+    # Check if phone already invited
+    if referal_data.phone:
+        existing_invite = db.query(Referal).filter(
+            Referal.referrer_id == customer_id,
+            Referal.phone == referal_data.phone
+        ).first()
+        
+        if existing_invite:
+            raise HTTPException(status_code=400, detail="This phone number already invited")
+    
+    # Create invite
+    new_invite = Referal(
+        referrer_id=customer_id,
+        referal_code=existing_referal.referal_code,
+        phone=referal_data.phone,
+        status="pending"
+    )
+    db.add(new_invite)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": "Do'st taklif qilindi",
+        "referal_code": existing_referal.referal_code
+    }
+
+
+@app.get("/api/referals", response_model=ReferalListResponse)
+def get_referals(
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Get all referals (sent and received)"""
+    from models import Referal
+    
+    referals_sent = db.query(Referal).filter(Referal.referrer_id == customer_id).all()
+    referals_received = db.query(Referal).filter(Referal.referred_id == customer_id).all()
+    
+    my_referal_code = ""
+    existing_referal = db.query(Referal).filter(Referal.referrer_id == customer_id).first()
+    if existing_referal:
+        my_referal_code = existing_referal.referal_code
+    
+    total_bonus = sum([r.bonus_amount or 0 for r in referals_sent])
+    
+    return ReferalListResponse(
+        referals_sent=[ReferalResponse.model_validate(r) for r in referals_sent],
+        referals_received=[ReferalResponse.model_validate(r) for r in referals_received],
+        my_referal_code=my_referal_code,
+        total_referals=len(referals_sent),
+        total_bonus_earned=total_bonus
+    )
+
+
+# ==================== LOYALTY ENDPOINTS ====================
+
+@app.get("/api/loyalty/points", response_model=LoyaltyPointResponse)
+def get_loyalty_points(
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Get customer's loyalty points"""
+    from models import LoyaltyPoint, Customer
+    
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    loyalty = db.query(LoyaltyPoint).filter(LoyaltyPoint.customer_id == customer_id).first()
+    
+    if not loyalty:
+        # Create new loyalty account
+        loyalty = LoyaltyPoint(
+            customer_id=customer_id,
+            points=0,
+            total_earned=0,
+            total_spent=0,
+            vip_level="bronze"
+        )
+        db.add(loyalty)
+        db.commit()
+        db.refresh(loyalty)
+    
+    return LoyaltyPointResponse.model_validate(loyalty)
+
+
+@app.get("/api/loyalty/transactions", response_model=List[LoyaltyTransactionResponse])
+def get_loyalty_transactions(
+    skip: int = 0,
+    limit: int = 50,
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Get loyalty transaction history"""
+    from models import LoyaltyPoint, LoyaltyTransaction
+    
+    loyalty = db.query(LoyaltyPoint).filter(LoyaltyPoint.customer_id == customer_id).first()
+    if not loyalty:
+        return []
+    
+    transactions = db.query(LoyaltyTransaction).filter(
+        LoyaltyTransaction.loyalty_point_id == loyalty.id
+    ).order_by(LoyaltyTransaction.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return [LoyaltyTransactionResponse.model_validate(t) for t in transactions]
+
+
+@app.post("/api/loyalty/spend", response_model=dict)
+def spend_loyalty_points(
+    points: int = Body(..., gt=0),
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Spend loyalty points"""
+    from models import LoyaltyPoint, LoyaltyTransaction
+    
+    loyalty = db.query(LoyaltyPoint).filter(LoyaltyPoint.customer_id == customer_id).first()
+    if not loyalty or loyalty.points < points:
+        raise HTTPException(status_code=400, detail="Not enough points")
+    
+    loyalty.points -= points
+    loyalty.total_spent += points
+    
+    transaction = LoyaltyTransaction(
+        loyalty_point_id=loyalty.id,
+        transaction_type="spent",
+        points=-points,
+        description=f"Spent {points} points"
+    )
+    db.add(transaction)
+    db.commit()
+    
+    return {
+        "success": True,
+        "remaining_points": loyalty.points,
+        "spent_points": points
+    }
+
+
+# ==================== PRODUCT VARIANT ENDPOINTS ====================
+
+@app.get("/api/products/{product_id}/variants", response_model=List[ProductVariantResponse])
+def get_product_variants(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all variants for a product"""
+    from models import ProductVariant
+    
+    variants = db.query(ProductVariant).filter(
+        ProductVariant.product_id == product_id
+    ).order_by(ProductVariant.is_default.desc(), ProductVariant.created_at.asc()).all()
+    
+    return [ProductVariantResponse.model_validate(v) for v in variants]
+
+
+@app.post("/api/products/{product_id}/variants", response_model=ProductVariantResponse)
+def create_product_variant(
+    product_id: int,
+    variant: ProductVariantCreate,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.create"))
+):
+    """Create a new product variant"""
+    from models import ProductVariant, Product
+    
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # If this is set as default, unset other defaults
+    if variant.is_default:
+        db.query(ProductVariant).filter(
+            ProductVariant.product_id == product_id,
+            ProductVariant.is_default == True
+        ).update({"is_default": False})
+    
+    db_variant = ProductVariant(
+        product_id=product_id,
+        **variant.dict()
+    )
+    db.add(db_variant)
+    db.commit()
+    db.refresh(db_variant)
+    
+    return ProductVariantResponse.model_validate(db_variant)
+
+
+@app.put("/api/products/{product_id}/variants/{variant_id}", response_model=ProductVariantResponse)
+def update_product_variant(
+    product_id: int,
+    variant_id: int,
+    variant: ProductVariantUpdate,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.update"))
+):
+    """Update a product variant"""
+    from models import ProductVariant
+    
+    db_variant = db.query(ProductVariant).filter(
+        ProductVariant.id == variant_id,
+        ProductVariant.product_id == product_id
+    ).first()
+    
+    if not db_variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    
+    update_data = variant.dict(exclude_unset=True)
+    
+    # If setting as default, unset other defaults
+    if update_data.get("is_default") == True:
+        db.query(ProductVariant).filter(
+            ProductVariant.product_id == product_id,
+            ProductVariant.id != variant_id,
+            ProductVariant.is_default == True
+        ).update({"is_default": False})
+    
+    for field, value in update_data.items():
+        setattr(db_variant, field, value)
+    
+    db.commit()
+    db.refresh(db_variant)
+    
+    return ProductVariantResponse.model_validate(db_variant)
+
+
+@app.delete("/api/products/{product_id}/variants/{variant_id}")
+def delete_product_variant(
+    product_id: int,
+    variant_id: int,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("products.delete"))
+):
+    """Delete a product variant"""
+    from models import ProductVariant
+    
+    db_variant = db.query(ProductVariant).filter(
+        ProductVariant.id == variant_id,
+        ProductVariant.product_id == product_id
+    ).first()
+    
+    if not db_variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    
+    db.delete(db_variant)
+    db.commit()
+    
+    return {"success": True, "message": "Variant deleted"}
+
+
+# ==================== ONLINE PAYMENT ENDPOINTS ====================
+
+@app.post("/api/payments/initiate", response_model=PaymentInitiateResponse)
+def initiate_payment(
+    payment_data: PaymentInitiateRequest,
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Initiate online payment"""
+    from models import Order
+    import uuid
+    
+    order = db.query(Order).filter(Order.id == payment_data.order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.customer_id != customer_id:
+        raise HTTPException(status_code=403, detail="Not your order")
+    
+    # Generate payment ID
+    payment_id = str(uuid.uuid4())
+    
+    # In production, integrate with actual payment gateways (Click, Payme, Uzcard)
+    # For now, return mock response
+    return PaymentInitiateResponse(
+        payment_id=payment_id,
+        payment_url=f"https://payment.example.com/pay/{payment_id}",
+        merchant_id="test_merchant",
+        transaction_id=None,
+        status="pending"
+    )
+
+
+@app.post("/api/payments/verify", response_model=PaymentVerifyResponse)
+def verify_payment(
+    verify_data: PaymentVerifyRequest,
+    x_customer_id: Optional[str] = Header(None, alias="X-Customer-ID"),
+    db: Session = Depends(get_db)
+):
+    customer_id = get_customer_from_header(x_customer_id)
+    """Verify payment status"""
+    from models import Order
+    
+    # In production, verify with payment gateway
+    # For now, return mock response
+    return PaymentVerifyResponse(
+        success=True,
+        order_id=1,  # Should get from payment_id
+        amount=0.0,
+        payment_method="click",
+        transaction_id=verify_data.transaction_id,
+        status="completed"
+    )
+
 
 @app.on_event("startup")
 async def startup_event():

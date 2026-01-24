@@ -201,10 +201,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 60,
-    backgroundColor: 'transparent',
     ...Platform.select({
       web: {
-        background: 'linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 100%)',
+        backgroundImage: 'linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 100%)',
       },
       default: {
         // For native, we can't use gradient easily, so we'll use a semi-transparent overlay

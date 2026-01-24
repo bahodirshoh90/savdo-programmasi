@@ -2,6 +2,11 @@
 Pydantic Schemas for Request/Response Models
 """
 from pydantic import BaseModel, Field
+try:
+    from pydantic import field_validator
+except ImportError:
+    # Pydantic v1 compatibility
+    from pydantic import validator as field_validator
 from typing import List, Optional
 from datetime import datetime
 from models import CustomerType, OrderStatus, PaymentMethod
@@ -14,8 +19,20 @@ class ProductBase(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
-    category: Optional[str] = Field(None, max_length=100, description="Kategoriya")
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya (legacy)")
+    category_id: Optional[int] = Field(None, description="Kategoriya ID")
     supplier: Optional[str] = Field(None, max_length=200)
+    
+    @field_validator('category')
+    @classmethod
+    def validate_category(cls, v):
+        """Keep non-empty category strings, convert empty strings to None"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            return v if v else None
+        return v
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
     location: Optional[str] = Field(None, max_length=200)  # Ombordagi joylashuv
@@ -103,6 +120,35 @@ class ProductResponse(ProductBase):
     days_since_last_sale: Optional[int] = None  # Oxirgi sotilganidan beri kunlar
     is_slow_moving: Optional[bool] = None  # Uzoq vaqt sotilmagan (30+ kun)
     product_url: Optional[str] = None  # Mahsulot URL'i (customer app uchun)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+# ==================== CATEGORY SCHEMAS ====================
+
+class CategoryBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=100)
+    display_order: int = Field(0, ge=0)
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=100)
+    display_order: Optional[int] = Field(None, ge=0)
+
+
+class CategoryResponse(CategoryBase):
+    id: int
     created_at: datetime
     updated_at: datetime
     
@@ -250,6 +296,104 @@ class ScanCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=200, description="Scanned QR code or barcode value")
 
 
+class DeviceTokenRequest(BaseModel):
+    """Request to register/update device token for push notifications"""
+    token: str = Field(..., min_length=1, max_length=500, description="Expo push token")
+    device_id: Optional[str] = Field(None, max_length=200, description="Device identifier")
+    platform: Optional[str] = Field(None, max_length=50, description="Platform: ios, android, web")
+
+
+class SendNotificationRequest(BaseModel):
+    """Request to send notification to customers"""
+    customer_ids: Optional[List[int]] = Field(None, description="Specific customer IDs (if None, sends to all)")
+    title: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=500)
+    data: Optional[Dict] = Field(None, description="Additional data payload")
+
+
+# ==================== CHAT/SUPPORT SCHEMAS ====================
+
+class ChatMessageCreate(BaseModel):
+    """Request to create a chat message"""
+    conversation_id: Optional[int] = Field(None, description="Existing conversation ID (if None, creates new)")
+    message: str = Field(..., min_length=1, max_length=5000, description="Message text")
+    subject: Optional[str] = Field(None, max_length=200, description="Subject for new conversation")
+
+
+class ChatMessageResponse(BaseModel):
+    """Chat message response"""
+    id: int
+    conversation_id: int
+    sender_type: str  # "customer" or "admin"
+    sender_id: int
+    sender_name: str
+    message: str
+    is_read: bool
+    read_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ConversationResponse(BaseModel):
+    """Conversation response"""
+    id: int
+    customer_id: int
+    customer_name: Optional[str] = None
+    seller_id: Optional[int] = None
+    seller_name: Optional[str] = None
+    subject: Optional[str] = None
+    status: str
+    is_customer_archived: bool
+    is_admin_archived: bool
+    unread_count: int = 0
+    last_message: Optional[ChatMessageResponse] = None
+    created_at: datetime
+    updated_at: datetime
+    last_message_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ConversationListResponse(BaseModel):
+    """List of conversations with pagination"""
+    conversations: List[ConversationResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class ChatMessageListResponse(BaseModel):
+    """List of messages in a conversation"""
+    messages: List[ChatMessageResponse]
+    conversation: ConversationResponse
+    total: int
+    skip: int
+    limit: int
+
+
+# ==================== SEARCH HISTORY SCHEMAS ====================
+
+class SearchHistoryCreate(BaseModel):
+    """Request to create search history"""
+    search_query: str = Field(..., min_length=1, max_length=500)
+    result_count: Optional[int] = Field(None, ge=0, description="Number of results found")
+
+
+class SearchHistoryResponse(BaseModel):
+    """Search history response"""
+    id: int
+    customer_id: Optional[int]
+    search_query: str
+    result_count: Optional[int]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class SellerResponse(SellerBase):
     id: int
     is_active: bool
@@ -307,6 +451,132 @@ class RoleResponse(RoleBase):
 
 class LocationUpdate(BaseModel):
     latitude: float
+
+
+# ==================== REFERAL SCHEMAS ====================
+
+class ReferalCreate(BaseModel):
+    phone: Optional[str] = Field(None, max_length=20, description="Taklif qilingan telefon raqami")
+    
+class ReferalResponse(BaseModel):
+    id: int
+    referrer_id: int
+    referred_id: Optional[int]
+    referal_code: str
+    phone: Optional[str]
+    status: str
+    bonus_given: bool
+    bonus_amount: Optional[float]
+    created_at: datetime
+    completed_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+class ReferalListResponse(BaseModel):
+    referals_sent: List[ReferalResponse]
+    referals_received: List[ReferalResponse]
+    my_referal_code: str
+    total_referals: int
+    total_bonus_earned: float
+
+
+# ==================== LOYALTY SCHEMAS ====================
+
+class LoyaltyPointResponse(BaseModel):
+    id: int
+    customer_id: int
+    points: int
+    total_earned: int
+    total_spent: int
+    vip_level: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class LoyaltyTransactionResponse(BaseModel):
+    id: int
+    loyalty_point_id: int
+    transaction_type: str
+    points: int
+    description: Optional[str]
+    order_id: Optional[int]
+    referal_id: Optional[int]
+    created_at: datetime
+    expires_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+class LoyaltyTransactionCreate(BaseModel):
+    transaction_type: str = Field(..., description="earned, spent, expired, bonus")
+    points: int
+    description: Optional[str] = None
+    order_id: Optional[int] = None
+    referal_id: Optional[int] = None
+
+
+# ==================== PRODUCT VARIANT SCHEMAS ====================
+
+class ProductVariantCreate(BaseModel):
+    variant_type: str = Field(..., max_length=50, description="size, color, material, etc.")
+    variant_value: str = Field(..., max_length=100)
+    sku: Optional[str] = Field(None, max_length=100)
+    price_modifier: Optional[float] = Field(0, description="Price difference from base product")
+    stock_quantity: Optional[int] = None
+    is_default: bool = False
+
+class ProductVariantUpdate(BaseModel):
+    variant_type: Optional[str] = None
+    variant_value: Optional[str] = None
+    sku: Optional[str] = None
+    price_modifier: Optional[float] = None
+    stock_quantity: Optional[int] = None
+    is_default: Optional[bool] = None
+
+class ProductVariantResponse(BaseModel):
+    id: int
+    product_id: int
+    variant_type: str
+    variant_value: str
+    sku: Optional[str]
+    price_modifier: Optional[float]
+    stock_quantity: Optional[int]
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ==================== ONLINE PAYMENT SCHEMAS ====================
+
+class PaymentInitiateRequest(BaseModel):
+    order_id: int
+    payment_method: str = Field(..., description="click, payme, uzcard")
+    amount: float
+
+class PaymentInitiateResponse(BaseModel):
+    payment_id: str
+    payment_url: Optional[str] = None
+    merchant_id: Optional[str] = None
+    transaction_id: Optional[str] = None
+    status: str
+
+class PaymentVerifyRequest(BaseModel):
+    payment_id: str
+    transaction_id: Optional[str] = None
+
+class PaymentVerifyResponse(BaseModel):
+    success: bool
+    order_id: int
+    amount: float
+    payment_method: str
+    transaction_id: Optional[str] = None
+    status: str
     longitude: float
 
 
@@ -383,6 +653,9 @@ class OrderCreate(BaseModel):
     items: List[OrderItemCreate] = Field(..., min_items=1)
     is_offline: bool = Field(default=False)
     payment_method: Optional[str] = Field(default="cash")  # cash, card, debt (olinadigan)
+    delivery_address: Optional[str] = Field(None, max_length=500)  # Text address
+    delivery_latitude: Optional[float] = Field(None)  # GPS latitude
+    delivery_longitude: Optional[float] = Field(None)  # GPS longitude
 
 
 class OrderItemResponse(BaseModel):
@@ -413,6 +686,9 @@ class OrderResponse(BaseModel):
     items: List[OrderItemResponse]
     is_offline: bool
     synced_at: Optional[datetime] = None
+    delivery_address: Optional[str] = None  # Text address
+    delivery_latitude: Optional[float] = None  # GPS latitude
+    delivery_longitude: Optional[float] = None  # GPS longitude
     created_at: datetime
     updated_at: datetime
     

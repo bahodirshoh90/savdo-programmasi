@@ -18,6 +18,7 @@ import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+import Footer from '../components/Footer';
 import Colors from '../constants/colors';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/api';
@@ -369,7 +370,8 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <Text style={styles.title}>Profil</Text>
       </View>
@@ -532,12 +534,27 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Yordam</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Yordam va Sevimlilar</Text>
         <TouchableOpacity
           style={styles.changePasswordButton}
-          onPress={() => setShowContactModal(true)}
+          onPress={() => navigation.navigate('Favorites')}
         >
-          <Text style={styles.changePasswordButtonText}>Admin bilan bog'lanish</Text>
+          <Ionicons name="heart-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
+          <Text style={styles.changePasswordButtonText}>Sevimlilar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.changePasswordButton, { marginTop: 8 }]}
+          onPress={() => navigation.navigate('ChatList')}
+        >
+          <Ionicons name="chatbubbles-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
+          <Text style={styles.changePasswordButtonText}>Chat / Yordam</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.changePasswordButton, { marginTop: 8 }]}
+          onPress={() => navigation.navigate('PriceAlerts')}
+        >
+          <Ionicons name="notifications-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
+          <Text style={styles.changePasswordButtonText}>Narx Eslatmalari</Text>
         </TouchableOpacity>
       </View>
 
@@ -546,6 +563,33 @@ export default function ProfileScreen({ navigation }) {
         <Text style={[styles.debtAmount, { color: colors.primary }]}>
           {customerData?.debt_balance?.toLocaleString('uz-UZ') || '0'} so'm
         </Text>
+        <TouchableOpacity
+          style={styles.paymentHistoryButton}
+          onPress={() => navigation.navigate('PaymentHistory')}
+        >
+          <Ionicons name="receipt-outline" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+          <Text style={styles.paymentHistoryButtonText}>To'lov tarixi</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Referal and Loyalty */}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('Referal')}
+        >
+          <Ionicons name="people-outline" size={24} color={colors.primary} />
+          <Text style={[styles.menuItemText, { color: colors.text }]}>Do'stni Taklif Qilish</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('Loyalty')}
+        >
+          <Ionicons name="trophy-outline" size={24} color={colors.primary} />
+          <Text style={[styles.menuItemText, { color: colors.text }]}>Bonus Tizimi</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+        </TouchableOpacity>
       </View>
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -709,7 +753,9 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+      <Footer currentScreen="profile" />
+    </View>
   );
 }
 
@@ -717,6 +763,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,

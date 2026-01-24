@@ -15,40 +15,64 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
 import Colors from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { getOrders, syncOfflineOrders } from '../services/orders';
 import OrderCard from '../components/OrderCard';
 import websocketService from '../services/websocket';
+import Footer from '../components/Footer';
 
 export default function OrdersScreen({ navigation }) {
+  const { colors } = useTheme();
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const ordersPerPage = 15;
 
-  const loadOrders = async () => {
-    console.log('[ORDERS SCREEN] Loading orders with filter:', statusFilter);
+  const loadOrders = async (page = 1, append = false) => {
+    console.log('[ORDERS SCREEN] Loading orders with filter:', statusFilter, 'page:', page);
     setIsLoading(true);
     try {
       // First try to sync any offline orders when screen loads
-      try {
-        await syncOfflineOrders();
-      } catch (syncError) {
-        console.warn('[ORDERS SCREEN] Offline sync failed (continuing to load orders):', syncError?.message);
+      if (page === 1) {
+        try {
+          await syncOfflineOrders();
+        } catch (syncError) {
+          console.warn('[ORDERS SCREEN] Offline sync failed (continuing to load orders):', syncError?.message);
+        }
       }
 
       const status = statusFilter === 'all' ? null : statusFilter;
-      console.log('[ORDERS SCREEN] Calling getOrders with status:', status);
-      const result = await getOrders(status);
+      const skip = (page - 1) * ordersPerPage;
+      console.log('[ORDERS SCREEN] Calling getOrders with status:', status, 'skip:', skip, 'limit:', ordersPerPage);
+      const result = await getOrders(status, skip, ordersPerPage);
       console.log('[ORDERS SCREEN] Orders received:', result);
       console.log('[ORDERS SCREEN] Orders count:', Array.isArray(result) ? result.length : 0);
-      setOrders(Array.isArray(result) ? result : []);
+      
+      const newOrders = Array.isArray(result) ? result : [];
+      
+      if (append) {
+        setOrders(prev => [...prev, ...newOrders]);
+      } else {
+        setOrders(newOrders);
+      }
+      
+      // Check if there are more orders
+      setHasMore(newOrders.length === ordersPerPage);
+      setTotalOrders(prev => append ? prev + newOrders.length : newOrders.length);
+      setCurrentPage(page);
     } catch (error) {
       console.error('[ORDERS SCREEN] Error loading orders:', error);
       // Only show alert for non-Customer ID errors
       if (error.message && !error.message.includes('Customer ID not found')) {
         Alert.alert('Xatolik', 'Buyurtmalarni yuklashda xatolik');
       }
-      setOrders([]);
+      if (!append) {
+        setOrders([]);
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -126,13 +150,23 @@ export default function OrdersScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      loadOrders();
+      setCurrentPage(1);
+      setHasMore(true);
+      loadOrders(1, false);
     }, [statusFilter])
   );
 
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      loadOrders(currentPage + 1, true);
+    }
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadOrders();
+    setCurrentPage(1);
+    setHasMore(true);
+    await loadOrders(1, false);
   };
 
   const handleOrderPress = (order) => {
@@ -140,7 +174,7 @@ export default function OrdersScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: 70 }]}>
       {/* Status Filter - Modern Design */}
       <View style={styles.filterContainer}>
         <View style={styles.filterCard}>
@@ -177,16 +211,35 @@ export default function OrdersScreen({ navigation }) {
         <FlatList
           data={orders}
           renderItem={({ item }) => (
-            <OrderCard order={item} onPress={handleOrderPress} />
+            <OrderCard 
+              order={item} 
+              onPress={(order, action) => {
+                if (action === 'reorder') {
+                  handleReorder(order);
+                } else {
+                  handleOrderPress(order);
+                }
+              }} 
+            />
           )}
           keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
               colors={[Colors.primary]}
             />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            hasMore && orders.length >= ordersPerPage ? (
+              <View style={styles.loadMoreContainer}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadMoreText}>Yuklanmoqda...</Text>
+              </View>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -195,6 +248,7 @@ export default function OrdersScreen({ navigation }) {
           }
         />
       )}
+      <Footer currentScreen="orders" />
     </View>
   );
 }
@@ -261,5 +315,17 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: Colors.textLight,
+  },
+  loadMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginLeft: 8,
   },
 });

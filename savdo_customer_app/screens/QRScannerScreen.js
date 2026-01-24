@@ -197,6 +197,7 @@ export default function QRScannerScreen() {
           </View>
         </View>
       </CameraView>
+      <Footer currentScreen="products" />
     </View>
   );
 }

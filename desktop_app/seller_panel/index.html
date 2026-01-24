@@ -70,6 +70,32 @@
                 <a href="#" class="nav-item" data-page="orders" data-permission="orders.view">
                     <i class="fas fa-clipboard-list"></i> Buyurtmalar
                 </a>
+                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(0, 0, 0, 0.1);">
+                    <div style="color: rgba(0, 0, 0, 0.6); font-size: 0.75rem; padding: 0.5rem 1rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Mijoz Ilovasi Funksiyalari
+                    </div>
+                </div>
+                <a href="#" class="nav-item" data-page="customer-referals">
+                    <i class="fas fa-user-plus"></i> Referallar
+                </a>
+                <a href="#" class="nav-item" data-page="customer-loyalty">
+                    <i class="fas fa-star"></i> Loyalty Program
+                </a>
+                <a href="#" class="nav-item" data-page="customer-price-alerts">
+                    <i class="fas fa-bell"></i> Narx Eslatmalari
+                </a>
+                <a href="#" class="nav-item" data-page="customer-favorites">
+                    <i class="fas fa-heart"></i> Sevimli Mahsulotlar
+                </a>
+                <a href="#" class="nav-item" data-page="customer-tags">
+                    <i class="fas fa-tags"></i> Shaxsiy Teglar
+                </a>
+                <a href="#" class="nav-item" data-page="product-reviews">
+                    <i class="fas fa-comments"></i> Mahsulot Sharhlari
+                </a>
+                <a href="#" class="nav-item" data-page="customer-payments">
+                    <i class="fas fa-credit-card"></i> To'lov Tarixi
+                </a>
                 <a href="#" class="nav-item" data-page="admin" id="admin-nav-item" style="display: none;">
                     <i class="fas fa-shield-alt"></i> Admin Boshqaruvi
                 </a>
@@ -716,6 +742,217 @@
                             </div>
                         </form>
                     </div>
+                </div>
+            </div>
+
+            <!-- Customer Referals Page -->
+            <div id="customer-referals-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-user-plus"></i> Mijozlar Referallari</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="referal-search" placeholder="Mijoz nomi yoki telefon bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerReferals()">
+                    <select id="referal-status-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadCustomerReferals()">
+                        <option value="">Barcha</option>
+                        <option value="active">Faol</option>
+                        <option value="completed">Tugallangan</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="referals-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Referal qilgan mijoz</th>
+                                <th>Taklif qilingan mijoz</th>
+                                <th>Referal kodi</th>
+                                <th>Bonus</th>
+                                <th>Holat</th>
+                                <th>Sana</th>
+                            </tr>
+                        </thead>
+                        <tbody id="referals-tbody">
+                            <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customer Loyalty Page -->
+            <div id="customer-loyalty-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-star"></i> Loyalty Program</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="loyalty-search" placeholder="Mijoz nomi yoki telefon bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerLoyalty()">
+                </div>
+                <div class="table-container">
+                    <table id="loyalty-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Telefon</th>
+                                <th>Ballar</th>
+                                <th>Sarflangan</th>
+                                <th>Jami olingan</th>
+                                <th>Oxirgi yangilanish</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loyalty-tbody">
+                            <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customer Price Alerts Page -->
+            <div id="customer-price-alerts-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-bell"></i> Mijozlar Narx Eslatmalari</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="price-alert-search" placeholder="Mijoz yoki mahsulot bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerPriceAlerts()">
+                    <select id="price-alert-status-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadCustomerPriceAlerts()">
+                        <option value="">Barcha</option>
+                        <option value="active">Faol</option>
+                        <option value="notified">Xabar berilgan</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="price-alerts-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulot</th>
+                                <th>Joriy narx</th>
+                                <th>Maqsadli narx</th>
+                                <th>Holat</th>
+                                <th>Sana</th>
+                            </tr>
+                        </thead>
+                        <tbody id="price-alerts-tbody">
+                            <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customer Favorites Page -->
+            <div id="customer-favorites-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-heart"></i> Mijozlar Sevimli Mahsulotlari</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="favorites-search" placeholder="Mijoz yoki mahsulot bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerFavorites()">
+                </div>
+                <div class="table-container">
+                    <table id="favorites-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulot</th>
+                                <th>Narx</th>
+                                <th>Qo'shilgan sana</th>
+                            </tr>
+                        </thead>
+                        <tbody id="favorites-tbody">
+                            <tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customer Tags Page -->
+            <div id="customer-tags-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-tags"></i> Mijozlar Shaxsiy Teglari</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="tags-search" placeholder="Mijoz, mahsulot yoki teg bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerTags()">
+                </div>
+                <div class="table-container">
+                    <table id="tags-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulot</th>
+                                <th>Teg</th>
+                                <th>Qo'shilgan sana</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tags-tbody">
+                            <tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Product Reviews Page -->
+            <div id="product-reviews-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-comments"></i> Mahsulot Sharhlari</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="reviews-search" placeholder="Mijoz yoki mahsulot bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadProductReviews()">
+                    <select id="reviews-rating-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadProductReviews()">
+                        <option value="">Barcha baholar</option>
+                        <option value="5">5 yulduz</option>
+                        <option value="4">4 yulduz</option>
+                        <option value="3">3 yulduz</option>
+                        <option value="2">2 yulduz</option>
+                        <option value="1">1 yulduz</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="reviews-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mahsulot</th>
+                                <th>Baholash</th>
+                                <th>Sharh</th>
+                                <th>Sana</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reviews-tbody">
+                            <tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customer Payments Page -->
+            <div id="customer-payments-page" class="panel-page">
+                <div class="page-header">
+                    <h2><i class="fas fa-credit-card"></i> Mijozlar To'lov Tarixi</h2>
+                </div>
+                <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="payments-search" placeholder="Mijoz nomi yoki telefon bo'yicha qidirish" class="search-input" style="flex: 1; min-width: 200px;" onkeyup="loadCustomerPayments()">
+                    <input type="date" id="payments-date-from" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadCustomerPayments()" placeholder="Dan">
+                    <input type="date" id="payments-date-to" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onchange="loadCustomerPayments()" placeholder="Gacha">
+                </div>
+                <div class="table-container">
+                    <table id="payments-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Summa</th>
+                                <th>To'lov usuli</th>
+                                <th>Buyurtma ID</th>
+                                <th>Sana</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payments-tbody">
+                            <tr><td colspan="6" class="text-center">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </main>

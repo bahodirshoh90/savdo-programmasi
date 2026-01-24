@@ -11,19 +11,32 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import Colors from '../constants/colors';
 import { useCart } from '../context/CartContext';
+import { useTheme } from '../context/ThemeContext';
 import CartItem from '../components/CartItem';
 import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import Footer from '../components/Footer';
 
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
+  const { colors } = useTheme();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState('cash'); // 'cash', 'card', 'debt'
+  const [showLocationModal, setShowLocationModal] = React.useState(false);
+  const [selectedLocation, setSelectedLocation] = React.useState({
+    address: null,
+    latitude: null,
+    longitude: null,
+  });
 
   const getImageUrl = (product) => {
     if (!product?.image_url) return null;
@@ -83,6 +96,9 @@ export default function CartScreen({ navigation }) {
     const orderData = {
       items: orderItems,
       payment_method: paymentMethod, // 'cash', 'card', 'debt' (olinadigan)
+      delivery_address: selectedLocation.address,
+      delivery_latitude: selectedLocation.latitude,
+      delivery_longitude: selectedLocation.longitude,
     };
 
     console.log('[CART] Step 3: Order data prepared:', JSON.stringify(orderData, null, 2));
@@ -119,48 +135,15 @@ export default function CartScreen({ navigation }) {
       console.error('[CART] Error status:', error.response?.status);
       console.error('[CART] Error config URL:', error.config?.url);
       console.error('[CART] Error config method:', error.config?.method);
-      console.error('[CART] Error config data:', error.config?.data);
-      console.error('[CART] Full error stringified:', JSON.stringify(error, null, 2));
       
-      let errorMessage = 'Buyurtma yaratishda xatolik';
-      
-      // Try to extract error message from response
-      if (error.response) {
-        const responseData = error.response.data;
-        console.log('[CART] Response data:', responseData);
-        
-        if (responseData) {
-          // FastAPI returns errors in {detail: "message"} format
-          if (responseData.detail) {
-            errorMessage = typeof responseData.detail === 'string' 
-              ? responseData.detail 
-              : JSON.stringify(responseData.detail);
-          } else if (responseData.message) {
-            errorMessage = typeof responseData.message === 'string'
-              ? responseData.message
-              : JSON.stringify(responseData.message);
-          } else if (responseData.error) {
-            errorMessage = typeof responseData.error === 'string'
-              ? responseData.error
-              : JSON.stringify(responseData.error);
-          } else if (Array.isArray(responseData)) {
-            errorMessage = responseData.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
-          } else if (typeof responseData === 'object') {
-            // Try to stringify the whole object
-            errorMessage = JSON.stringify(responseData);
-          } else if (typeof responseData === 'string') {
-            errorMessage = responseData;
-          }
-        }
+      // Show user-friendly error message
+      let errorMessage = 'Buyurtma yaratishda xatolik yuz berdi.';
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
       } else if (error.message) {
         errorMessage = error.message;
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Vaqt tugadi. Internetni tekshiring va qayta urinib ko\'ring.';
-      } else if (error.code === 'ERR_NETWORK') {
-        errorMessage = 'Internet aloqasi yo\'q. Internetni tekshiring va qayta urinib ko\'ring.';
       }
       
-      console.log('[CART] Final error message:', errorMessage);
       Alert.alert('Xatolik', errorMessage);
     } finally {
     setIsSubmitting(false);
@@ -236,21 +219,27 @@ export default function CartScreen({ navigation }) {
 
   if (cartItems.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Savatcha bo'sh</Text>
-        <TouchableOpacity
-          style={styles.browseButton}
-          onPress={() => navigation.navigate('Products')}
-        >
-          <Text style={styles.browseButtonText}>Mahsulotlarni ko'rish</Text>
-        </TouchableOpacity>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
+          <Text style={[styles.emptyText, { color: colors.text }]}>Savatcha bo'sh</Text>
+          <TouchableOpacity
+            style={[styles.browseButton, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('Products')}
+          >
+            <Text style={[styles.browseButtonText, { color: Colors.surface }]}>Mahsulotlarni ko'rish</Text>
+          </TouchableOpacity>
+        </View>
+        <Footer currentScreen="cart" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={[styles.content, { paddingBottom: 20 }]}
+      >
         {cartItems.map((item) => (
           <CartItem
             key={item.product.id}
@@ -262,10 +251,33 @@ export default function CartScreen({ navigation }) {
         ))}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        {/* Location Selection */}
+        <View style={[styles.locationContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.locationLabel, { color: colors.text }]}>Yetkazib berish manzili:</Text>
+          <TouchableOpacity
+            style={[styles.locationButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+            onPress={() => setShowLocationModal(true)}
+          >
+            <Ionicons name="location-outline" size={20} color={colors.primary} />
+            <Text style={[styles.locationText, { color: selectedLocation.address ? colors.text : colors.textLight }]}>
+              {selectedLocation.address || 'Xaritadan joyni tanlang'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+          </TouchableOpacity>
+          {selectedLocation.address && (
+            <TouchableOpacity
+              style={styles.clearLocationButton}
+              onPress={() => setSelectedLocation({ address: null, latitude: null, longitude: null })}
+            >
+              <Ionicons name="close-circle" size={18} color={colors.danger} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Payment Method Selection */}
-        <View style={styles.paymentMethodContainer}>
-          <Text style={styles.paymentMethodLabel}>To'lov usuli:</Text>
+        <View style={[styles.paymentMethodContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.paymentMethodLabel, { color: colors.text }]}>To'lov usuli:</Text>
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={paymentMethod}
@@ -273,8 +285,8 @@ export default function CartScreen({ navigation }) {
                 console.log('[CART] Payment method changed to:', value);
                 setPaymentMethod(value);
               }}
-              style={styles.picker}
-              dropdownIconColor={Colors.primary}
+              style={[styles.picker, { color: colors.text }]}
+              dropdownIconColor={colors.primary}
             >
               <Picker.Item label="Naqd" value="cash" />
               <Picker.Item label="Plastik karta" value="card" />
@@ -284,24 +296,137 @@ export default function CartScreen({ navigation }) {
         </View>
 
         <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Jami:</Text>
-          <Text style={styles.totalAmount}>
+          <Text style={[styles.totalLabel, { color: colors.text }]}>Jami:</Text>
+          <Text style={[styles.totalAmount, { color: colors.primary }]}>
             {getTotalAmount().toLocaleString('uz-UZ')} so'm
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.checkoutButton, isSubmitting && styles.checkoutButtonDisabled]}
+          style={[styles.checkoutButton, { backgroundColor: colors.primary }, isSubmitting && styles.checkoutButtonDisabled]}
           onPress={handleCheckout}
           disabled={isSubmitting}
         >
           {isSubmitting ? (
-            <ActivityIndicator color={Colors.surface} />
+            <ActivityIndicator color={colors.surface} />
           ) : (
-            <Text style={styles.checkoutButtonText}>Buyurtma berish</Text>
+            <Text style={[styles.checkoutButtonText, { color: colors.surface }]}>Buyurtma berish</Text>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Location Selection Modal */}
+      <Modal
+        visible={showLocationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLocationModal(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Yetkazib berish manzili</Text>
+              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.locationModalContent}>
+              <Text style={[styles.locationModalText, { color: colors.text }]}>
+                Xaritadan joyni tanlash funksiyasi tez orada qo'shiladi.
+              </Text>
+              <Text style={[styles.locationModalSubtext, { color: colors.textLight }]}>
+                Hozircha manzilni qo'lda kiriting:
+              </Text>
+
+              <TextInput
+                style={[styles.addressInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="Manzilni kiriting (masalan: Toshkent shahar, Chilonzor tumani, ...)"
+                placeholderTextColor={colors.textLight}
+                value={selectedLocation.address || ''}
+                onChangeText={(text) => setSelectedLocation({ ...selectedLocation, address: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              <TouchableOpacity
+                style={[styles.getCurrentLocationButton, { backgroundColor: colors.primary }]}
+                onPress={async () => {
+                  try {
+                    const { status } = await Location.requestForegroundPermissionsAsync();
+                    if (status !== 'granted') {
+                      Alert.alert('Ruxsat kerak', 'Joylashuv ruxsatini bering');
+                      return;
+                    }
+
+                    const location = await Location.getCurrentPositionAsync({});
+                    const { latitude, longitude } = location.coords;
+
+                    // Reverse geocoding to get address
+                    const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+                    if (geocode && geocode.length > 0) {
+                      const addr = geocode[0];
+                      const addressParts = [
+                        addr.street,
+                        addr.district,
+                        addr.city,
+                        addr.region,
+                        addr.country,
+                      ].filter(Boolean);
+                      const address = addressParts.join(', ');
+
+                      setSelectedLocation({
+                        address: address || `${latitude}, ${longitude}`,
+                        latitude,
+                        longitude,
+                      });
+                      Alert.alert('Muvaffaqiyatli', 'Joylashuv aniqlandi');
+                    } else {
+                      setSelectedLocation({
+                        address: `${latitude}, ${longitude}`,
+                        latitude,
+                        longitude,
+                      });
+                      Alert.alert('Muvaffaqiyatli', 'Joylashuv aniqlandi');
+                    }
+                  } catch (error) {
+                    console.error('Error getting location:', error);
+                    Alert.alert('Xatolik', 'Joylashuvni aniqlashda xatolik');
+                  }
+                }}
+              >
+                <Ionicons name="locate" size={20} color={Colors.surface} />
+                <Text style={[styles.getCurrentLocationText, { color: Colors.surface }]}>
+                  Joriy joylashuvni olish
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                  onPress={() => setShowLocationModal(false)}
+                >
+                  <Text style={[styles.modalButtonText, { color: colors.text }]}>Bekor</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
+                  onPress={() => {
+                    if (selectedLocation.address) {
+                      setShowLocationModal(false);
+                    } else {
+                      Alert.alert('Xatolik', 'Manzilni kiriting');
+                    }
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: Colors.surface }]}>Saqlash</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Footer currentScreen="cart" />
     </View>
   );
 }
@@ -309,64 +434,55 @@ export default function CartScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: 16,
+    paddingBottom: 20,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    paddingBottom: 100, // Add padding to avoid footer overlap
   },
   emptyText: {
     fontSize: 18,
-    color: Colors.textLight,
     marginBottom: 20,
   },
   browseButton: {
-    backgroundColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
   },
   browseButtonText: {
-    color: Colors.surface,
     fontSize: 16,
     fontWeight: '600',
   },
   footer: {
-    backgroundColor: Colors.surface,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
   },
   paymentMethodContainer: {
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   paymentMethodLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textDark,
     marginBottom: 8,
   },
   pickerWrapper: {
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: Colors.background,
   },
   picker: {
     height: 50,
-    color: Colors.textDark,
   },
   totalContainer: {
     flexDirection: 'row',
@@ -377,15 +493,12 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.textDark,
   },
   totalAmount: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: Colors.primary,
   },
   checkoutButton: {
-    backgroundColor: Colors.primary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -394,8 +507,107 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   checkoutButtonText: {
-    color: Colors.surface,
     fontSize: 18,
+    fontWeight: '600',
+  },
+  locationContainer: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  locationLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  locationText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  clearLocationButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  locationModalContent: {
+    gap: 16,
+  },
+  locationModalText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  locationModalSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  addressInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  getCurrentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  getCurrentLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  saveButton: {
+    // backgroundColor set inline
+  },
+  modalButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });

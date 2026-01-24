@@ -73,6 +73,13 @@ class WebSocketService {
             return;
           }
 
+          // Handle customer_type_changed event
+          if (message.type === 'customer_type_changed' && message.customer_id === this.customerId) {
+            console.log('[WebSocket] Customer type changed, emitting event');
+            this.emit('customer_type_changed', message);
+            return;
+          }
+
           // Emit message to listeners
           this.emit(message.type || 'message', message);
         } catch (error) {

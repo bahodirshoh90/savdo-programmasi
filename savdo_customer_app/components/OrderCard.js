@@ -72,6 +72,20 @@ export default function OrderCard({ order, onPress }) {
       </View>
 
       <View style={styles.footer}>
+        {order.status === 'completed' && (
+          <TouchableOpacity
+            style={styles.reorderButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (onPress) {
+                onPress(order, 'reorder');
+              }
+            }}
+          >
+            <Ionicons name="repeat-outline" size={16} color={Colors.primary} />
+            <Text style={styles.reorderButtonText}>Qayta buyurtma</Text>
+          </TouchableOpacity>
+        )}
         <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
       </View>
     </TouchableOpacity>
@@ -129,6 +143,23 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   footer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reorderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    gap: 6,
+  },
+  reorderButtonText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

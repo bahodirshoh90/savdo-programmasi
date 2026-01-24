@@ -33,12 +33,15 @@ function formatDate(dateStr) {
 let currentProductPage = 1;
 let currentCustomerPage = 1;
 let currentSalePage = 1;
+let currentOrderPage = 1;
 let productsPerPage = 20;
 let customersPerPage = 20;
 let salesPerPage = 20;
+let ordersPerPage = 15;
 let totalProducts = 0;
 let totalCustomers = 0;
 let totalSales = 0;
+let totalOrders = 0;
 
 // Selected products for bulk operations
 let selectedProducts = new Set();
@@ -286,6 +289,8 @@ function showPage(pageName) {
             loadDashboard();
             break;
         case 'products':
+            loadCategories(); // Load categories for filter
+            loadProductCategories(); // Load categories for product form dropdown
             loadProducts();
             // Initialize barcode scanner after page loads
             setTimeout(() => {
@@ -329,6 +334,9 @@ function showPage(pageName) {
             break;
         case 'banners':
             loadBanners();
+            break;
+        case 'categories':
+            loadCategoriesPage();
             break;
     }
 }
@@ -609,6 +617,7 @@ function initAdminProductBarcodeScanner() {
 
 function clearProductFilters() {
     document.getElementById('product-search').value = '';
+    document.getElementById('product-category-filter').value = '';
     document.getElementById('product-brand-filter').value = '';
     document.getElementById('product-supplier-filter').value = '';
     document.getElementById('product-location-filter').value = '';
@@ -617,9 +626,73 @@ function clearProductFilters() {
     loadProducts();
 }
 
+// Load categories for filter dropdown
+async function loadCategories() {
+    try {
+        // Fetch products in batches to get all categories (max limit is 1000)
+        let allProducts = [];
+        let skip = 0;
+        const limit = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+            const response = await fetch(`${API_BASE}/products?skip=${skip}&limit=${limit}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const products = await response.json();
+            if (!Array.isArray(products)) {
+                throw new Error('Invalid response format');
+            }
+            allProducts = allProducts.concat(products);
+            if (products.length < limit) {
+                hasMore = false;
+            } else {
+                skip += limit;
+            }
+        }
+        
+        const categories = new Set();
+        allProducts.forEach(product => {
+            if (product.category && product.category.trim()) {
+                const category = product.category.trim();
+                categories.add(category);
+            }
+        });
+        
+        const categoryFilter = document.getElementById('product-category-filter');
+        if (categoryFilter) {
+            // Save current selected value
+            const currentValue = categoryFilter.value;
+            
+            // Clear all options except the first one
+            while (categoryFilter.children.length > 1) {
+                categoryFilter.removeChild(categoryFilter.lastChild);
+            }
+            
+            // Add categories sorted
+            const sortedCategories = Array.from(categories).sort();
+            sortedCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categoryFilter.appendChild(option);
+            });
+            
+            // Restore selected value if it still exists
+            if (currentValue && Array.from(categoryFilter.options).some(opt => opt.value === currentValue)) {
+                categoryFilter.value = currentValue;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+    }
+}
+
 async function loadProducts() {
     try {
         const search = document.getElementById('product-search')?.value || '';
+        const category = document.getElementById('product-category-filter')?.value || '';
         const brand = document.getElementById('product-brand-filter')?.value || '';
         const supplier = document.getElementById('product-supplier-filter')?.value || '';
         const location = document.getElementById('product-location-filter')?.value || '';
@@ -647,6 +720,7 @@ async function loadProducts() {
         params.append('limit', productsPerPage);
         
         if (search) params.append('search', search);
+        if (category) params.append('category', category);
         if (brand) params.append('brand', brand);
         if (supplier) params.append('supplier', supplier);
         if (location) params.append('location', location);
@@ -677,6 +751,7 @@ async function loadProducts() {
         // Build count URL with same filters
         const countParams = new URLSearchParams();
         if (search) countParams.append('search', search);
+        if (category) countParams.append('category', category);
         if (brand) countParams.append('brand', brand);
         if (supplier) countParams.append('supplier', supplier);
         if (location) countParams.append('location', location);
@@ -765,6 +840,7 @@ async function loadProducts() {
                 <td>${product.id}</td>
                 <td class="product-image-cell"></td>
                 <td>${escapeHtml(product.name)}</td>
+                <td>${escapeHtml(product.category || '-')}</td>
                 <td>${escapeHtml(product.item_number || '-')}</td>
                 <td>${escapeHtml(product.barcode || '-')}</td>
                 <td>${product.pieces_per_package}</td>
@@ -1094,7 +1170,7 @@ function generateBarcode() {
     document.getElementById('product-barcode').value = randomBarcode;
 }
 
-function showAddProductModal() {
+async function showAddProductModal() {
     document.getElementById('product-modal-title').textContent = 'Yangi Mahsulot';
     document.getElementById('product-form').reset();
     document.getElementById('product-id').value = '';
@@ -1103,6 +1179,8 @@ function showAddProductModal() {
     document.getElementById('product-image-url').value = '';
     document.getElementById('product-total-pieces-input').value = '0';
     updateProductImagePreview('');
+    // Load categories for dropdown - wait for it to complete
+    await loadProductCategories();
     document.getElementById('product-modal').style.display = 'block';
 }
 
@@ -1114,6 +1192,30 @@ async function editProduct(id) {
         document.getElementById('product-name').value = product.name;
         document.getElementById('product-item-number').value = product.item_number || '';
         document.getElementById('product-barcode').value = product.barcode || '';
+        // Load categories first, then set the category
+        await loadProductCategories();
+        
+        // Set category_id if available, otherwise use category name
+        const categorySelect = document.getElementById('product-category-select');
+        if (categorySelect) {
+            if (product.category_id) {
+                categorySelect.value = product.category_id;
+            } else if (product.category) {
+                // Try to find category by name
+                const categories = await fetch(`${API_BASE}/categories?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []);
+                const category = categories.find(c => c.name === product.category);
+                if (category) {
+                    categorySelect.value = category.id;
+                }
+            }
+        }
+        
+        // Legacy category field (for backward compatibility)
+        const categoryInput = document.getElementById('product-category');
+        if (categoryInput) {
+            categoryInput.value = product.category || '';
+        }
+        
         document.getElementById('product-brand').value = product.brand || '';
         document.getElementById('product-supplier').value = product.supplier || '';
         document.getElementById('product-location').value = product.location || '';
@@ -1301,6 +1403,7 @@ async function saveProduct(e) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
+        data.category = document.getElementById('product-category').value.trim() || null;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
@@ -1313,6 +1416,9 @@ async function saveProduct(e) {
         
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
+        
+        const categoryValue = document.getElementById('product-category').value.trim();
+        if (categoryValue) data.category = categoryValue;
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -2069,8 +2175,12 @@ async function loadOrders() {
         const endDate = document.getElementById('order-end-date')?.value;
         const customerId = selectedCustomerIdForOrderFilter;
         
+        const skip = (currentOrderPage - 1) * ordersPerPage;
+        
         let url = `${API_BASE}/orders`;
         const params = [];
+        params.push(`skip=${skip}`);
+        params.push(`limit=${ordersPerPage}`);
         // Only add status if it's not empty (empty string or "all" means "all")
         // Empty string from select means "all", so don't add status parameter
         if (status && status.trim() !== '' && status !== 'all') {
@@ -2093,15 +2203,36 @@ async function loadOrders() {
         console.log('Status filter value:', status);
         console.log('Status filter type:', typeof status);
         
-        const response = await fetch(url);
+        // Build count URL with same filters
+        const countParams = [];
+        if (status && status.trim() !== '' && status !== 'all') {
+            countParams.push(`status=${encodeURIComponent(status)}`);
+        }
+        if (startDate && startDate.trim() !== '') {
+            countParams.push(`start_date=${encodeURIComponent(startDate)}`);
+        }
+        if (endDate && endDate.trim() !== '') {
+            countParams.push(`end_date=${encodeURIComponent(endDate)}`);
+        }
+        if (customerId) {
+            countParams.push(`customer_id=${customerId}`);
+        }
+        const countUrl = `${API_BASE}/orders/count${countParams.length > 0 ? '?' + countParams.join('&') : ''}`;
+        
+        const [response, countResponse] = await Promise.all([
+            fetch(url),
+            fetch(countUrl).then(r => r.json()).catch(() => ({ count: 0 }))
+        ]);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const orders = await response.json();
+        totalOrders = countResponse.count || 0;
         
         console.log('Orders loaded:', orders ? orders.length : 0);
+        console.log('Total orders:', totalOrders);
         console.log('Orders data:', orders);
         
         // Check if orders is actually an array
@@ -2113,6 +2244,13 @@ async function loadOrders() {
         
         if (orders.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" class="text-center">Buyurtmalar topilmadi</td></tr>';
+            // Render pagination even if no orders
+            if (totalOrders > 0) {
+                renderPagination('orders-pagination', currentOrderPage, ordersPerPage, totalOrders, (page) => {
+                    currentOrderPage = page;
+                    loadOrders();
+                });
+            }
             return;
         }
 
@@ -2143,6 +2281,20 @@ async function loadOrders() {
             tbody.appendChild(row);
         });
         
+        // Render pagination if total orders > 15
+        if (totalOrders > ordersPerPage) {
+            renderPagination('orders-pagination', currentOrderPage, ordersPerPage, totalOrders, (page) => {
+                currentOrderPage = page;
+                loadOrders();
+            });
+        } else {
+            // Clear pagination if not needed
+            const paginationEl = document.getElementById('orders-pagination');
+            if (paginationEl) {
+                paginationEl.innerHTML = '';
+            }
+        }
+        
         console.log('Successfully rendered', orders.length, 'orders');
     } catch (error) {
         console.error('Error loading orders:', error);
@@ -2170,6 +2322,7 @@ function handleOrderCustomerSearch() {
     
     if (!query) {
         selectedCustomerIdForOrderFilter = null;
+        currentOrderPage = 1;
         loadOrders();
         return;
     }
@@ -2182,11 +2335,13 @@ function handleOrderCustomerSearch() {
     
     if (match) {
         selectedCustomerIdForOrderFilter = match.id;
+        currentOrderPage = 1;
         loadOrders();
     } else {
         // If no match, clear selection
         if (selectedCustomerIdForOrderFilter) {
             selectedCustomerIdForOrderFilter = null;
+            currentOrderPage = 1;
             loadOrders();
         }
     }
@@ -2199,6 +2354,7 @@ function clearOrderFilters() {
     document.getElementById('order-customer-search').value = '';
     document.getElementById('order-status-filter').value = '';
     selectedCustomerIdForOrderFilter = null;
+    currentOrderPage = 1;
     loadOrders();
 }
 
@@ -5739,5 +5895,290 @@ async function deleteBanner(id) {
     } catch (error) {
         console.error('Error deleting banner:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+// ==================== CATEGORIES ====================
+
+async function loadCategoriesPage() {
+    await loadCategoriesList();
+}
+
+async function loadCategoriesList() {
+    try {
+        const tbody = document.getElementById('categories-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>';
+        
+        // Test backend connection first
+        try {
+            const testResponse = await fetch(`${API_BASE}/statistics`);
+            if (!testResponse.ok && testResponse.status === 404) {
+                throw new Error('Backend server is not running or endpoint not found');
+            }
+        } catch (testError) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Backend server ishlamayapti. Iltimos, backend serverni ishga tushiring.</td></tr>';
+            console.error('Backend connection test failed:', testError);
+            return;
+        }
+        
+        const headers = getAuthHeaders();
+        const response = await fetch(`${API_BASE}/categories?limit=1000`, { headers });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Kategoriyalar endpoint topilmadi. Backend serverni tekshiring.</td></tr>';
+                console.error('Categories endpoint not found (404)');
+                return;
+            }
+            const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}: ${response.statusText}` }));
+            throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const categories = await response.json();
+        
+        if (categories.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Kategoriyalar mavjud emas</td></tr>';
+            return;
+        }
+        
+        // Get product counts for each category
+        const productCounts = {};
+        try {
+            const productsResponse = await fetch(`${API_BASE}/products?limit=10000`, { headers });
+            if (productsResponse.ok) {
+                const products = await productsResponse.json();
+                products.forEach(product => {
+                    if (product.category_id) {
+                        productCounts[product.category_id] = (productCounts[product.category_id] || 0) + 1;
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Error loading product counts:', e);
+        }
+        
+        tbody.innerHTML = categories.map(category => {
+            const productCount = productCounts[category.id] || 0;
+            const createdDate = category.created_at ? new Date(category.created_at).toLocaleDateString('uz-UZ') : '-';
+            return `
+                <tr>
+                    <td>${category.id}</td>
+                    <td>${escapeHtml(category.name || '-')}</td>
+                    <td>${escapeHtml(category.description || '-')}</td>
+                    <td>${category.icon ? `<i class="${category.icon}"></i>` : '-'}</td>
+                    <td>${category.display_order || 0}</td>
+                    <td>${productCount}</td>
+                    <td>${createdDate}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editCategory(${category.id})">
+                            <i class="fas fa-edit"></i> Tahrirlash
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCategory(${category.id})">
+                            <i class="fas fa-trash"></i> O'chirish
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Apply search filter if any
+        const searchInput = document.getElementById('category-search');
+        if (searchInput && searchInput.value) {
+            loadCategories(); // This will filter the results
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+        const tbody = document.getElementById('categories-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Xatolik: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+// Alias for search
+function loadCategories() {
+    const searchTerm = document.getElementById('category-search')?.value.toLowerCase() || '';
+    const rows = document.querySelectorAll('#categories-tbody tr');
+    
+    rows.forEach(row => {
+        const nameCell = row.querySelector('td:nth-child(2)');
+        if (!nameCell) return;
+        
+        const name = nameCell.textContent.toLowerCase();
+        row.style.display = name.includes(searchTerm) ? '' : 'none';
+    });
+}
+
+function showAddCategoryModal() {
+    document.getElementById('category-id').value = '';
+    document.getElementById('category-name').value = '';
+    document.getElementById('category-description').value = '';
+    document.getElementById('category-icon').value = '';
+    document.getElementById('category-display-order').value = '0';
+    document.getElementById('category-modal-title').textContent = 'Yangi Kategoriya';
+    document.getElementById('category-modal').style.display = 'block';
+}
+
+function editCategory(id) {
+    const headers = getAuthHeaders();
+    fetch(`${API_BASE}/categories/${id}`, { headers })
+        .then(r => r.json())
+        .then(category => {
+            document.getElementById('category-id').value = category.id;
+            document.getElementById('category-name').value = category.name || '';
+            document.getElementById('category-description').value = category.description || '';
+            document.getElementById('category-icon').value = category.icon || '';
+            document.getElementById('category-display-order').value = category.display_order || 0;
+            document.getElementById('category-modal-title').textContent = 'Kategoriyani Tahrirlash';
+            document.getElementById('category-modal').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error loading category:', error);
+            alert('Kategoriyani yuklashda xatolik: ' + error.message);
+        });
+}
+
+async function saveCategory(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    
+    const id = document.getElementById('category-id').value;
+    const name = document.getElementById('category-name').value.trim();
+    const description = document.getElementById('category-description').value.trim();
+    const icon = document.getElementById('category-icon').value.trim();
+    const displayOrder = parseInt(document.getElementById('category-display-order').value) || 0;
+    
+    if (!name) {
+        alert('Kategoriya nomini kiriting');
+        return;
+    }
+    
+    try {
+        const headers = getAuthHeaders();
+        headers['Content-Type'] = 'application/json';
+        
+        const data = {
+            name,
+            description: description || null,
+            icon: icon || null,
+            display_order: displayOrder
+        };
+        
+        let response;
+        if (id) {
+            // Update
+            response = await fetch(`${API_BASE}/categories/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+        } else {
+            // Create
+            response = await fetch(`${API_BASE}/categories`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+        }
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Kategoriyani saqlashda xatolik');
+        }
+        
+        showToast(id ? 'Kategoriya yangilandi' : 'Kategoriya yaratildi');
+        document.getElementById('category-modal').style.display = 'none';
+        loadCategoriesList();
+        // Reload product categories dropdown
+        loadProductCategories();
+    } catch (error) {
+        console.error('Error saving category:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteCategory(id) {
+    if (!confirm('Kategoriyani o\'chirishni xohlaysizmi?')) return;
+    
+    try {
+        const headers = getAuthHeaders();
+        
+        // Check if category has products
+        const categoryResponse = await fetch(`${API_BASE}/categories/${id}`, { headers });
+        if (!categoryResponse.ok) {
+            throw new Error('Kategoriya topilmadi');
+        }
+        
+        const response = await fetch(`${API_BASE}/categories/${id}`, {
+            method: 'DELETE',
+            headers
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Kategoriyani o\'chirishda xatolik');
+        }
+        
+        showToast('Kategoriya o\'chirildi');
+        loadCategoriesList();
+        // Reload product categories dropdown
+        loadProductCategories();
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function loadProductCategories() {
+    try {
+        const headers = getAuthHeaders();
+        const response = await fetch(`${API_BASE}/categories?limit=1000`, { headers });
+        
+        if (!response.ok) {
+            console.error('Error loading categories from API:', response.status, response.statusText);
+            return;
+        }
+        
+        const categories = await response.json();
+        
+        // Update product category select
+        const select = document.getElementById('product-category-select');
+        if (select) {
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Kategoriya tanlash...</option>';
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                select.appendChild(option);
+            });
+            if (currentValue) {
+                select.value = currentValue;
+            }
+        }
+        
+        // Update product category filter
+        const filterSelect = document.getElementById('product-category-filter');
+        if (filterSelect) {
+            const currentFilterValue = filterSelect.value;
+            // Keep the first option (empty)
+            while (filterSelect.children.length > 1) {
+                filterSelect.removeChild(filterSelect.lastChild);
+            }
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                filterSelect.appendChild(option);
+            });
+            if (currentFilterValue) {
+                filterSelect.value = currentFilterValue;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading categories from API:', error);
     }
 }

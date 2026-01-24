@@ -60,6 +60,8 @@ class ProductService:
                 product_data = product.dict()
             
             print(f"[ProductService.create_product] Product data: {product_data}")
+            print(f"[ProductService.create_product] Category in product_data: {product_data.get('category')}")
+            print(f"[ProductService.create_product] Category type: {type(product_data.get('category'))}")
             
             # Ensure pieces_per_package is at least 1
             if 'pieces_per_package' not in product_data or product_data['pieces_per_package'] is None:
@@ -81,19 +83,99 @@ class ProductService:
             if 'pieces_in_stock' not in product_data or product_data['pieces_in_stock'] is None:
                 product_data['pieces_in_stock'] = 0
             
-            print(f"[ProductService.create_product] Final product data: {product_data}")
+            # Handle optional string fields - convert empty strings to None, but keep non-empty strings
+            if 'category' in product_data:
+                category_value = product_data['category']
+                print(f"[ProductService.create_product] Processing category: {category_value}, type: {type(category_value)}")
+                if category_value is None:
+                    product_data['category'] = None
+                elif category_value == '' or (isinstance(category_value, str) and category_value.strip() == ''):
+                    product_data['category'] = None
+                elif category_value:
+                    product_data['category'] = str(category_value).strip()
+                    print(f"[ProductService.create_product] Category after processing: {product_data['category']}")
+            else:
+                print(f"[ProductService.create_product] Category not in product_data")
             
+            if 'brand' in product_data:
+                if product_data['brand'] == '' or (isinstance(product_data['brand'], str) and product_data['brand'].strip() == ''):
+                    product_data['brand'] = None
+                elif product_data['brand']:
+                    product_data['brand'] = product_data['brand'].strip()
+            
+            if 'supplier' in product_data:
+                if product_data['supplier'] == '' or (isinstance(product_data['supplier'], str) and product_data['supplier'].strip() == ''):
+                    product_data['supplier'] = None
+                elif product_data['supplier']:
+                    product_data['supplier'] = product_data['supplier'].strip()
+            
+            if 'item_number' in product_data:
+                if product_data['item_number'] == '' or (isinstance(product_data['item_number'], str) and product_data['item_number'].strip() == ''):
+                    product_data['item_number'] = None
+                elif product_data['item_number']:
+                    product_data['item_number'] = product_data['item_number'].strip()
+            
+            if 'location' in product_data:
+                if product_data['location'] == '' or (isinstance(product_data['location'], str) and product_data['location'].strip() == ''):
+                    product_data['location'] = None
+                elif product_data['location']:
+                    product_data['location'] = product_data['location'].strip()
+            
+            print(f"[ProductService.create_product] Final product data: {product_data}")
+            print(f"[ProductService.create_product] Category in final data: {product_data.get('category')}")
+            print(f"[ProductService.create_product] Category type in final data: {type(product_data.get('category'))}")
+            
+            # Get category value before creating Product object
+            category_value = product_data.get('category')
+            print(f"[ProductService.create_product] Category value from product_data: '{category_value}' (type: {type(category_value)})")
+            
+            # Process category value
+            if category_value is not None:
+                if isinstance(category_value, str):
+                    category_value = category_value.strip()
+                    if category_value == '':
+                        category_value = None
+                else:
+                    category_value = str(category_value).strip() if category_value else None
+            else:
+                category_value = None
+            
+            print(f"[ProductService.create_product] Processed category value: '{category_value}'")
+            
+            # Remove category from product_data to set it explicitly after object creation
+            if 'category' in product_data:
+                del product_data['category']
+            
+            # Create Product object without category first
             db_product = Product(**product_data)
+            
+            # Explicitly set category after object creation
+            db_product.category = category_value
+            print(f"[ProductService.create_product] Category explicitly set to: '{db_product.category}'")
+            
             print(f"[ProductService.create_product] Product object created: {db_product.name}")
+            print(f"[ProductService.create_product] Product category after creation: '{db_product.category}'")
             
             db.add(db_product)
             print(f"[ProductService.create_product] Product added to session")
+            print(f"[ProductService.create_product] Category before commit: '{db_product.category}'")
             
             db.commit()
             print(f"[ProductService.create_product] Changes committed")
             
             db.refresh(db_product)
             print(f"[ProductService.create_product] Product refreshed, ID: {db_product.id}")
+            print(f"[ProductService.create_product] Product category after refresh: '{db_product.category}'")
+            
+            # Double-check category is saved correctly
+            if category_value is not None:
+                if db_product.category != category_value:
+                    print(f"[ProductService.create_product] WARNING: Category mismatch! Expected: '{category_value}', Got: '{db_product.category}'")
+                    # Try to fix it
+                    db_product.category = category_value
+                    db.commit()
+                    db.refresh(db_product)
+                    print(f"[ProductService.create_product] Category fixed and re-committed: '{db_product.category}'")
             
             return db_product
         except Exception as e:

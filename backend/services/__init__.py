@@ -14,6 +14,7 @@ from .role_service import RoleService
 from .audit_service import AuditService
 from .debt_service import DebtService
 from .auth_service import AuthService
+from .notification_service import NotificationService
 
 __all__ = [
     "ProductService",
@@ -29,4 +30,5 @@ __all__ = [
     "AuditService",
     "DebtService",
     "AuthService",
+    "NotificationService",
 ]

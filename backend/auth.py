@@ -60,6 +60,9 @@ PERMISSIONS = {
     # GPS
     "gps.view": "GPS xaritani ko'rish",
     "gps.update": "GPS joylashuvni yangilash",
+    
+    # Notifications
+    "notifications.send": "Push bildirishnomalar yuborish",
 }
 
 

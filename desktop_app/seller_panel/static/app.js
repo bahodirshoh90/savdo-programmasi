@@ -625,7 +625,13 @@ function showPage(pageId) {
         'customers-page',
         'orders-page',
         'admin-page',
-        'admin-page'
+        'customer-referals-page',
+        'customer-loyalty-page',
+        'customer-price-alerts-page',
+        'customer-favorites-page',
+        'customer-tags-page',
+        'product-reviews-page',
+        'customer-payments-page'
     ];
     
     // Hide all panel pages - ONLY .panel-page, NOT .page (which includes seller-panel)
@@ -826,6 +832,34 @@ function showPage(pageId) {
                 alert('Sizda admin panelga kirish uchun ruxsat yo\'q');
                 showPage('dashboard');
             }
+            break;
+        case 'customer-referals':
+        case 'customer-referals-page':
+            loadCustomerReferals();
+            break;
+        case 'customer-loyalty':
+        case 'customer-loyalty-page':
+            loadCustomerLoyalty();
+            break;
+        case 'customer-price-alerts':
+        case 'customer-price-alerts-page':
+            loadCustomerPriceAlerts();
+            break;
+        case 'customer-favorites':
+        case 'customer-favorites-page':
+            loadCustomerFavorites();
+            break;
+        case 'customer-tags':
+        case 'customer-tags-page':
+            loadCustomerTags();
+            break;
+        case 'product-reviews':
+        case 'product-reviews-page':
+            loadProductReviews();
+            break;
+        case 'customer-payments':
+        case 'customer-payments-page':
+            loadCustomerPayments();
             break;
     }
 }
@@ -3800,6 +3834,542 @@ async function updateAdminOrderStatus(orderId) {
     } catch (error) {
         console.error('Error updating order status:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+// Helper function to get auth headers for seller
+function getSellerAuthHeaders() {
+    const token = currentToken || localStorage.getItem('seller_token');
+    const sellerId = localStorage.getItem('seller_id');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (sellerId) headers['X-Seller-ID'] = sellerId;
+    return headers;
+}
+
+// Load Customer Referals
+async function loadCustomerReferals() {
+    try {
+        const search = document.getElementById('referal-search')?.value || '';
+        const statusFilter = document.getElementById('referal-status-filter')?.value || '';
+        
+        // Get all customers first to get their referals
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('referals-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        // For each customer, get their referals
+        let allReferals = [];
+        for (const customer of customers) {
+            try {
+                const response = await fetch(`${API_BASE}/referals?customer_id=${customer.id}`, {
+                    headers: {
+                        ...getSellerAuthHeaders(),
+                        'X-Customer-ID': customer.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.referals_sent) {
+                        data.referals_sent.forEach(ref => {
+                            allReferals.push({
+                                ...ref,
+                                referrer_name: customer.name,
+                                referrer_phone: customer.phone
+                            });
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error(`Error loading referals for customer ${customer.id}:`, e);
+            }
+        }
+        
+        // Filter
+        let filtered = allReferals;
+        if (search) {
+            filtered = filtered.filter(r => 
+                (r.referrer_name && r.referrer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (r.referrer_phone && r.referrer_phone.includes(search))
+            );
+        }
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = filtered.map(ref => `
+            <tr>
+                <td>${ref.id || '-'}</td>
+                <td>${escapeHtml(ref.referrer_name || '-')} (${escapeHtml(ref.referrer_phone || '-')})</td>
+                <td>${ref.referred_id ? `Mijoz #${ref.referred_id}` : 'Kutilmoqda'}</td>
+                <td><code>${escapeHtml(ref.referal_code || '-')}</code></td>
+                <td>${ref.bonus_amount ? ref.bonus_amount.toLocaleString('uz-UZ') + ' so\'m' : '-'}</td>
+                <td>${ref.status || 'active'}</td>
+                <td>${formatDate(ref.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer referals:', error);
+        const tbody = document.getElementById('referals-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+// Load Customer Loyalty
+async function loadCustomerLoyalty() {
+    try {
+        const search = document.getElementById('loyalty-search')?.value || '';
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('loyalty-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        let loyaltyData = [];
+        for (const customer of customers) {
+            try {
+                const response = await fetch(`${API_BASE}/loyalty/points`, {
+                    headers: {
+                        ...getSellerAuthHeaders(),
+                        'X-Customer-ID': customer.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    loyaltyData.push({
+                        customer_id: customer.id,
+                        customer_name: customer.name,
+                        customer_phone: customer.phone,
+                        ...data
+                    });
+                }
+            } catch (e) {
+                // Customer may not have loyalty account
+            }
+        }
+        
+        if (search) {
+            loyaltyData = loyaltyData.filter(l => 
+                (l.customer_name && l.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (l.customer_phone && l.customer_phone.includes(search))
+            );
+        }
+        
+        if (loyaltyData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = loyaltyData.map(l => `
+            <tr>
+                <td>${l.customer_id || '-'}</td>
+                <td>${escapeHtml(l.customer_name || '-')}</td>
+                <td>${escapeHtml(l.customer_phone || '-')}</td>
+                <td><strong>${(l.current_points || 0).toLocaleString('uz-UZ')}</strong></td>
+                <td>${(l.total_spent_points || 0).toLocaleString('uz-UZ')}</td>
+                <td>${(l.total_earned_points || 0).toLocaleString('uz-UZ')}</td>
+                <td>${formatDate(l.updated_at || l.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer loyalty:', error);
+        const tbody = document.getElementById('loyalty-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+// Load Customer Price Alerts
+async function loadCustomerPriceAlerts() {
+    try {
+        const search = document.getElementById('price-alert-search')?.value || '';
+        const statusFilter = document.getElementById('price-alert-status-filter')?.value || '';
+        
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('price-alerts-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        let allAlerts = [];
+        for (const customer of customers) {
+            try {
+                const response = await fetch(`${API_BASE}/price-alerts`, {
+                    headers: {
+                        ...getSellerAuthHeaders(),
+                        'X-Customer-ID': customer.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const alerts = await response.json();
+                    alerts.forEach(alert => {
+                        allAlerts.push({
+                            ...alert,
+                            customer_name: customer.name,
+                            customer_phone: customer.phone
+                        });
+                    });
+                }
+            } catch (e) {
+                // Customer may not have alerts
+            }
+        }
+        
+        let filtered = allAlerts;
+        if (search) {
+            filtered = filtered.filter(a => 
+                (a.customer_name && a.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (a.product_name && a.product_name.toLowerCase().includes(search.toLowerCase()))
+            );
+        }
+        if (statusFilter === 'active') {
+            filtered = filtered.filter(a => a.is_active);
+        } else if (statusFilter === 'notified') {
+            filtered = filtered.filter(a => a.notified);
+        }
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = filtered.map(alert => `
+            <tr>
+                <td>${alert.id || '-'}</td>
+                <td>${escapeHtml(alert.customer_name || '-')}</td>
+                <td>${escapeHtml(alert.product_name || '-')}</td>
+                <td>${alert.current_price ? alert.current_price.toLocaleString('uz-UZ') + ' so\'m' : '-'}</td>
+                <td><strong>${alert.target_price ? alert.target_price.toLocaleString('uz-UZ') + ' so\'m' : '-'}</strong></td>
+                <td>${alert.is_active ? '<span style="color: green;">Faol</span>' : '<span style="color: gray;">Nofaol</span>'} ${alert.notified ? '<span style="color: blue;">(Xabar berilgan)</span>' : ''}</td>
+                <td>${formatDate(alert.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer price alerts:', error);
+        const tbody = document.getElementById('price-alerts-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+// Load Customer Favorites
+async function loadCustomerFavorites() {
+    try {
+        const search = document.getElementById('favorites-search')?.value || '';
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('favorites-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        let allFavorites = [];
+        for (const customer of customers) {
+            try {
+                const response = await fetch(`${API_BASE}/favorites?customer_id=${customer.id}`, {
+                    headers: {
+                        ...getSellerAuthHeaders(),
+                        'X-Customer-ID': customer.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.favorites) {
+                        data.favorites.forEach(fav => {
+                            allFavorites.push({
+                                ...fav,
+                                customer_name: customer.name,
+                                customer_phone: customer.phone
+                            });
+                        });
+                    }
+                }
+            } catch (e) {
+                // Customer may not have favorites
+            }
+        }
+        
+        if (search) {
+            allFavorites = allFavorites.filter(f => 
+                (f.customer_name && f.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (f.name && f.name.toLowerCase().includes(search.toLowerCase()))
+            );
+        }
+        
+        if (allFavorites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = allFavorites.map(fav => `
+            <tr>
+                <td>${fav.id || '-'}</td>
+                <td>${escapeHtml(fav.customer_name || '-')}</td>
+                <td>${escapeHtml(fav.name || '-')}</td>
+                <td>${fav.price ? fav.price.toLocaleString('uz-UZ') + ' so\'m' : '-'}</td>
+                <td>${formatDate(fav.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer favorites:', error);
+        const tbody = document.getElementById('favorites-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+// Load Customer Tags
+async function loadCustomerTags() {
+    try {
+        const search = document.getElementById('tags-search')?.value || '';
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('tags-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        let allTags = [];
+        for (const customer of customers) {
+            try {
+                const response = await fetch(`${API_BASE}/product-tags`, {
+                    headers: {
+                        ...getSellerAuthHeaders(),
+                        'X-Customer-ID': customer.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const tags = await response.json();
+                    tags.forEach(tag => {
+                        allTags.push({
+                            ...tag,
+                            customer_name: customer.name,
+                            customer_phone: customer.phone
+                        });
+                    });
+                }
+            } catch (e) {
+                // Customer may not have tags
+            }
+        }
+        
+        if (search) {
+            allTags = allTags.filter(t => 
+                (t.customer_name && t.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (t.product_name && t.product_name.toLowerCase().includes(search.toLowerCase())) ||
+                (t.tag && t.tag.toLowerCase().includes(search.toLowerCase()))
+            );
+        }
+        
+        if (allTags.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = allTags.map(tag => `
+            <tr>
+                <td>${tag.id || '-'}</td>
+                <td>${escapeHtml(tag.customer_name || '-')}</td>
+                <td>${escapeHtml(tag.product_name || `Mahsulot #${tag.product_id}`)}</td>
+                <td><span style="background: #e0e7ff; padding: 0.25rem 0.5rem; border-radius: 4px;">${escapeHtml(tag.tag || '-')}</span></td>
+                <td>${formatDate(tag.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer tags:', error);
+        const tbody = document.getElementById('tags-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+// Load Product Reviews
+async function loadProductReviews() {
+    try {
+        const search = document.getElementById('reviews-search')?.value || '';
+        const ratingFilter = document.getElementById('reviews-rating-filter')?.value || '';
+        
+        const response = await fetch(`${API_BASE}/products/reviews`, {
+            headers: getSellerAuthHeaders()
+        });
+        
+        const tbody = document.getElementById('reviews-tbody');
+        if (!tbody) return;
+        
+        if (!response.ok) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Xatolik yuz berdi</td></tr>';
+            return;
+        }
+        
+        let reviews = await response.json();
+        
+        if (search) {
+            reviews = reviews.filter(r => 
+                (r.customer_name && r.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (r.product_name && r.product_name.toLowerCase().includes(search.toLowerCase()))
+            );
+        }
+        if (ratingFilter) {
+            reviews = reviews.filter(r => r.rating === parseInt(ratingFilter));
+        }
+        
+        if (reviews.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = reviews.map(review => `
+            <tr>
+                <td>${review.id || '-'}</td>
+                <td>${escapeHtml(review.customer_name || '-')}</td>
+                <td>${escapeHtml(review.product_name || '-')}</td>
+                <td>${'★'.repeat(review.rating || 0)}${'☆'.repeat(5 - (review.rating || 0))} (${review.rating || 0})</td>
+                <td>${escapeHtml(review.comment || '-')}</td>
+                <td>${formatDate(review.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="deleteReview(${review.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
+                        <i class="fas fa-trash"></i> O'chirish
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading product reviews:', error);
+        const tbody = document.getElementById('reviews-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
+    }
+}
+
+async function deleteReview(reviewId) {
+    if (!confirm('Bu sharhni o\'chirishni xohlaysizmi?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/products/reviews/${reviewId}`, {
+            method: 'DELETE',
+            headers: getSellerAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error('Sharhni o\'chirishda xatolik');
+        }
+        
+        loadProductReviews();
+    } catch (error) {
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// Load Customer Payments
+async function loadCustomerPayments() {
+    try {
+        const search = document.getElementById('payments-search')?.value || '';
+        const dateFrom = document.getElementById('payments-date-from')?.value || '';
+        const dateTo = document.getElementById('payments-date-to')?.value || '';
+        
+        // Get all customers and their payment history
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, {
+            headers: getSellerAuthHeaders()
+        }).then(r => r.json());
+        
+        const tbody = document.getElementById('payments-tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>';
+        
+        let allPayments = [];
+        for (const customer of customers) {
+            try {
+                // Get customer's sales history as payment history
+                const response = await fetch(`${API_BASE}/customers/${customer.id}/sales-history?limit=1000`, {
+                    headers: getSellerAuthHeaders()
+                });
+                if (response.ok) {
+                    const sales = await response.json();
+                    sales.forEach(sale => {
+                        allPayments.push({
+                            id: sale.id,
+                            customer_id: customer.id,
+                            customer_name: customer.name,
+                            customer_phone: customer.phone,
+                            amount: sale.total_amount || 0,
+                            payment_method: sale.payment_method || 'cash',
+                            order_id: sale.id,
+                            created_at: sale.created_at
+                        });
+                    });
+                }
+            } catch (e) {
+                // Customer may not have payments
+            }
+        }
+        
+        // Filter
+        let filtered = allPayments;
+        if (search) {
+            filtered = filtered.filter(p => 
+                (p.customer_name && p.customer_name.toLowerCase().includes(search.toLowerCase())) ||
+                (p.customer_phone && p.customer_phone.includes(search))
+            );
+        }
+        if (dateFrom) {
+            filtered = filtered.filter(p => new Date(p.created_at) >= new Date(dateFrom));
+        }
+        if (dateTo) {
+            filtered = filtered.filter(p => new Date(p.created_at) <= new Date(dateTo + 'T23:59:59'));
+        }
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Ma\'lumot topilmadi</td></tr>';
+            return;
+        }
+        
+        const paymentMethodMap = {
+            'cash': 'Naqd',
+            'card': 'Karta',
+            'bank_transfer': 'Hisob raqam'
+        };
+        
+        tbody.innerHTML = filtered.map(payment => `
+            <tr>
+                <td>${payment.id || '-'}</td>
+                <td>${escapeHtml(payment.customer_name || '-')}</td>
+                <td><strong>${payment.amount.toLocaleString('uz-UZ')} so'm</strong></td>
+                <td>${paymentMethodMap[payment.payment_method] || payment.payment_method || 'Naqd'}</td>
+                <td>#${payment.order_id || '-'}</td>
+                <td>${formatDate(payment.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading customer payments:', error);
+        const tbody = document.getElementById('payments-tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: red;">Xatolik: ' + error.message + '</td></tr>';
+        }
     }
 }
 

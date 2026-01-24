@@ -13,6 +13,7 @@ export const getProducts = async (
   limit = 100,
   brand = '',
   supplier = '',
+  category = '',
   sort = ''
 ) => {
   try {
@@ -20,6 +21,7 @@ export const getProducts = async (
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (brand) url += `&brand=${encodeURIComponent(brand)}`;
     if (supplier) url += `&supplier=${encodeURIComponent(supplier)}`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
     if (sort) url += `&sort=${encodeURIComponent(sort)}`;
 
     const response = await api.get(url);

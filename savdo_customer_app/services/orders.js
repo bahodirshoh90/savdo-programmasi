@@ -138,6 +138,9 @@ export const createOrder = async (orderData) => {
       items: items,
       is_offline: false,
       payment_method: orderData.payment_method || 'cash', // cash, card, debt
+      delivery_address: orderData.delivery_address || null,
+      delivery_latitude: orderData.delivery_latitude || null,
+      delivery_longitude: orderData.delivery_longitude || null,
     };
 
     console.log('[ORDERS] ===== CREATING ORDER =====');
@@ -166,7 +169,7 @@ export const createOrder = async (orderData) => {
 
         return {
           offline: true,
-          message: 'Internet yo\\'q. Buyurtma offline saqlandi, keyinroq yuboriladi.',
+          message: "Internet yo'q. Buyurtma offline saqlandi, keyinroq yuboriladi.",
         };
       }
 
