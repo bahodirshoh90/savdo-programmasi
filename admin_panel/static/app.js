@@ -361,9 +361,8 @@ async function loadDashboard() {
             // products.length contains the count from /api/products/count
             document.getElementById('total-products').textContent = products.length || 0;
         }
-        if (document.getElementById('total-orders')) {
-            document.getElementById('total-orders').textContent = orders.length || 0;
-        }
+        // total-orders will be updated from statistics endpoint below
+        // Initial value from orders.length is not accurate (only fetches limit=1)
         // Note: total-sales will be updated from statistics endpoint below
         // Initial value from sales.length is not accurate (only fetches limit=1)
         if (document.getElementById('total-customers')) {
@@ -450,6 +449,20 @@ async function loadDashboard() {
                 document.getElementById('total-profit').textContent = formatMoney(profit);
                 console.log('Profit displayed:', profit);
             }
+            
+            // Update online orders count
+            if (document.getElementById('online-orders')) {
+                const onlineOrdersCount = stats.online_orders_count !== undefined ? stats.online_orders_count : 0;
+                document.getElementById('online-orders').textContent = onlineOrdersCount;
+                console.log('Online orders count updated:', onlineOrdersCount);
+            }
+            
+            // Update total orders count (online + offline)
+            if (document.getElementById('total-orders')) {
+                const totalOrdersCount = (stats.online_orders_count || 0) + (stats.offline_orders_count || 0);
+                document.getElementById('total-orders').textContent = totalOrdersCount;
+                console.log('Total orders count updated:', totalOrdersCount);
+            }
         } else {
             console.error('Statistics not loaded');
             if (document.getElementById('total-sales')) {
@@ -457,6 +470,12 @@ async function loadDashboard() {
             }
             if (document.getElementById('total-profit')) {
                 document.getElementById('total-profit').textContent = formatMoney(0);
+            }
+            if (document.getElementById('online-orders')) {
+                document.getElementById('online-orders').textContent = 0;
+            }
+            if (document.getElementById('total-orders')) {
+                document.getElementById('total-orders').textContent = 0;
             }
         }
         
@@ -6020,6 +6039,9 @@ function showAddCategoryModal() {
     document.getElementById('category-modal-title').textContent = 'Yangi Kategoriya';
     document.getElementById('category-modal').style.display = 'block';
 }
+
+// Make function globally available
+window.showAddCategoryModal = showAddCategoryModal;
 
 function editCategory(id) {
     const headers = getAuthHeaders();
