@@ -7,7 +7,7 @@ try:
 except ImportError:
     # Pydantic v1 compatibility
     from pydantic import validator as field_validator
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from models import CustomerType, OrderStatus, PaymentMethod
 
