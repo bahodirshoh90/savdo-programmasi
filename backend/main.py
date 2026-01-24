@@ -97,6 +97,30 @@ try:
         if 'image_url' not in sellers_columns:
             conn.execute(text("ALTER TABLE sellers ADD COLUMN image_url VARCHAR(500)"))
         
+        # Migrate orders table to add delivery location columns if they don't exist
+        try:
+            try:
+                orders_columns = [col['name'] for col in inspector.get_columns('orders')]
+            except Exception:
+                orders_columns = []
+            
+            if 'delivery_address' not in orders_columns:
+                print("Adding delivery_address column to orders table...")
+                conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_address VARCHAR(500)"))
+                print("✓ Added delivery_address column")
+            
+            if 'delivery_latitude' not in orders_columns:
+                print("Adding delivery_latitude column to orders table...")
+                conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_latitude REAL"))
+                print("✓ Added delivery_latitude column")
+            
+            if 'delivery_longitude' not in orders_columns:
+                print("Adding delivery_longitude column to orders table...")
+                conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_longitude REAL"))
+                print("✓ Added delivery_longitude column")
+        except Exception as e:
+            print(f"Warning: Could not migrate orders table: {e}")
+        
         # Migrate customers table to add username and password_hash columns if they don't exist
         try:
             try:
