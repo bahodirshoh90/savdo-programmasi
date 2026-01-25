@@ -56,8 +56,7 @@
         {
           "cameraPermission": "Kamera ruxsati QR kod va barcode skan qilish uchun kerak."
         }
-      ],
-      "expo-barcode-scanner"
+      ]
     ],
     "scheme": "savdo",
     "extra": {
