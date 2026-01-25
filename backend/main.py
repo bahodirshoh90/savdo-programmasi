@@ -89,6 +89,54 @@ try:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
         
+        if 'enable_referals' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_referals BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_referals = 1 WHERE enable_referals IS NULL"))
+        
+        if 'enable_loyalty' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_loyalty BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_loyalty = 1 WHERE enable_loyalty IS NULL"))
+        
+        if 'enable_price_alerts' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_price_alerts BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_price_alerts = 1 WHERE enable_price_alerts IS NULL"))
+        
+        if 'enable_favorites' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_favorites BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_favorites = 1 WHERE enable_favorites IS NULL"))
+        
+        if 'enable_tags' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_tags BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_tags = 1 WHERE enable_tags IS NULL"))
+        
+        if 'enable_reviews' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_reviews BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_reviews = 1 WHERE enable_reviews IS NULL"))
+        
+        if 'referal_bonus_points' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_points INTEGER NOT NULL DEFAULT 100"))
+            conn.execute(text("UPDATE settings SET referal_bonus_points = 100 WHERE referal_bonus_points IS NULL"))
+        
+        if 'referal_bonus_percent' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_percent REAL NOT NULL DEFAULT 5"))
+            conn.execute(text("UPDATE settings SET referal_bonus_percent = 5 WHERE referal_bonus_percent IS NULL"))
+        
+        if 'loyalty_points_per_sum' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_points_per_sum REAL NOT NULL DEFAULT 0.01"))
+            conn.execute(text("UPDATE settings SET loyalty_points_per_sum = 0.01 WHERE loyalty_points_per_sum IS NULL"))
+        
+        if 'loyalty_point_value' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
+        
+        if 'enable_location_selection' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_location_selection = 1 WHERE enable_location_selection IS NULL"))
+        
+        if 'enable_offline_orders' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN NOT NULL DEFAULT 1"))
+            conn.execute(text("UPDATE settings SET enable_offline_orders = 1 WHERE enable_offline_orders IS NULL"))
+        
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
             sellers_columns = [col['name'] for col in inspector.get_columns('sellers')]
@@ -807,6 +855,7 @@ async def create_product(
         "item_number": created.item_number,
         "barcode": created.barcode,
         "category": created.category,
+        "category_id": created.category_id,
         "brand": created.brand,
         "supplier": created.supplier,
         "received_date": created.received_date,
@@ -947,6 +996,7 @@ def get_products(
     low_stock_only: bool = False,
     min_stock: int = 0,
     brand: Optional[str] = None,
+    category_id: Optional[int] = None,
     category: Optional[str] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
@@ -960,7 +1010,8 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, category=category, supplier=supplier, location=location,
+                                      brand=brand, category_id=category_id, category=category,
+                                      supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -984,6 +1035,7 @@ def get_products(
                 "item_number": p.item_number,
                 "barcode": p.barcode,
                 "category": p.category,
+                "category_id": p.category_id,
                 "brand": p.brand,
                 "supplier": p.supplier,
                 "received_date": p.received_date,
@@ -1021,6 +1073,7 @@ def get_products_count(
     low_stock_only: bool = False,
     min_stock: int = 0,
     brand: Optional[str] = None,
+    category_id: Optional[int] = None,
     category: Optional[str] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
@@ -1035,6 +1088,7 @@ def get_products_count(
         low_stock_only=low_stock_only,
         min_stock=min_stock,
         brand=brand,
+        category_id=category_id,
         category=category,
         supplier=supplier,
         location=location
@@ -1089,6 +1143,7 @@ def get_low_stock_products(min_stock: int = 10, db: Session = Depends(get_db)):
                 "item_number": p.item_number,
                 "barcode": p.barcode,
                 "category": p.category,
+                "category_id": p.category_id,
                 "brand": p.brand,
                 "supplier": p.supplier,
                 "received_date": p.received_date,
@@ -1161,6 +1216,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         "item_number": product.item_number,
         "barcode": product.barcode,
         "category": product.category,
+        "category_id": product.category_id,
         "brand": product.brand,
         "supplier": product.supplier,
         "received_date": product.received_date,
@@ -1215,6 +1271,7 @@ def update_product(product_id: int, product: ProductUpdate, db: Session = Depend
         "item_number": product_full.item_number,
         "barcode": product_full.barcode,
         "category": product_full.category,
+        "category_id": product_full.category_id,
         "brand": product_full.brand,
         "supplier": product_full.supplier,
         "received_date": product_full.received_date,
@@ -2370,6 +2427,30 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["work_end_time"] = settings.work_end_time
         if hasattr(settings, 'work_days'):
             response_data["work_days"] = settings.work_days
+        if hasattr(settings, 'enable_referals'):
+            response_data["enable_referals"] = settings.enable_referals
+        if hasattr(settings, 'enable_loyalty'):
+            response_data["enable_loyalty"] = settings.enable_loyalty
+        if hasattr(settings, 'enable_price_alerts'):
+            response_data["enable_price_alerts"] = settings.enable_price_alerts
+        if hasattr(settings, 'enable_favorites'):
+            response_data["enable_favorites"] = settings.enable_favorites
+        if hasattr(settings, 'enable_tags'):
+            response_data["enable_tags"] = settings.enable_tags
+        if hasattr(settings, 'enable_reviews'):
+            response_data["enable_reviews"] = settings.enable_reviews
+        if hasattr(settings, 'referal_bonus_points'):
+            response_data["referal_bonus_points"] = settings.referal_bonus_points
+        if hasattr(settings, 'referal_bonus_percent'):
+            response_data["referal_bonus_percent"] = settings.referal_bonus_percent
+        if hasattr(settings, 'loyalty_points_per_sum'):
+            response_data["loyalty_points_per_sum"] = settings.loyalty_points_per_sum
+        if hasattr(settings, 'loyalty_point_value'):
+            response_data["loyalty_point_value"] = settings.loyalty_point_value
+        if hasattr(settings, 'enable_location_selection'):
+            response_data["enable_location_selection"] = settings.enable_location_selection
+        if hasattr(settings, 'enable_offline_orders'):
+            response_data["enable_offline_orders"] = settings.enable_offline_orders
         
         return SettingsResponse(**response_data)
     except Exception as e:

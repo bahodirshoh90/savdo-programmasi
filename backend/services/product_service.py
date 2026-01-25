@@ -4,7 +4,7 @@ Product Service
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from sqlalchemy import func
-from models import Product
+from models import Product, Category
 from schemas import ProductCreate, ProductUpdate, ProductResponse
 
 
@@ -125,8 +125,9 @@ class ProductService:
             print(f"[ProductService.create_product] Category in final data: {product_data.get('category')}")
             print(f"[ProductService.create_product] Category type in final data: {type(product_data.get('category'))}")
             
-            # Get category value before creating Product object
+            # Get category values before creating Product object
             category_value = product_data.get('category')
+            category_id_value = product_data.get('category_id')
             print(f"[ProductService.create_product] Category value from product_data: '{category_value}' (type: {type(category_value)})")
             
             # Process category value
@@ -141,6 +142,18 @@ class ProductService:
                 category_value = None
             
             print(f"[ProductService.create_product] Processed category value: '{category_value}'")
+            
+            # If category_id is set but category is empty, hydrate category name
+            if category_id_value and not category_value:
+                category_obj = db.query(Category).filter(Category.id == category_id_value).first()
+                if category_obj:
+                    category_value = category_obj.name
+            
+            # If category name is set but category_id missing, try to map it
+            if category_value and not category_id_value:
+                category_obj = db.query(Category).filter(Category.name == category_value).first()
+                if category_obj:
+                    product_data['category_id'] = category_obj.id
             
             # Remove category from product_data to set it explicitly after object creation
             if 'category' in product_data:
@@ -195,6 +208,7 @@ class ProductService:
         low_stock_only: bool = False,
         min_stock: int = 0,
         brand: Optional[str] = None,
+        category_id: Optional[int] = None,
         category: Optional[str] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
@@ -220,8 +234,10 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
-        # Filter by category
-        if category:
+        # Filter by category (prefer ID when provided)
+        if category_id:
+            query = query.filter(Product.category_id == category_id)
+        elif category:
             query = query.filter(Product.category.ilike(f"%{category}%"))
         
         # Filter by supplier
@@ -333,6 +349,7 @@ class ProductService:
         low_stock_only: bool = False,
         min_stock: int = 0,
         brand: Optional[str] = None,
+        category_id: Optional[int] = None,
         category: Optional[str] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
@@ -353,7 +370,9 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
-        if category:
+        if category_id:
+            query = query.filter(Product.category_id == category_id)
+        elif category:
             query = query.filter(Product.category.ilike(f"%{category}%"))
         
         if supplier:
@@ -414,13 +433,36 @@ class ProductService:
             # Remove from update_data to avoid duplicate processing
             del update_data['location']
         
+        # Handle category_id updates and keep legacy category name in sync
+        if 'category_id' in update_data:
+            category_id_value = update_data['category_id']
+            if category_id_value:
+                db_product.category_id = category_id_value
+                if 'category' not in update_data:
+                    category_obj = db.query(Category).filter(Category.id == category_id_value).first()
+                    if category_obj:
+                        db_product.category = category_obj.name
+            else:
+                db_product.category_id = None
+                if 'category' not in update_data:
+                    db_product.category = None
+            del update_data['category_id']
+        
         # Handle other optional string fields - convert empty strings to None
-        for field in ['brand', 'supplier', 'barcode', 'image_url']:
+        for field in ['brand', 'supplier', 'barcode', 'image_url', 'category']:
             if field in update_data:
                 if update_data[field] == '':
                     setattr(db_product, field, None)
                 else:
-                    setattr(db_product, field, update_data[field])
+                    if field == 'category' and update_data[field] is not None:
+                        setattr(db_product, field, str(update_data[field]).strip())
+                    else:
+                        setattr(db_product, field, update_data[field])
+                # If category name is set but category_id was not provided, try to map it
+                if field == 'category' and update_data[field]:
+                    category_obj = db.query(Category).filter(Category.name == db_product.category).first()
+                    if category_obj:
+                        db_product.category_id = category_obj.id
                 del update_data[field]
         
         # Apply remaining updates field by field
