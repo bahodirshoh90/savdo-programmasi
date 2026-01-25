@@ -42,5 +42,8 @@
     "@babel/core": "^7.20.0",
     "babel-preset-expo": "~54.0.0"
   },
+  "overrides": {
+    "expo-image-loader": "6.0.0"
+  },
   "private": true
 }
