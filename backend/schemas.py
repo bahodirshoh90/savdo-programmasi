@@ -55,6 +55,8 @@ class ProductUpdate(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya (legacy)")
+    category_id: Optional[int] = Field(None, description="Kategoriya ID")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
@@ -731,6 +733,18 @@ class SettingsBase(BaseModel):
     notify_low_stock: bool = True  # Kam qolgan mahsulotlar
     notify_debt_limit: bool = True  # Qarz limiti oshganlar
     notify_daily_report: bool = True  # Kunlik hisobotlar
+    enable_referals: bool = True
+    enable_loyalty: bool = True
+    enable_price_alerts: bool = True
+    enable_favorites: bool = True
+    enable_tags: bool = True
+    enable_reviews: bool = True
+    referal_bonus_points: int = 100
+    referal_bonus_percent: float = 5.0
+    loyalty_points_per_sum: float = 0.01
+    loyalty_point_value: float = 1.0
+    enable_location_selection: bool = True
+    enable_offline_orders: bool = True
 
 
 class SettingsUpdate(SettingsBase):

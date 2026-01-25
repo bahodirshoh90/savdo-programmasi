@@ -289,7 +289,6 @@ function showPage(pageName) {
             loadDashboard();
             break;
         case 'products':
-            loadCategories(); // Load categories for filter
             loadProductCategories(); // Load categories for product form dropdown
             loadProducts();
             // Initialize barcode scanner after page loads
@@ -331,6 +330,9 @@ function showPage(pageName) {
             break;
         case 'settings':
             loadSettings();
+            break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
             break;
         case 'banners':
             loadBanners();
@@ -651,73 +653,15 @@ function clearProductFilters() {
     loadProducts();
 }
 
-// Load categories for filter dropdown
+// Load categories for product filter dropdown (alias)
 async function loadCategories() {
-    try {
-        // Fetch products in batches to get all categories (max limit is 1000)
-        let allProducts = [];
-        let skip = 0;
-        const limit = 1000;
-        let hasMore = true;
-        
-        while (hasMore) {
-            const response = await fetch(`${API_BASE}/products?skip=${skip}&limit=${limit}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            const products = await response.json();
-            if (!Array.isArray(products)) {
-                throw new Error('Invalid response format');
-            }
-            allProducts = allProducts.concat(products);
-            if (products.length < limit) {
-                hasMore = false;
-            } else {
-                skip += limit;
-            }
-        }
-        
-        const categories = new Set();
-        allProducts.forEach(product => {
-            if (product.category && product.category.trim()) {
-                const category = product.category.trim();
-                categories.add(category);
-            }
-        });
-        
-        const categoryFilter = document.getElementById('product-category-filter');
-        if (categoryFilter) {
-            // Save current selected value
-            const currentValue = categoryFilter.value;
-            
-            // Clear all options except the first one
-            while (categoryFilter.children.length > 1) {
-                categoryFilter.removeChild(categoryFilter.lastChild);
-            }
-            
-            // Add categories sorted
-            const sortedCategories = Array.from(categories).sort();
-            sortedCategories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category;
-                option.textContent = category;
-                categoryFilter.appendChild(option);
-            });
-            
-            // Restore selected value if it still exists
-            if (currentValue && Array.from(categoryFilter.options).some(opt => opt.value === currentValue)) {
-                categoryFilter.value = currentValue;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading categories:', error);
-    }
+    return loadProductCategories();
 }
 
 async function loadProducts() {
     try {
         const search = document.getElementById('product-search')?.value || '';
-        const category = document.getElementById('product-category-filter')?.value || '';
+        const categoryId = document.getElementById('product-category-filter')?.value || '';
         const brand = document.getElementById('product-brand-filter')?.value || '';
         const supplier = document.getElementById('product-supplier-filter')?.value || '';
         const location = document.getElementById('product-location-filter')?.value || '';
@@ -745,7 +689,7 @@ async function loadProducts() {
         params.append('limit', productsPerPage);
         
         if (search) params.append('search', search);
-        if (category) params.append('category', category);
+        if (categoryId) params.append('category_id', categoryId);
         if (brand) params.append('brand', brand);
         if (supplier) params.append('supplier', supplier);
         if (location) params.append('location', location);
@@ -776,7 +720,7 @@ async function loadProducts() {
         // Build count URL with same filters
         const countParams = new URLSearchParams();
         if (search) countParams.append('search', search);
-        if (category) countParams.append('category', category);
+        if (categoryId) countParams.append('category_id', categoryId);
         if (brand) countParams.append('brand', brand);
         if (supplier) countParams.append('supplier', supplier);
         if (location) countParams.append('location', location);
@@ -1221,7 +1165,7 @@ async function editProduct(id) {
         await loadProductCategories();
         
         // Set category_id if available, otherwise use category name
-        const categorySelect = document.getElementById('product-category-select');
+        const categorySelect = document.getElementById('product-category');
         if (categorySelect) {
             if (product.category_id) {
                 categorySelect.value = product.category_id;
@@ -1233,12 +1177,6 @@ async function editProduct(id) {
                     categorySelect.value = category.id;
                 }
             }
-        }
-        
-        // Legacy category field (for backward compatibility)
-        const categoryInput = document.getElementById('product-category');
-        if (categoryInput) {
-            categoryInput.value = product.category || '';
         }
         
         document.getElementById('product-brand').value = product.brand || '';
@@ -1424,11 +1362,19 @@ async function saveProduct(e) {
     data.pieces_in_stock = piecesInStock;
     
     // Optional fields - include even if null/empty for update
+    const categorySelect = document.getElementById('product-category');
+    const rawCategoryId = categorySelect ? categorySelect.value : '';
+    const categoryId = rawCategoryId ? parseInt(rawCategoryId, 10) : null;
+    const categoryName = categorySelect && rawCategoryId
+        ? (categorySelect.options[categorySelect.selectedIndex]?.textContent || '').trim()
+        : null;
+    
     if (id) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
-        data.category = document.getElementById('product-category').value.trim() || null;
+        data.category_id = categoryId;
+        data.category = categoryName || null;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
@@ -1442,8 +1388,10 @@ async function saveProduct(e) {
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
-        const categoryValue = document.getElementById('product-category').value.trim();
-        if (categoryValue) data.category = categoryValue;
+        if (categoryId) {
+            data.category_id = categoryId;
+            if (categoryName) data.category = categoryName;
+        }
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -4559,9 +4507,15 @@ function setupWebSocket() {
         // Chat message from customer
         if (data.type === 'new_chat_message' || data.type === 'chat_message') {
             const messageData = data.message || data.data || {};
-            const customerName = messageData.sender_name || messageData.customer_name || 'Noma\'lum mijoz';
-            const messageText = messageData.message || '';
-            const conversationId = messageData.conversation_id || data.conversation_id;
+            const nestedMessage = messageData.message || messageData;
+            const customerName = messageData.sender_name ||
+                messageData.customer_name ||
+                nestedMessage.sender_name ||
+                nestedMessage.customer_name ||
+                'Noma\'lum mijoz';
+            const rawText = typeof nestedMessage === 'string' ? nestedMessage : (nestedMessage.message || '');
+            const messageText = typeof rawText === 'string' ? rawText : JSON.stringify(rawText);
+            const conversationId = messageData.conversation_id || nestedMessage.conversation_id || data.conversation_id;
             
             console.log('[WebSocket] New chat message received:', messageData);
             
@@ -5673,6 +5627,80 @@ async function saveSettings(additionalData = {}) {
     }
 }
 
+// ==================== CUSTOMER APP SETTINGS ====================
+let customerAppSettingsSaveTimeout = null;
+
+async function loadCustomerAppSettings() {
+    try {
+        const headers = getAuthHeaders();
+        const response = await fetch('/api/settings', { headers });
+        if (!response.ok) throw new Error('Mijoz ilovasi sozlamalarini yuklashda xatolik');
+        const settings = await response.json();
+        
+        document.getElementById('enable-referals').checked = settings.enable_referals !== false;
+        document.getElementById('enable-loyalty').checked = settings.enable_loyalty !== false;
+        document.getElementById('enable-price-alerts').checked = settings.enable_price_alerts !== false;
+        document.getElementById('enable-favorites').checked = settings.enable_favorites !== false;
+        document.getElementById('enable-tags').checked = settings.enable_tags !== false;
+        document.getElementById('enable-reviews').checked = settings.enable_reviews !== false;
+        
+        document.getElementById('referal-bonus-points').value = settings.referal_bonus_points ?? 100;
+        document.getElementById('referal-bonus-percent').value = settings.referal_bonus_percent ?? 5;
+        document.getElementById('loyalty-points-per-sum').value = settings.loyalty_points_per_sum ?? 0.01;
+        document.getElementById('loyalty-point-value').value = settings.loyalty_point_value ?? 1;
+        
+        document.getElementById('enable-location-selection').checked = settings.enable_location_selection !== false;
+        document.getElementById('enable-offline-orders').checked = settings.enable_offline_orders !== false;
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        showToast('Mijoz ilovasi sozlamalarini yuklashda xatolik', 'error');
+    }
+}
+
+function saveCustomerAppSettings() {
+    if (customerAppSettingsSaveTimeout) {
+        clearTimeout(customerAppSettingsSaveTimeout);
+    }
+    
+    customerAppSettingsSaveTimeout = setTimeout(async () => {
+        try {
+            const settings = {
+                enable_referals: document.getElementById('enable-referals').checked,
+                enable_loyalty: document.getElementById('enable-loyalty').checked,
+                enable_price_alerts: document.getElementById('enable-price-alerts').checked,
+                enable_favorites: document.getElementById('enable-favorites').checked,
+                enable_tags: document.getElementById('enable-tags').checked,
+                enable_reviews: document.getElementById('enable-reviews').checked,
+                referal_bonus_points: parseInt(document.getElementById('referal-bonus-points').value, 10) || 0,
+                referal_bonus_percent: parseFloat(document.getElementById('referal-bonus-percent').value) || 0,
+                loyalty_points_per_sum: parseFloat(document.getElementById('loyalty-points-per-sum').value) || 0,
+                loyalty_point_value: parseFloat(document.getElementById('loyalty-point-value').value) || 0,
+                enable_location_selection: document.getElementById('enable-location-selection').checked,
+                enable_offline_orders: document.getElementById('enable-offline-orders').checked
+            };
+            
+            const headers = getAuthHeaders();
+            headers['Content-Type'] = 'application/json';
+            
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(settings)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ detail: 'Sozlamalarni saqlashda xatolik' }));
+                throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+            }
+            
+            showToast('Mijoz ilovasi sozlamalari saqlandi', 'success');
+        } catch (error) {
+            console.error('Error saving customer app settings:', error);
+            showToast('Sozlamalarni saqlashda xatolik: ' + error.message, 'error');
+        }
+    }, 400);
+}
+
 // ==================== BANNERS ====================
 
 async function loadBanners() {
@@ -6033,7 +6061,7 @@ async function loadCategoriesList() {
         // Apply search filter if any
         const searchInput = document.getElementById('category-search');
         if (searchInput && searchInput.value) {
-            loadCategories(); // This will filter the results
+            filterCategoriesList(); // This will filter the results
         }
     } catch (error) {
         console.error('Error loading categories:', error);
@@ -6045,7 +6073,7 @@ async function loadCategoriesList() {
 }
 
 // Alias for search
-function loadCategories() {
+function filterCategoriesList() {
     const searchTerm = document.getElementById('category-search')?.value.toLowerCase() || '';
     const rows = document.querySelectorAll('#categories-tbody tr');
     
@@ -6197,7 +6225,7 @@ async function loadProductCategories() {
         const categories = await response.json();
         
         // Update product category select
-        const select = document.getElementById('product-category-select');
+        const select = document.getElementById('product-category') || document.getElementById('product-category-select');
         if (select) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Kategoriya tanlash...</option>';

@@ -649,6 +649,20 @@ class Settings(Base):
     notify_low_stock = Column(Boolean, nullable=False, default=True)  # Kam qolgan mahsulotlar
     notify_debt_limit = Column(Boolean, nullable=False, default=True)  # Qarz limiti oshganlar
     notify_daily_report = Column(Boolean, nullable=False, default=True)  # Kunlik hisobotlar
+
+    # Customer app feature settings
+    enable_referals = Column(Boolean, nullable=False, default=True)
+    enable_loyalty = Column(Boolean, nullable=False, default=True)
+    enable_price_alerts = Column(Boolean, nullable=False, default=True)
+    enable_favorites = Column(Boolean, nullable=False, default=True)
+    enable_tags = Column(Boolean, nullable=False, default=True)
+    enable_reviews = Column(Boolean, nullable=False, default=True)
+    referal_bonus_points = Column(Integer, nullable=False, default=100)
+    referal_bonus_percent = Column(Float, nullable=False, default=5.0)
+    loyalty_points_per_sum = Column(Float, nullable=False, default=0.01)
+    loyalty_point_value = Column(Float, nullable=False, default=1.0)
+    enable_location_selection = Column(Boolean, nullable=False, default=True)
+    enable_offline_orders = Column(Boolean, nullable=False, default=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

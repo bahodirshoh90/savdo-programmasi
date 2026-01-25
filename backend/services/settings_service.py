@@ -25,7 +25,19 @@ class SettingsService:
                     receipt_show_logo=True,
                     work_start_time="09:00",
                     work_end_time="18:00",
-                    work_days="1,2,3,4,5,6,7"
+                    work_days="1,2,3,4,5,6,7",
+                    enable_referals=True,
+                    enable_loyalty=True,
+                    enable_price_alerts=True,
+                    enable_favorites=True,
+                    enable_tags=True,
+                    enable_reviews=True,
+                    referal_bonus_points=100,
+                    referal_bonus_percent=5.0,
+                    loyalty_points_per_sum=0.01,
+                    loyalty_point_value=1.0,
+                    enable_location_selection=True,
+                    enable_offline_orders=True
                 )
                 db.add(settings)
                 db.commit()
@@ -56,6 +68,30 @@ class SettingsService:
                     settings.work_end_time = "18:00"
                 if not hasattr(settings, 'work_days') or settings.work_days is None:
                     settings.work_days = "1,2,3,4,5,6,7"
+                if not hasattr(settings, 'enable_referals') or settings.enable_referals is None:
+                    settings.enable_referals = True
+                if not hasattr(settings, 'enable_loyalty') or settings.enable_loyalty is None:
+                    settings.enable_loyalty = True
+                if not hasattr(settings, 'enable_price_alerts') or settings.enable_price_alerts is None:
+                    settings.enable_price_alerts = True
+                if not hasattr(settings, 'enable_favorites') or settings.enable_favorites is None:
+                    settings.enable_favorites = True
+                if not hasattr(settings, 'enable_tags') or settings.enable_tags is None:
+                    settings.enable_tags = True
+                if not hasattr(settings, 'enable_reviews') or settings.enable_reviews is None:
+                    settings.enable_reviews = True
+                if not hasattr(settings, 'referal_bonus_points') or settings.referal_bonus_points is None:
+                    settings.referal_bonus_points = 100
+                if not hasattr(settings, 'referal_bonus_percent') or settings.referal_bonus_percent is None:
+                    settings.referal_bonus_percent = 5.0
+                if not hasattr(settings, 'loyalty_points_per_sum') or settings.loyalty_points_per_sum is None:
+                    settings.loyalty_points_per_sum = 0.01
+                if not hasattr(settings, 'loyalty_point_value') or settings.loyalty_point_value is None:
+                    settings.loyalty_point_value = 1.0
+                if not hasattr(settings, 'enable_location_selection') or settings.enable_location_selection is None:
+                    settings.enable_location_selection = True
+                if not hasattr(settings, 'enable_offline_orders') or settings.enable_offline_orders is None:
+                    settings.enable_offline_orders = True
                 db.commit()
             except Exception as e:
                 # If columns don't exist, just continue without them
@@ -94,6 +130,30 @@ class SettingsService:
             settings.work_end_time = settings_update.work_end_time
         if settings_update.work_days is not None:
             settings.work_days = settings_update.work_days
+        if settings_update.enable_referals is not None:
+            settings.enable_referals = settings_update.enable_referals
+        if settings_update.enable_loyalty is not None:
+            settings.enable_loyalty = settings_update.enable_loyalty
+        if settings_update.enable_price_alerts is not None:
+            settings.enable_price_alerts = settings_update.enable_price_alerts
+        if settings_update.enable_favorites is not None:
+            settings.enable_favorites = settings_update.enable_favorites
+        if settings_update.enable_tags is not None:
+            settings.enable_tags = settings_update.enable_tags
+        if settings_update.enable_reviews is not None:
+            settings.enable_reviews = settings_update.enable_reviews
+        if settings_update.referal_bonus_points is not None:
+            settings.referal_bonus_points = settings_update.referal_bonus_points
+        if settings_update.referal_bonus_percent is not None:
+            settings.referal_bonus_percent = settings_update.referal_bonus_percent
+        if settings_update.loyalty_points_per_sum is not None:
+            settings.loyalty_points_per_sum = settings_update.loyalty_points_per_sum
+        if settings_update.loyalty_point_value is not None:
+            settings.loyalty_point_value = settings_update.loyalty_point_value
+        if settings_update.enable_location_selection is not None:
+            settings.enable_location_selection = settings_update.enable_location_selection
+        if settings_update.enable_offline_orders is not None:
+            settings.enable_offline_orders = settings_update.enable_offline_orders
         
         db.commit()
         db.refresh(settings)
