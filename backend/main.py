@@ -1833,6 +1833,96 @@ def get_product_rating_summary(
     }
 
 
+# ==================== ADMIN PRODUCT REVIEWS ====================
+
+@app.get("/api/admin/reviews")
+def admin_get_product_reviews(
+    search: Optional[str] = None,
+    rating: Optional[int] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get product reviews for admin panel"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(ProductReview).options(joinedload(ProductReview.product)).filter(
+        ProductReview.is_deleted == False
+    )
+
+    if rating:
+        query = query.filter(ProductReview.rating == rating)
+
+    if status == "approved":
+        query = query.filter(ProductReview.is_approved == True)
+    elif status == "pending":
+        query = query.filter(ProductReview.is_approved == False)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.join(Product).filter(
+            (Product.name.ilike(search_term)) |
+            (ProductReview.customer_name.ilike(search_term)) |
+            (ProductReview.comment.ilike(search_term))
+        )
+
+    total = query.count()
+    reviews = query.order_by(ProductReview.created_at.desc()).offset(skip).limit(limit).all()
+
+    results = []
+    for review in reviews:
+        product = review.product
+        results.append({
+            "id": review.id,
+            "product_id": review.product_id,
+            "product_name": product.name if product else None,
+            "customer_id": review.customer_id,
+            "customer_name": review.customer_name,
+            "rating": review.rating,
+            "comment": review.comment,
+            "is_approved": review.is_approved,
+            "created_at": to_uzbekistan_time(review.created_at).isoformat() if review.created_at else None
+        })
+
+    return {"total": total, "reviews": results}
+
+
+@app.put("/api/admin/reviews/{review_id}")
+def admin_update_product_review(
+    review_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Approve/unapprove or delete a review (admin)"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    review = db.query(ProductReview).filter(ProductReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Baholash topilmadi")
+
+    if "is_approved" in payload:
+        review.is_approved = bool(payload["is_approved"])
+    if "is_deleted" in payload:
+        review.is_deleted = bool(payload["is_deleted"])
+
+    db.commit()
+    db.refresh(review)
+
+    return {
+        "success": True,
+        "review_id": review.id,
+        "is_approved": review.is_approved,
+        "is_deleted": review.is_deleted
+    }
+
+
 # ==================== SEARCH HISTORY ====================
 
 @app.post("/api/search-history", response_model=SearchHistoryResponse)
@@ -2060,14 +2150,55 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/customers/{customer_id}/stats", response_model=CustomerStatsResponse)
-def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
+def get_customer_stats(
+    customer_id: int,
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """Get statistics for a specific customer (orders & sales)"""
     # Ensure customer exists
     customer = CustomerService.get_customer(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    stats = CustomerService.get_customer_stats(db, customer_id)
+    # Auto-set date range based on period if not provided
+    if not start_date or not end_date:
+        now = get_uzbekistan_now()
+        if period == "daily":
+            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_day.isoformat()
+        elif period == "monthly":
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_month.isoformat()
+        elif period == "yearly":
+            start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_year.isoformat()
+
+    def parse_date(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            date_str = value.replace('Z', '+00:00') if 'Z' in value else value
+            if '+' not in date_str and 'Z' not in date_str and date_str[-1] != 'Z':
+                parsed = datetime.fromisoformat(date_str)
+                if parsed.tzinfo is None:
+                    from utils import UZBEKISTAN_TZ
+                    parsed = parsed.replace(tzinfo=UZBEKISTAN_TZ)
+            else:
+                parsed = datetime.fromisoformat(date_str)
+            return parsed
+        except (ValueError, AttributeError):
+            return None
+
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date)
+
+    stats = CustomerService.get_customer_stats(db, customer_id, start_dt, end_dt)
     return stats
 
 
@@ -4756,6 +4887,56 @@ def check_favorite(
     ).first()
     
     return {"is_favorite": favorite is not None}
+
+
+# ==================== ADMIN FAVORITES ====================
+
+@app.get("/api/admin/favorites")
+def admin_get_favorites(
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get all favorites for admin panel"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(Favorite).options(
+        joinedload(Favorite.customer),
+        joinedload(Favorite.product)
+    )
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.join(Customer).join(Product).filter(
+            (Customer.name.ilike(search_term)) |
+            (Customer.phone.ilike(search_term)) |
+            (Product.name.ilike(search_term))
+        )
+
+    total = query.count()
+    favorites = query.order_by(Favorite.created_at.desc()).offset(skip).limit(limit).all()
+
+    results = []
+    for fav in favorites:
+        product = fav.product
+        customer = fav.customer
+        results.append({
+            "id": fav.id,
+            "customer_id": fav.customer_id,
+            "customer_name": customer.name if customer else None,
+            "customer_phone": customer.phone if customer else None,
+            "product_id": fav.product_id,
+            "product_name": product.name if product else None,
+            "product_price": product.retail_price if product else 0,
+            "created_at": to_uzbekistan_time(fav.created_at).isoformat() if fav.created_at else None
+        })
+
+    return {"total": total, "favorites": results}
 
 
 # ==================== PERSONAL PRODUCT TAGS ====================

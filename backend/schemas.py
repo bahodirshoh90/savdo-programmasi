@@ -55,6 +55,8 @@ class ProductUpdate(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya (legacy)")
+    category_id: Optional[int] = Field(None, description="Kategoriya ID")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
@@ -199,9 +201,11 @@ class CustomerStatsResponse(BaseModel):
     """Customer statistics for dashboard (orders & sales)"""
     customer_id: int
     total_orders: int
+    total_orders_amount: float = 0.0
     completed_orders: int
     cancelled_orders: int
     pending_orders: int
+    orders_by_status: Dict[str, int] = Field(default_factory=dict)
     total_sales_amount: float
     total_paid_amount: float
     total_debt_amount: float

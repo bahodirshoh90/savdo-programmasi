@@ -74,7 +74,7 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
     
     const platformName = platform || Platform.OS;
     
-    await api.post('/api/notifications/register-token', {
+    await api.post('/notifications/register-token', {
       token,
       device_id: deviceId,
       platform: platformName,
@@ -96,7 +96,7 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
  */
 export async function unregisterDeviceToken(token) {
   try {
-    await api.delete('/api/notifications/unregister-token', {
+    await api.delete('/notifications/unregister-token', {
       params: { token },
     });
     

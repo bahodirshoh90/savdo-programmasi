@@ -9,12 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useCart } from '../context/CartContext';
 import Colors from '../constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Footer({ currentScreen = 'home' }) {
   const navigation = useNavigation();
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { cartItems } = useCart();
+  const insets = useSafeAreaInsets();
 
   if (!isAuthenticated) {
     return null;
@@ -72,7 +74,17 @@ export default function Footer({ currentScreen = 'home' }) {
   };
 
   return (
-    <View style={[styles.footer, { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
+    <View
+      style={[
+        styles.footer,
+        {
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          paddingBottom: Math.max(insets.bottom, 8),
+        },
+      ]}
+    >
       {navItems.map((item) => {
         const isActive = currentScreen.toLowerCase() === item.id;
         return (
@@ -112,12 +124,8 @@ export default function Footer({ currentScreen = 'home' }) {
 
 const styles = StyleSheet.create({
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingTop: 8,
     paddingHorizontal: 4,
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -129,7 +137,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
-    zIndex: 1000,
   },
   footerItem: {
     flex: 1,

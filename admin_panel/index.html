@@ -119,6 +119,9 @@
                 <a href="#" class="nav-item" data-page="customer-favorites">
                     <i class="fas fa-heart"></i> Sevimli Mahsulotlar
                 </a>
+                <a href="#" class="nav-item" data-page="conversations">
+                    <i class="fas fa-comments"></i> Suhbatlar
+                </a>
                 <a href="#" class="nav-item" data-page="customer-tags">
                     <i class="fas fa-tags"></i> Shaxsiy Teglar
                 </a>
@@ -1153,6 +1156,39 @@
                 </div>
             </div>
 
+            <!-- Customer Conversations Page -->
+            <div id="conversations" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-comments"></i> Mijozlar Suhbatlari</h1>
+                </div>
+                <div class="filters">
+                    <input type="text" id="conversations-search" placeholder="Mijoz yoki mavzu bo'yicha qidirish" class="search-input" onkeyup="loadConversations()">
+                    <select id="conversation-status-filter" onchange="loadConversations()">
+                        <option value="">Barcha</option>
+                        <option value="open">Ochiq</option>
+                        <option value="closed">Yopiq</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="conversations-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mavzu</th>
+                                <th>Holat</th>
+                                <th>Oxirgi xabar</th>
+                                <th>Yangilangan</th>
+                                <th>O'qilmagan</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversations-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Customer Payments Page -->
             <div id="customer-payments" class="page">
                 <div class="page-header">
@@ -1671,6 +1707,27 @@
                 </div>
             </form>
         </div>
+        </div>
+    </div>
+
+    <!-- Conversation Modal -->
+    <div id="conversation-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="closeConversationModal()">&times;</span>
+            <h2 id="conversation-modal-title">Suhbat</h2>
+            <div id="conversation-meta" style="margin: 0.5rem 0 1rem; color: var(--text-light);"></div>
+            <div id="conversation-messages" class="chat-messages"></div>
+            <form id="conversation-reply-form" onsubmit="sendConversationMessage(event)" style="margin-top: 1rem;">
+                <input type="hidden" id="conversation-id">
+                <div class="form-group">
+                    <label>Xabar</label>
+                    <textarea id="conversation-message-input" rows="3" placeholder="Javob yozing..." required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeConversationModal()">Bekor</button>
+                    <button type="submit" class="btn btn-primary">Yuborish</button>
+                </div>
+            </form>
         </div>
     </div>
 
