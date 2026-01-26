@@ -347,6 +347,9 @@ function showPage(pageName) {
         case 'conversations':
             loadConversations();
             break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
+            break;
     }
 }
 
@@ -5537,6 +5540,115 @@ async function loadSettings() {
     } catch (error) {
         console.error('Error loading settings:', error);
         alert('Sozlamalarni yuklashda xatolik yuz berdi');
+    }
+}
+
+async function loadCustomerAppSettings() {
+    const defaults = {
+        enable_referals: false,
+        enable_loyalty: false,
+        enable_price_alerts: false,
+        enable_favorites: false,
+        enable_tags: false,
+        enable_reviews: false,
+        enable_location_selection: false,
+        enable_offline_orders: false,
+        referal_bonus_points: 100,
+        referal_bonus_percent: 5,
+        loyalty_points_per_sum: 0.01,
+        loyalty_point_value: 1
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/settings`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Mijoz ilovasi sozlamalarini yuklashda xatolik');
+        }
+        const settings = await response.json();
+        const resolved = { ...defaults, ...settings };
+
+        const setCheckbox = (id, value) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.checked = Boolean(value);
+            }
+        };
+
+        const setNumber = (id, value) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.value = value ?? '';
+            }
+        };
+
+        setCheckbox('enable-referals', resolved.enable_referals);
+        setCheckbox('enable-loyalty', resolved.enable_loyalty);
+        setCheckbox('enable-price-alerts', resolved.enable_price_alerts);
+        setCheckbox('enable-favorites', resolved.enable_favorites);
+        setCheckbox('enable-tags', resolved.enable_tags);
+        setCheckbox('enable-reviews', resolved.enable_reviews);
+        setCheckbox('enable-location-selection', resolved.enable_location_selection);
+        setCheckbox('enable-offline-orders', resolved.enable_offline_orders);
+
+        setNumber('referal-bonus-points', resolved.referal_bonus_points);
+        setNumber('referal-bonus-percent', resolved.referal_bonus_percent);
+        setNumber('loyalty-points-per-sum', resolved.loyalty_points_per_sum);
+        setNumber('loyalty-point-value', resolved.loyalty_point_value);
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        showToast(error.message || 'Sozlamalarni yuklashda xatolik', 'error');
+    }
+}
+
+async function saveCustomerAppSettings() {
+    try {
+        const getCheckbox = (id) => {
+            const input = document.getElementById(id);
+            return input ? input.checked : false;
+        };
+
+        const getNumber = (id, fallback = 0) => {
+            const input = document.getElementById(id);
+            if (!input) return fallback;
+            const parsed = parseFloat(input.value);
+            return Number.isNaN(parsed) ? fallback : parsed;
+        };
+
+        const payload = {
+            enable_referals: getCheckbox('enable-referals'),
+            enable_loyalty: getCheckbox('enable-loyalty'),
+            enable_price_alerts: getCheckbox('enable-price-alerts'),
+            enable_favorites: getCheckbox('enable-favorites'),
+            enable_tags: getCheckbox('enable-tags'),
+            enable_reviews: getCheckbox('enable-reviews'),
+            enable_location_selection: getCheckbox('enable-location-selection'),
+            enable_offline_orders: getCheckbox('enable-offline-orders'),
+            referal_bonus_points: Math.round(getNumber('referal-bonus-points', 100)),
+            referal_bonus_percent: getNumber('referal-bonus-percent', 5),
+            loyalty_points_per_sum: getNumber('loyalty-points-per-sum', 0.01),
+            loyalty_point_value: getNumber('loyalty-point-value', 1)
+        };
+
+        const response = await fetch(`${API_BASE}/settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+        }
+
+        showToast('Sozlamalar saqlandi', 'success');
+    } catch (error) {
+        console.error('Error saving customer app settings:', error);
+        showToast(error.message || 'Sozlamalarni saqlashda xatolik', 'error');
     }
 }
 

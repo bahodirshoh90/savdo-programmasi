@@ -735,6 +735,18 @@ class SettingsBase(BaseModel):
     notify_low_stock: bool = True  # Kam qolgan mahsulotlar
     notify_debt_limit: bool = True  # Qarz limiti oshganlar
     notify_daily_report: bool = True  # Kunlik hisobotlar
+    enable_referals: Optional[bool] = None
+    enable_loyalty: Optional[bool] = None
+    enable_price_alerts: Optional[bool] = None
+    enable_favorites: Optional[bool] = None
+    enable_tags: Optional[bool] = None
+    enable_reviews: Optional[bool] = None
+    enable_location_selection: Optional[bool] = None
+    enable_offline_orders: Optional[bool] = None
+    referal_bonus_points: Optional[int] = None
+    referal_bonus_percent: Optional[float] = None
+    loyalty_points_per_sum: Optional[float] = None
+    loyalty_point_value: Optional[float] = None
 
 
 class SettingsUpdate(SettingsBase):
