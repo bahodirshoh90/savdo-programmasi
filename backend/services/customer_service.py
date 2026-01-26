@@ -11,6 +11,25 @@ from schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerSt
 
 class CustomerService:
     """Service for customer management"""
+
+    @staticmethod
+    def customer_to_response(customer: Customer) -> CustomerResponse:
+        """Convert customer model to response schema"""
+        customer_dict = {
+            "id": customer.id,
+            "name": customer.name,
+            "phone": customer.phone,
+            "address": customer.address,
+            "customer_type": customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type),
+            "notes": customer.notes,
+            "username": customer.username,
+            "debt_balance": customer.debt_balance if customer.debt_balance is not None else 0.0,
+            "debt_limit": customer.debt_limit,
+            "debt_due_date": customer.debt_due_date,
+            "created_at": customer.created_at,
+            "updated_at": customer.updated_at
+        }
+        return CustomerResponse.model_validate(customer_dict)
     
     @staticmethod
     def create_customer(db: Session, customer: CustomerCreate) -> Customer:
