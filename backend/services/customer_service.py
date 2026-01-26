@@ -4,7 +4,8 @@ Customer Service
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from models import Customer, CustomerType, Sale, Order
+from datetime import datetime
+from models import Customer, CustomerType, Sale, Order, OrderStatus
 from schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerStatsResponse
 
 
@@ -183,31 +184,60 @@ class CustomerService:
             raise ValueError("Mijozni o'chirib bo'lmaydi: bog'liq ma'lumotlar mavjud.")
 
     @staticmethod
-    def get_customer_stats(db: Session, customer_id: int) -> CustomerStatsResponse:
+    def get_customer_stats(
+        db: Session,
+        customer_id: int,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> CustomerStatsResponse:
         """Get aggregated statistics for a customer (orders & sales)"""
-        # Total orders per status
-        total_orders = db.query(func.count(Order.id)).filter(Order.customer_id == customer_id).scalar() or 0
-        completed_orders = db.query(func.count(Order.id)).filter(
+        # Orders base query with optional date filters
+        order_query = db.query(Order).filter(Order.customer_id == customer_id)
+        if start_date:
+            order_query = order_query.filter(Order.created_at >= start_date)
+        if end_date:
+            order_query = order_query.filter(Order.created_at <= end_date)
+
+        total_orders = order_query.count() or 0
+
+        orders_by_status = {}
+        for status in OrderStatus:
+            status_count = order_query.filter(Order.status == status).count()
+            orders_by_status[status.value] = int(status_count or 0)
+
+        completed_orders = orders_by_status.get(OrderStatus.COMPLETED.value, 0)
+        cancelled_orders = orders_by_status.get(OrderStatus.CANCELLED.value, 0)
+        pending_orders = orders_by_status.get(OrderStatus.PENDING.value, 0)
+
+        # Total amount for completed orders
+        completed_amount_query = db.query(func.coalesce(func.sum(Order.total_amount), 0.0)).filter(
             Order.customer_id == customer_id,
-            Order.status == 'completed'
-        ).scalar() or 0
-        cancelled_orders = db.query(func.count(Order.id)).filter(
-            Order.customer_id == customer_id,
-            Order.status == 'cancelled'
-        ).scalar() or 0
-        pending_orders = db.query(func.count(Order.id)).filter(
-            Order.customer_id == customer_id,
-            Order.status == 'pending'
-        ).scalar() or 0
+            Order.status == OrderStatus.COMPLETED
+        )
+        if start_date:
+            completed_amount_query = completed_amount_query.filter(Order.created_at >= start_date)
+        if end_date:
+            completed_amount_query = completed_amount_query.filter(Order.created_at <= end_date)
+        total_orders_amount = completed_amount_query.scalar() or 0.0
 
         # Sales amounts
         total_sales_amount = db.query(func.coalesce(func.sum(Sale.total_amount), 0.0)).filter(
             Sale.customer_id == customer_id
-        ).scalar() or 0.0
+        )
+        if start_date:
+            total_sales_amount = total_sales_amount.filter(Sale.created_at >= start_date)
+        if end_date:
+            total_sales_amount = total_sales_amount.filter(Sale.created_at <= end_date)
+        total_sales_amount = total_sales_amount.scalar() or 0.0
 
         total_paid_amount = db.query(func.coalesce(func.sum(Sale.payment_amount), 0.0)).filter(
             Sale.customer_id == customer_id
-        ).scalar() or 0.0
+        )
+        if start_date:
+            total_paid_amount = total_paid_amount.filter(Sale.created_at >= start_date)
+        if end_date:
+            total_paid_amount = total_paid_amount.filter(Sale.created_at <= end_date)
+        total_paid_amount = total_paid_amount.scalar() or 0.0
 
         # Debt amount is difference
         total_debt_amount = float(total_sales_amount) - float(total_paid_amount)
@@ -215,26 +245,39 @@ class CustomerService:
         # Average order amount
         average_order_amount = 0.0
         if total_orders > 0:
-            total_order_amount = db.query(func.coalesce(func.sum(Order.total_amount), 0.0)).filter(
+            total_order_amount_query = db.query(func.coalesce(func.sum(Order.total_amount), 0.0)).filter(
                 Order.customer_id == customer_id
-            ).scalar() or 0.0
+            )
+            if start_date:
+                total_order_amount_query = total_order_amount_query.filter(Order.created_at >= start_date)
+            if end_date:
+                total_order_amount_query = total_order_amount_query.filter(Order.created_at <= end_date)
+            total_order_amount = total_order_amount_query.scalar() or 0.0
             average_order_amount = float(total_order_amount) / float(total_orders)
 
         # Last order & sale dates
-        last_order_date = db.query(func.max(Order.created_at)).filter(
-            Order.customer_id == customer_id
-        ).scalar()
+        last_order_date_query = db.query(func.max(Order.created_at)).filter(Order.customer_id == customer_id)
+        if start_date:
+            last_order_date_query = last_order_date_query.filter(Order.created_at >= start_date)
+        if end_date:
+            last_order_date_query = last_order_date_query.filter(Order.created_at <= end_date)
+        last_order_date = last_order_date_query.scalar()
 
-        last_sale_date = db.query(func.max(Sale.created_at)).filter(
-            Sale.customer_id == customer_id
-        ).scalar()
+        last_sale_date_query = db.query(func.max(Sale.created_at)).filter(Sale.customer_id == customer_id)
+        if start_date:
+            last_sale_date_query = last_sale_date_query.filter(Sale.created_at >= start_date)
+        if end_date:
+            last_sale_date_query = last_sale_date_query.filter(Sale.created_at <= end_date)
+        last_sale_date = last_sale_date_query.scalar()
 
         return CustomerStatsResponse(
             customer_id=customer_id,
             total_orders=int(total_orders),
+            total_orders_amount=float(total_orders_amount),
             completed_orders=int(completed_orders),
             cancelled_orders=int(cancelled_orders),
             pending_orders=int(pending_orders),
+            orders_by_status=orders_by_status,
             total_sales_amount=float(total_sales_amount),
             total_paid_amount=float(total_paid_amount),
             total_debt_amount=float(total_debt_amount),

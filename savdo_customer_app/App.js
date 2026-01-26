@@ -10,6 +10,7 @@ import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { initializeNotifications, removeNotificationListeners } from './services/notifications';
 import { useAuth } from './context/AuthContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Import screens
 import LoginScreen from './screens/LoginScreen';
@@ -291,18 +292,20 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <CartProvider>
-              <AppNavigator />
-              <StatusBar style="auto" />
-            </CartProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    <SafeAreaProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <CartProvider>
+                <AppNavigator />
+                <StatusBar style="auto" />
+              </CartProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
 

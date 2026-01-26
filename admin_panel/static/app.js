@@ -338,6 +338,15 @@ function showPage(pageName) {
         case 'categories':
             loadCategoriesPage();
             break;
+        case 'customer-favorites':
+            loadCustomerFavorites();
+            break;
+        case 'product-reviews':
+            loadProductReviews();
+            break;
+        case 'conversations':
+            loadConversations();
+            break;
     }
 }
 
@@ -1221,7 +1230,7 @@ async function editProduct(id) {
         await loadProductCategories();
         
         // Set category_id if available, otherwise use category name
-        const categorySelect = document.getElementById('product-category-select');
+        const categorySelect = document.getElementById('product-category');
         if (categorySelect) {
             if (product.category_id) {
                 categorySelect.value = product.category_id;
@@ -1233,12 +1242,6 @@ async function editProduct(id) {
                     categorySelect.value = category.id;
                 }
             }
-        }
-        
-        // Legacy category field (for backward compatibility)
-        const categoryInput = document.getElementById('product-category');
-        if (categoryInput) {
-            categoryInput.value = product.category || '';
         }
         
         document.getElementById('product-brand').value = product.brand || '';
@@ -1428,7 +1431,14 @@ async function saveProduct(e) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
-        data.category = document.getElementById('product-category').value.trim() || null;
+        const categorySelect = document.getElementById('product-category');
+        const categoryValue = categorySelect ? categorySelect.value : '';
+        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
+        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
+            ? categorySelect.selectedOptions[0].textContent.trim()
+            : null;
+        data.category_id = !isNaN(categoryId) ? categoryId : null;
+        data.category = categoryName;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
@@ -1442,8 +1452,14 @@ async function saveProduct(e) {
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
-        const categoryValue = document.getElementById('product-category').value.trim();
-        if (categoryValue) data.category = categoryValue;
+        const categorySelect = document.getElementById('product-category');
+        const categoryValue = categorySelect ? categorySelect.value : '';
+        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
+        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
+            ? categorySelect.selectedOptions[0].textContent.trim()
+            : null;
+        if (!isNaN(categoryId) && categoryId) data.category_id = categoryId;
+        if (categoryName) data.category = categoryName;
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -6197,7 +6213,7 @@ async function loadProductCategories() {
         const categories = await response.json();
         
         // Update product category select
-        const select = document.getElementById('product-category-select');
+        const select = document.getElementById('product-category');
         if (select) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Kategoriya tanlash...</option>';
@@ -6222,7 +6238,7 @@ async function loadProductCategories() {
             }
             categories.forEach(category => {
                 const option = document.createElement('option');
-                option.value = category.id;
+                option.value = category.name;
                 option.textContent = category.name;
                 filterSelect.appendChild(option);
             });
@@ -6232,5 +6248,358 @@ async function loadProductCategories() {
         }
     } catch (error) {
         console.error('Error loading categories from API:', error);
+    }
+}
+
+// ==================== CUSTOMER FAVORITES ====================
+async function loadCustomerFavorites() {
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('favorites-search')?.value || '';
+        const url = search
+            ? `${API_BASE}/admin/favorites?search=${encodeURIComponent(search)}`
+            : `${API_BASE}/admin/favorites`;
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Sevimli mahsulotlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const favorites = data.favorites || [];
+
+        if (favorites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Sevimli mahsulotlar topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = favorites.map(fav => `
+            <tr>
+                <td>${fav.id}</td>
+                <td>
+                    ${escapeHtml(fav.customer_name || '-')}
+                    <div style="color: var(--text-light); font-size: 0.8rem;">${escapeHtml(fav.customer_phone || '')}</div>
+                </td>
+                <td>${escapeHtml(fav.product_name || '-')}</td>
+                <td>${formatMoney(fav.product_price || 0)}</td>
+                <td>${formatDate(fav.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+// ==================== PRODUCT REVIEWS ====================
+async function loadProductReviews() {
+    const tbody = document.getElementById('reviews-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('reviews-search')?.value || '';
+        const rating = document.getElementById('reviews-rating-filter')?.value || '';
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (rating) params.append('rating', rating);
+
+        const url = `${API_BASE}/admin/reviews${params.toString() ? `?${params.toString()}` : ''}`;
+        const response = await fetch(url, { headers: getAuthHeaders() });
+
+        if (!response.ok) {
+            throw new Error('Sharhlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const reviews = data.reviews || [];
+
+        if (reviews.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Sharhlar topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = reviews.map(review => `
+            <tr>
+                <td>${review.id}</td>
+                <td>${escapeHtml(review.customer_name || '-')}</td>
+                <td>${escapeHtml(review.product_name || '-')}</td>
+                <td>${'★'.repeat(review.rating)} (${review.rating})</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(review.comment || '')}">
+                    ${escapeHtml(review.comment || '-')}
+                </td>
+                <td>${formatDate(review.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm ${review.is_approved ? 'btn-secondary' : 'btn-success'}"
+                        onclick="setReviewApproval(${review.id}, ${review.is_approved ? 'false' : 'true'})"
+                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
+                        ${review.is_approved ? 'Bekor' : 'Tasdiqlash'}
+                    </button>
+                    <button class="btn btn-sm btn-danger"
+                        onclick="deleteReview(${review.id})"
+                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        O'chirish
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+async function setReviewApproval(reviewId, isApproved) {
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_approved: isApproved })
+        });
+
+        if (!response.ok) {
+            throw new Error('Sharh holatini yangilashda xatolik');
+        }
+
+        showToast(isApproved ? 'Sharh tasdiqlandi' : 'Sharh bekor qilindi', 'success');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error updating review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteReview(reviewId) {
+    if (!confirm('Sharhni o\'chirishni xohlaysizmi?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_deleted: true })
+        });
+
+        if (!response.ok) {
+            throw new Error('Sharhni o\'chirishda xatolik');
+        }
+
+        showToast('Sharh o\'chirildi', 'success');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// ==================== CUSTOMER CONVERSATIONS ====================
+async function loadConversations() {
+    const tbody = document.getElementById('conversations-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('conversations-search')?.value || '';
+        const status = document.getElementById('conversation-status-filter')?.value || '';
+        const url = status ? `${API_BASE}/conversations?status=${encodeURIComponent(status)}` : `${API_BASE}/conversations`;
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Suhbatlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        let conversations = data.conversations || [];
+
+        if (search) {
+            const term = search.toLowerCase();
+            conversations = conversations.filter(conv => {
+                const customerName = (conv.customer_name || '').toLowerCase();
+                const subject = (conv.subject || '').toLowerCase();
+                const lastMessage = (conv.last_message?.message || '').toLowerCase();
+                return customerName.includes(term) || subject.includes(term) || lastMessage.includes(term);
+            });
+        }
+
+        if (conversations.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Suhbatlar topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            open: 'Ochiq',
+            closed: 'Yopiq'
+        };
+
+        tbody.innerHTML = conversations.map(conv => {
+            const lastMessage = conv.last_message?.message
+                ? `${conv.last_message.sender_name || ''}: ${conv.last_message.message}`
+                : '-';
+            const unreadBadge = conv.unread_count > 0
+                ? `<span class="badge" style="background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">${conv.unread_count}</span>`
+                : '-';
+            return `
+                <tr>
+                    <td>${conv.id}</td>
+                    <td>${escapeHtml(conv.customer_name || '-')}</td>
+                    <td>${escapeHtml(conv.subject || '-')}</td>
+                    <td>${statusLabels[conv.status] || conv.status}</td>
+                    <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(lastMessage)}">
+                        ${escapeHtml(lastMessage)}
+                    </td>
+                    <td>${formatDate(conv.last_message_at || conv.updated_at)}</td>
+                    <td>${unreadBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
+                            Ko'rish
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="updateConversationStatus(${conv.id}, '${conv.status === 'closed' ? 'open' : 'closed'}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            ${conv.status === 'closed' ? 'Ochish' : 'Yopish'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+function openConversation(conversationId) {
+    const modal = document.getElementById('conversation-modal');
+    const input = document.getElementById('conversation-id');
+    if (input) {
+        input.value = conversationId;
+    }
+    if (modal) {
+        modal.style.display = 'block';
+    }
+    loadConversationMessages(conversationId);
+}
+
+function closeConversationModal() {
+    const modal = document.getElementById('conversation-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    const messageInput = document.getElementById('conversation-message-input');
+    if (messageInput) {
+        messageInput.value = '';
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    const container = document.getElementById('conversation-messages');
+    if (!container) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Xabarlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const messages = data.messages || [];
+        const conversation = data.conversation || {};
+
+        const titleEl = document.getElementById('conversation-modal-title');
+        if (titleEl) {
+            titleEl.textContent = `Suhbat #${conversationId}`;
+        }
+
+        const metaEl = document.getElementById('conversation-meta');
+        if (metaEl) {
+            const statusLabel = conversation.status === 'closed' ? 'Yopiq' : 'Ochiq';
+            metaEl.textContent = `Mijoz: ${conversation.customer_name || '-'} • Holat: ${statusLabel}`;
+        }
+
+        if (messages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: var(--text-light);">Xabarlar yo\'q</div>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => {
+            const messageClass = msg.sender_type === 'admin' ? 'admin' : 'customer';
+            return `
+                <div class="chat-message ${messageClass}">
+                    <div>
+                        <div class="chat-bubble ${messageClass}">${escapeHtml(msg.message || '')}</div>
+                        <div class="chat-meta">${escapeHtml(msg.sender_name || '')} • ${formatDate(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.scrollTop = container.scrollHeight;
+    } catch (error) {
+        console.error('Error loading conversation messages:', error);
+        container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
+    }
+}
+
+async function sendConversationMessage(event) {
+    event.preventDefault();
+    const conversationId = document.getElementById('conversation-id')?.value;
+    const messageInput = document.getElementById('conversation-message-input');
+    const message = messageInput?.value?.trim();
+
+    if (!conversationId || !message) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            method: 'POST',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+
+        if (!response.ok) {
+            throw new Error('Xabar yuborishda xatolik');
+        }
+
+        if (messageInput) {
+            messageInput.value = '';
+        }
+        await loadConversationMessages(conversationId);
+        loadConversations();
+    } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function updateConversationStatus(conversationId, status) {
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/status`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) {
+            throw new Error('Holatni yangilashda xatolik');
+        }
+
+        loadConversations();
+    } catch (error) {
+        console.error('Error updating conversation status:', error);
+        alert('Xatolik: ' + error.message);
     }
 }
