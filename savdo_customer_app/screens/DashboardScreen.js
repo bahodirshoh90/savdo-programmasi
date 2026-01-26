@@ -57,9 +57,19 @@ export default function DashboardScreen({ navigation }) {
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
+      } else {
+        // Fallback to legacy statistics endpoint if needed
+        const fallbackResponse = await fetch(`${baseUrl}/statistics?period=${period}`);
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          setStatistics(fallbackData);
+        } else {
+          setStatistics(null);
+        }
       }
     } catch (error) {
       console.error('Error loading statistics:', error);
+      setStatistics(null);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

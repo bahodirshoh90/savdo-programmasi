@@ -4602,6 +4602,10 @@ def get_statistics(
                 "total_orders_amount": total_orders_amount,
                 "online_orders_amount": online_orders_amount
             }
+            # Backward-compatible top-level fields for customer app
+            stats["total_orders"] = total_orders
+            stats["total_orders_amount"] = total_orders_amount
+            stats["orders_by_status"] = orders_by_status
         except Exception as e:
             print(f"Error getting order statistics: {e}")
             import traceback
@@ -4615,6 +4619,9 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             }
+            stats["total_orders"] = 0
+            stats["total_orders_amount"] = 0
+            stats["orders_by_status"] = {}
         
         try:
             # Add inventory statistics
@@ -4655,6 +4662,9 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             },
+            "total_orders": 0,
+            "total_orders_amount": 0,
+            "orders_by_status": {},
             "inventory": {"total_value": 0, "total_packages": 0, "total_pieces": 0},
             "total_debt": 0
         }

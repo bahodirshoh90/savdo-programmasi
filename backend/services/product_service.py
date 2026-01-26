@@ -267,9 +267,18 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
-        # Filter by category
+        # Filter by category (accept id or name)
         if category:
-            query = query.filter(Product.category.ilike(f"%{category}%"))
+            category_value = str(category).strip()
+            if category_value:
+                if category_value.isdigit():
+                    category_id = int(category_value)
+                    query = query.filter(
+                        (Product.category_id == category_id) |
+                        (Product.category.ilike(f"%{category_value}%"))
+                    )
+                else:
+                    query = query.filter(Product.category.ilike(f"%{category_value}%"))
         
         # Filter by supplier
         if supplier:
@@ -401,7 +410,16 @@ class ProductService:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
         if category:
-            query = query.filter(Product.category.ilike(f"%{category}%"))
+            category_value = str(category).strip()
+            if category_value:
+                if category_value.isdigit():
+                    category_id = int(category_value)
+                    query = query.filter(
+                        (Product.category_id == category_id) |
+                        (Product.category.ilike(f"%{category_value}%"))
+                    )
+                else:
+                    query = query.filter(Product.category.ilike(f"%{category_value}%"))
         
         if supplier:
             query = query.filter(Product.supplier.ilike(f"%{supplier}%"))
