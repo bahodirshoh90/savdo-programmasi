@@ -18,7 +18,7 @@ import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 import Colors from '../constants/colors';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/api';
@@ -370,7 +370,7 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <Text style={styles.title}>Profil</Text>
@@ -755,7 +755,7 @@ export default function ProfileScreen({ navigation }) {
       </Modal>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

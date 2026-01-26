@@ -11,12 +11,29 @@ import { useCart } from '../context/CartContext';
 import Colors from '../constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+export const FOOTER_BASE_HEIGHT = 56;
+
+export const useFooterHeight = () => {
+  const insets = useSafeAreaInsets();
+  return FOOTER_BASE_HEIGHT + Math.max(insets.bottom, 8);
+};
+
+export const FooterAwareView = ({ children, style }) => {
+  const footerHeight = useFooterHeight();
+  return (
+    <View style={[styles.footerAwareContainer, { paddingBottom: footerHeight }, style]}>
+      {children}
+    </View>
+  );
+};
+
 export default function Footer({ currentScreen = 'home' }) {
   const navigation = useNavigation();
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { cartItems } = useCart();
   const insets = useSafeAreaInsets();
+  const footerHeight = useFooterHeight();
 
   if (!isAuthenticated) {
     return null;
@@ -82,6 +99,7 @@ export default function Footer({ currentScreen = 'home' }) {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           paddingBottom: Math.max(insets.bottom, 8),
+          height: footerHeight,
         },
       ]}
     >
@@ -123,7 +141,14 @@ export default function Footer({ currentScreen = 'home' }) {
 }
 
 const styles = StyleSheet.create({
+  footerAwareContainer: {
+    flex: 1,
+  },
   footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     paddingTop: 8,
     paddingHorizontal: 4,

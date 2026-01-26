@@ -28,7 +28,7 @@ import useOffline from '../hooks/useOffline';
 import offlineService from '../services/offlineService';
 import AnimatedView from '../components/AnimatedView';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 import websocketService from '../services/websocket';
 
 export default function ProductsScreen({ navigation, route }) {
@@ -454,7 +454,7 @@ export default function ProductsScreen({ navigation, route }) {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Compare Mode Header */}
       {compareMode && (
         <View style={styles.compareHeader}>
@@ -511,12 +511,6 @@ export default function ProductsScreen({ navigation, route }) {
               <Ionicons name="search" size={20} color={Colors.textLight} style={styles.searchIcon} />
             )}
           </View>
-          <TouchableOpacity
-            style={styles.scanButton}
-            onPress={() => navigation.navigate('QRScanner')}
-          >
-            <Ionicons name="qr-code-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilters(true)}
@@ -695,7 +689,7 @@ export default function ProductsScreen({ navigation, route }) {
         </View>
       </Modal>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 
@@ -823,14 +817,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.surface,
     fontWeight: '600',
-  },
-  scanButton: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.borderLight,
-    marginRight: 8,
   },
   filterButton: {
     padding: 8,

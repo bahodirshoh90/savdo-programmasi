@@ -21,7 +21,6 @@ import { useAuth } from '../context/AuthContext';
 import { login as authLogin, signup } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
-import Footer from '../components/Footer';
 import { API_ENDPOINTS } from '../config/api';
 
 export default function LoginScreen() {

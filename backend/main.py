@@ -88,6 +88,44 @@ try:
         if 'work_days' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
+
+        # Customer app settings fields
+        if 'enable_referals' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_referals BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_referals = 0 WHERE enable_referals IS NULL"))
+        if 'enable_loyalty' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_loyalty BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_loyalty = 0 WHERE enable_loyalty IS NULL"))
+        if 'enable_price_alerts' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_price_alerts BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_price_alerts = 0 WHERE enable_price_alerts IS NULL"))
+        if 'enable_favorites' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_favorites BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_favorites = 0 WHERE enable_favorites IS NULL"))
+        if 'enable_tags' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_tags BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_tags = 0 WHERE enable_tags IS NULL"))
+        if 'enable_reviews' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_reviews BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_reviews = 0 WHERE enable_reviews IS NULL"))
+        if 'enable_location_selection' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_location_selection = 0 WHERE enable_location_selection IS NULL"))
+        if 'enable_offline_orders' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_offline_orders = 0 WHERE enable_offline_orders IS NULL"))
+        if 'referal_bonus_points' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_points INTEGER"))
+            conn.execute(text("UPDATE settings SET referal_bonus_points = 100 WHERE referal_bonus_points IS NULL"))
+        if 'referal_bonus_percent' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_percent REAL"))
+            conn.execute(text("UPDATE settings SET referal_bonus_percent = 5 WHERE referal_bonus_percent IS NULL"))
+        if 'loyalty_points_per_sum' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_points_per_sum REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_points_per_sum = 0.01 WHERE loyalty_points_per_sum IS NULL"))
+        if 'loyalty_point_value' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
         
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
@@ -948,6 +986,7 @@ def get_products(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -960,7 +999,8 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, category=category, supplier=supplier, location=location,
+                                      brand=brand, category=category, category_id=category_id,
+                                      supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -1022,6 +1062,7 @@ def get_products_count(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -1036,6 +1077,7 @@ def get_products_count(
         min_stock=min_stock,
         brand=brand,
         category=category,
+        category_id=category_id,
         supplier=supplier,
         location=location
     )
@@ -2216,13 +2258,15 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
     # If customer type changed, notify customer app via WebSocket
     if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
         try:
+            old_type_value = old_customer_type.value if hasattr(old_customer_type, 'value') else str(old_customer_type)
+            new_type_value = customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type)
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_customer_type,
-                "new_type": customer.customer_type
+                "old_type": old_type_value,
+                "new_type": new_type_value
             })
-            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_type_value} -> {new_type_value}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     
@@ -2501,6 +2545,30 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["work_end_time"] = settings.work_end_time
         if hasattr(settings, 'work_days'):
             response_data["work_days"] = settings.work_days
+        if hasattr(settings, 'enable_referals'):
+            response_data["enable_referals"] = settings.enable_referals
+        if hasattr(settings, 'enable_loyalty'):
+            response_data["enable_loyalty"] = settings.enable_loyalty
+        if hasattr(settings, 'enable_price_alerts'):
+            response_data["enable_price_alerts"] = settings.enable_price_alerts
+        if hasattr(settings, 'enable_favorites'):
+            response_data["enable_favorites"] = settings.enable_favorites
+        if hasattr(settings, 'enable_tags'):
+            response_data["enable_tags"] = settings.enable_tags
+        if hasattr(settings, 'enable_reviews'):
+            response_data["enable_reviews"] = settings.enable_reviews
+        if hasattr(settings, 'enable_location_selection'):
+            response_data["enable_location_selection"] = settings.enable_location_selection
+        if hasattr(settings, 'enable_offline_orders'):
+            response_data["enable_offline_orders"] = settings.enable_offline_orders
+        if hasattr(settings, 'referal_bonus_points'):
+            response_data["referal_bonus_points"] = settings.referal_bonus_points
+        if hasattr(settings, 'referal_bonus_percent'):
+            response_data["referal_bonus_percent"] = settings.referal_bonus_percent
+        if hasattr(settings, 'loyalty_points_per_sum'):
+            response_data["loyalty_points_per_sum"] = settings.loyalty_points_per_sum
+        if hasattr(settings, 'loyalty_point_value'):
+            response_data["loyalty_point_value"] = settings.loyalty_point_value
         
         return SettingsResponse(**response_data)
     except Exception as e:
@@ -2814,6 +2882,7 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -2976,6 +3045,7 @@ def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(

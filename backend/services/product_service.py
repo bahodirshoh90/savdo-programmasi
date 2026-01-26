@@ -243,6 +243,7 @@ class ProductService:
         min_stock: int = 0,
         brand: Optional[str] = None,
         category: Optional[str] = None,
+        category_id: Optional[int] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
         min_price: Optional[float] = None,
@@ -268,6 +269,8 @@ class ProductService:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
         # Filter by category (accept id or name)
+        if category_id is not None:
+            query = query.filter(Product.category_id == category_id)
         if category:
             category_value = str(category).strip()
             if category_value:
@@ -390,6 +393,7 @@ class ProductService:
         min_stock: int = 0,
         brand: Optional[str] = None,
         category: Optional[str] = None,
+        category_id: Optional[int] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
         min_price: Optional[float] = None,
@@ -409,6 +413,9 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
+        if category_id is not None:
+            query = query.filter(Product.category_id == category_id)
+
         if category:
             category_value = str(category).strip()
             if category_value:

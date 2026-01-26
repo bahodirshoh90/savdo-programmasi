@@ -62,17 +62,22 @@ export const login = async (username, password) => {
 
     // ONLY allow customer login - reject seller/admin logins
     if (response.user_type === 'customer') {
-      const { token, user, customer_id, customer_name } = response;
+      const { token, user, customer_id, customer_name, customer_type } = response;
 
       // Store token
       await tokenStorage.setItem('customer_token', token);
 
       // Prepare user data
+      const resolvedCustomerType = user?.customer_type || customer_type || 'regular';
       const userData = user || {
         customer_id: customer_id,
         name: customer_name || user?.name,
         phone: user?.phone,
+        customer_type: resolvedCustomerType,
       };
+      if (userData && !userData.customer_type) {
+        userData.customer_type = resolvedCustomerType;
+      }
 
       // Store user data
       if (customer_id) {

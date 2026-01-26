@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import BannerCarousel from '../components/BannerCarousel';
 import api from '../services/api';
 import API_CONFIG from '../config/api';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -114,7 +114,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={[styles.greeting, { color: colors.text }]}>
@@ -139,14 +139,6 @@ export default function HomeScreen() {
           >
             <Ionicons name="cube-outline" size={32} color={colors.primary} />
             <Text style={[styles.actionText, { color: colors.text }]}>Mahsulotlar</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('QRScanner')}
-          >
-            <Ionicons name="qr-code-outline" size={32} color={colors.primary} />
-            <Text style={[styles.actionText, { color: colors.text }]}>QR Kod</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -183,7 +175,7 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
       <Footer currentScreen="home" />
-    </View>
+    </FooterAwareView>
   );
 }
 
