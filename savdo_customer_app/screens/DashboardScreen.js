@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
@@ -106,7 +106,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -224,7 +224,7 @@ export default function DashboardScreen({ navigation }) {
         )}
       </ScrollView>
       <Footer currentScreen="reports" />
-    </View>
+    </FooterAwareView>
   );
 }
 

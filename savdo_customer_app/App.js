@@ -23,7 +23,6 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
-import QRScannerScreen from './screens/QRScannerScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import NewChatScreen from './screens/NewChatScreen';
@@ -237,11 +236,6 @@ function AppNavigator() {
               name="OrderDetail"
               component={OrderDetailScreen}
               options={{ title: 'Buyurtma detallari' }}
-            />
-            <Stack.Screen
-              name="QRScanner"
-              component={QRScannerScreen}
-              options={{ title: 'QR Kod Skaner', headerShown: false }}
             />
             <Stack.Screen
               name="ChatList"

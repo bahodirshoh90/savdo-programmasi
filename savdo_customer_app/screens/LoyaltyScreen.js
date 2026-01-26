@@ -18,7 +18,7 @@ import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function LoyaltyScreen({ navigation }) {
   const { colors } = useTheme();
@@ -116,7 +116,7 @@ export default function LoyaltyScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -231,7 +231,7 @@ export default function LoyaltyScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

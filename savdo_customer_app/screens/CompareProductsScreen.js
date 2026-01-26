@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import StarRating from '../components/StarRating';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function CompareProductsScreen({ route, navigation }) {
   const { productIds } = route.params || { productIds: [] };
@@ -118,11 +118,10 @@ export default function CompareProductsScreen({ route, navigation }) {
     { key: 'category', label: 'Kategoriya', type: 'text' },
     { key: 'retail_price', label: 'Narx', type: 'price' },
     { key: 'total_pieces', label: 'Omborda', type: 'stock' },
-    { key: 'barcode', label: 'Barcode', type: 'text' },
   ];
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -207,7 +206,7 @@ export default function CompareProductsScreen({ route, navigation }) {
       )}
       </ScrollView>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 

@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function PriceAlertsScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -296,7 +296,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Narx Eslatmalari</Text>
         <TouchableOpacity
@@ -446,7 +446,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
       </Modal>
 
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

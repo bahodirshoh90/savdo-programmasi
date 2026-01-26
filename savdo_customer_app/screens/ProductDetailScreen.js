@@ -26,7 +26,7 @@ import { TextInput, Modal, Share as RNShare } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
@@ -418,15 +418,16 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <FooterAwareView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
   if (!product && !isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.text }]}>Mahsulot topilmadi</Text>
@@ -438,7 +439,7 @@ export default function ProductDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="products" />
-      </View>
+      </FooterAwareView>
     );
   }
 
@@ -469,7 +470,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const currentImageUrl = currentImage?.image_url || imageUrl;
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.imageContainer}>
         {currentImageUrl ? (
@@ -547,9 +548,6 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
         )}
 
-        {product.barcode && (
-          <Text style={styles.barcode}>Barcode: {product.barcode}</Text>
-        )}
 
         <Text style={styles.price}>
           {price.toLocaleString('uz-UZ')} so'm
@@ -699,7 +697,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 
@@ -781,11 +779,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.textDark,
     marginBottom: 8,
-  },
-  barcode: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 12,
   },
   price: {
     fontSize: 28,

@@ -21,7 +21,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import websocketService from '../services/websocket';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ChatScreen() {
   const navigation = useNavigation();
@@ -206,7 +206,7 @@ export default function ChatScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -222,93 +222,96 @@ export default function ChatScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+        <Footer currentScreen="chat" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {conversation?.subject || t('support') || 'Yordam'}
-          </Text>
-          {conversation?.seller_name && (
-            <Text style={[styles.headerSubtitle, { color: colors.textLight }]}>
-              {t('admin') || 'Admin'}: {conversation.seller_name}
-            </Text>
-          )}
-        </View>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.messagesList}
-        inverted={false}
-        onContentSizeChange={() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color={colors.textLight} />
-            <Text style={[styles.emptyText, { color: colors.textLight }]}>
-              {t('no_messages') || 'Hozircha xabarlar yo\'q'}
-            </Text>
-          </View>
-        }
-      />
-
-      <View
-        style={[
-          styles.inputContainer,
-          { backgroundColor: colors.surface, borderTopColor: colors.border },
-        ]}
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <TextInput
-          style={[
-            styles.input,
-            { color: colors.text, backgroundColor: colors.background },
-          ]}
-          placeholder={t('type_message') || 'Xabar yozing...'}
-          placeholderTextColor={colors.textLight}
-          value={messageText}
-          onChangeText={setMessageText}
-          multiline
-          maxLength={5000}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              {conversation?.subject || t('support') || 'Yordam'}
+            </Text>
+            {conversation?.seller_name && (
+              <Text style={[styles.headerSubtitle, { color: colors.textLight }]}>
+                {t('admin') || 'Admin'}: {conversation.seller_name}
+              </Text>
+            )}
+          </View>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.messagesList}
+          inverted={false}
+          onContentSizeChange={() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={64} color={colors.textLight} />
+              <Text style={[styles.emptyText, { color: colors.textLight }]}>
+                {t('no_messages') || 'Hozircha xabarlar yo\'q'}
+              </Text>
+            </View>
+          }
         />
-        <TouchableOpacity
+
+        <View
           style={[
-            styles.sendButton,
-            {
-              backgroundColor: messageText.trim() ? colors.primary : colors.border,
-            },
+            styles.inputContainer,
+            { backgroundColor: colors.surface, borderTopColor: colors.border },
           ]}
-          onPress={sendMessage}
-          disabled={!messageText.trim() || isSending}
         >
-          {isSending ? (
-            <ActivityIndicator size="small" color={colors.surface} />
-          ) : (
-            <Ionicons name="send" size={20} color={colors.surface} />
-          )}
-        </TouchableOpacity>
-      </View>
+          <TextInput
+            style={[
+              styles.input,
+              { color: colors.text, backgroundColor: colors.background },
+            ]}
+            placeholder={t('type_message') || 'Xabar yozing...'}
+            placeholderTextColor={colors.textLight}
+            value={messageText}
+            onChangeText={setMessageText}
+            multiline
+            maxLength={5000}
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: messageText.trim() ? colors.primary : colors.border,
+              },
+            ]}
+            onPress={sendMessage}
+            disabled={!messageText.trim() || isSending}
+          >
+            {isSending ? (
+              <ActivityIndicator size="small" color={colors.surface} />
+            ) : (
+              <Ionicons name="send" size={20} color={colors.surface} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
       <Footer currentScreen="chat" />
-    </KeyboardAvoidingView>
+    </FooterAwareView>
   );
 }
 
