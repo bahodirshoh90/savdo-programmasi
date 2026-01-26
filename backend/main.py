@@ -948,6 +948,7 @@ def get_products(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -960,7 +961,8 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, category=category, supplier=supplier, location=location,
+                                      brand=brand, category=category, category_id=category_id,
+                                      supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -1022,6 +1024,7 @@ def get_products_count(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -1036,6 +1039,7 @@ def get_products_count(
         min_stock=min_stock,
         brand=brand,
         category=category,
+        category_id=category_id,
         supplier=supplier,
         location=location
     )
