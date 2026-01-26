@@ -8,6 +8,8 @@ import Colors from '../constants/colors';
 import AnimatedView from './AnimatedView';
 import OptimizedImage from './OptimizedImage';
 import AnimatedButton from './AnimatedButton';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function ProductCard({
   product,
@@ -20,7 +22,8 @@ export default function ProductCard({
   quantity = 0,
   index = 0,
 }) {
-  const price = product.retail_price || product.regular_price || 0;
+  const { user } = useAuth();
+  const price = getProductPrice(product, user?.customer_type);
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   return (

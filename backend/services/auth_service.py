@@ -122,6 +122,7 @@ class AuthService:
                 "customer_id": customer.id,
                 "name": customer.name,
                 "phone": customer.phone,
+                "customer_type": customer.customer_type.value if customer.customer_type else None,
             }
         }
     

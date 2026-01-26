@@ -2220,13 +2220,15 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
     # If customer type changed, notify customer app via WebSocket
     if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
         try:
+            old_type_value = old_customer_type.value if hasattr(old_customer_type, 'value') else str(old_customer_type)
+            new_type_value = customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type)
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_customer_type,
-                "new_type": customer.customer_type
+                "old_type": old_type_value,
+                "new_type": new_type_value
             })
-            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_type_value} -> {new_type_value}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     
@@ -2818,6 +2820,7 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -2980,6 +2983,7 @@ def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(

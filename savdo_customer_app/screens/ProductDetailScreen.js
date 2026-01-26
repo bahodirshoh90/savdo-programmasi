@@ -16,6 +16,7 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,10 +28,12 @@ import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '../context/ToastContext';
 import Footer, { FooterAwareView } from '../components/Footer';
+import { getProductPrice } from '../utils/pricing';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
   const { addToCart, cartItems } = useCart();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const { colors } = useTheme();
   const [product, setProduct] = useState(routeProduct || null);
@@ -444,7 +447,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   }
 
   const imageUrl = getImageUrl();
-  const price = product.retail_price || product.regular_price || 0;
+  const price = getProductPrice(product, user?.customer_type);
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   // Get all images (product.image_url + productImages)

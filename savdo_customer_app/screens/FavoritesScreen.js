@@ -18,8 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import Footer, { FooterAwareView } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function FavoritesScreen({ navigation }) {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -153,7 +156,7 @@ export default function FavoritesScreen({ navigation }) {
   const renderProduct = ({ item }) => {
     const isFavorite = favoriteStatus[item.id] || false;
     const imageUrl = getImageUrl(item.image_url);
-    const price = item.retail_price || item.regular_price || item.wholesale_price || 0;
+    const price = getProductPrice(item, user?.customer_type);
     const isOutOfStock = item.total_pieces !== undefined && item.total_pieces !== null && item.total_pieces <= 0;
 
     return (
