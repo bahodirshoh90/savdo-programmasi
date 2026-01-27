@@ -217,6 +217,7 @@ export const signup = async (customerData) => {
       username: customerData.username,
       password: customerData.password,
       customer_type: 'regular', // Mijoz ilovasida yaratiladigan mijozlar oddiy mijoz bo'ladi
+    referal_code: customerData.referal_code || null,
     });
 
     console.log('Customer created:', customerResponse);

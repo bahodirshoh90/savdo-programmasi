@@ -161,6 +161,16 @@ export function removeNotificationListeners(subscriptions) {
  */
 export async function initializeNotifications(navigation) {
   try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#4f46e5',
+        sound: 'default',
+      });
+    }
+
     // Request permissions
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {

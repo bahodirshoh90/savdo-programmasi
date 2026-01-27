@@ -52,6 +52,7 @@ export default function LoginScreen() {
     password: '',
     confirm_password: '',
     address: '',
+    referal_code: '',
   });
   const [isRegistering, setIsRegistering] = useState(false);
   
@@ -277,6 +278,7 @@ export default function LoginScreen() {
         username: registerData.username.trim(),
         password: registerData.password,
         address: registerData.address.trim() || '',
+        referal_code: registerData.referal_code.trim() || null,
       });
 
       if (result.success) {
@@ -292,6 +294,7 @@ export default function LoginScreen() {
                 password: '',
                 confirm_password: '',
                 address: '',
+                referal_code: '',
               });
             },
           },
@@ -716,6 +719,17 @@ export default function LoginScreen() {
               />
             </View>
 
+            <View style={styles.inputContainer}>
+              <Ionicons name="gift-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Referal kod (ixtiyoriy)"
+                value={registerData.referal_code}
+                onChangeText={(text) => setRegisterData({ ...registerData, referal_code: text })}
+                autoCapitalize="characters"
+              />
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.button, styles.buttonSecondary]}
@@ -728,6 +742,7 @@ export default function LoginScreen() {
                     password: '',
                     confirm_password: '',
                     address: '',
+                    referal_code: '',
                   });
                 }}
               >

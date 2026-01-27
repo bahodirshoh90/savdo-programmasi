@@ -46,6 +46,10 @@ let totalOrders = 0;
 // Selected products for bulk operations
 let selectedProducts = new Set();
 
+// Product image state (multi-image uploads)
+let pendingProductImages = [];
+let existingProductImages = [];
+
 // Authentication state
 let currentAdminToken = null;
 let currentAdminUser = null;
@@ -349,6 +353,9 @@ function showPage(pageName) {
             break;
         case 'customer-app-settings':
             loadCustomerAppSettings();
+            break;
+        case 'customer-push':
+            resetBroadcastForm();
             break;
     }
 }
@@ -1216,6 +1223,7 @@ async function showAddProductModal() {
     document.getElementById('product-image-url').value = '';
     document.getElementById('product-total-pieces-input').value = '0';
     updateProductImagePreview('');
+    resetProductImagesState();
     // Load categories for dropdown - wait for it to complete
     await loadProductCategories();
     document.getElementById('product-modal').style.display = 'block';
@@ -1224,6 +1232,7 @@ async function showAddProductModal() {
 async function editProduct(id) {
     try {
         const product = await fetch(`${API_BASE}/products/${id}`).then(r => r.json());
+        resetProductImagesState();
         document.getElementById('product-modal-title').textContent = 'Mahsulotni Tahrirlash';
         document.getElementById('product-id').value = product.id;
         document.getElementById('product-name').value = product.name;
@@ -1270,6 +1279,7 @@ async function editProduct(id) {
         document.getElementById('product-regular-price').value = product.regular_price || 0;
         document.getElementById('product-packages-in-stock').value = product.packages_in_stock;
         document.getElementById('product-pieces-in-stock').value = product.pieces_in_stock;
+        await loadProductImagesForEdit(product.id);
         document.getElementById('product-modal').style.display = 'block';
     } catch (error) {
         alert('Xatolik: ' + error.message);
@@ -1326,6 +1336,178 @@ async function handleProductImageUpload(event) {
     } catch (error) {
         console.error('Image upload error:', error);
         alert('Rasm yuklashda xatolik: ' + error.message);
+    }
+}
+
+function getProductUploadHeaders() {
+    const headers = getAuthHeaders();
+    if (!headers['X-Seller-ID'] && currentAdminUser && currentAdminUser.id) {
+        headers['X-Seller-ID'] = currentAdminUser.id.toString();
+    }
+    return headers;
+}
+
+function resetProductImagesState() {
+    pendingProductImages = [];
+    existingProductImages = [];
+    const multiInput = document.getElementById('product-multi-image-file');
+    if (multiInput) {
+        multiInput.value = '';
+    }
+    renderProductImages();
+}
+
+function renderProductImages() {
+    const container = document.getElementById('product-images-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const allImages = [];
+    existingProductImages.forEach((img) => allImages.push({ ...img, type: 'existing' }));
+    pendingProductImages.forEach((file, index) => allImages.push({ file, index, type: 'pending' }));
+
+    if (allImages.length === 0) {
+        container.innerHTML = '<small style="color: var(--text-light);">Hozircha qo\'shimcha rasm yo\'q</small>';
+        return;
+    }
+
+    allImages.forEach((image) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: inline-flex; flex-direction: column; align-items: center; margin-right: 8px; margin-bottom: 8px;';
+
+        const img = document.createElement('img');
+        if (image.type === 'existing') {
+            const url = image.image_url && image.image_url.startsWith('http')
+                ? image.image_url
+                : `${window.location.origin}${image.image_url || ''}`;
+            img.src = url;
+        } else {
+            img.src = URL.createObjectURL(image.file);
+        }
+        img.style.cssText = 'width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);';
+        wrapper.appendChild(img);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'O\'chirish';
+        removeBtn.style.cssText = 'margin-top: 4px; padding: 4px 6px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border-color); background: #fff; cursor: pointer;';
+        if (image.type === 'existing') {
+            removeBtn.onclick = () => deleteExistingProductImage(image.id);
+        } else {
+            removeBtn.onclick = () => removePendingProductImage(image.index);
+        }
+        wrapper.appendChild(removeBtn);
+
+        container.appendChild(wrapper);
+    });
+}
+
+function removePendingProductImage(index) {
+    pendingProductImages.splice(index, 1);
+    renderProductImages();
+}
+
+async function deleteExistingProductImage(imageId) {
+    const productId = document.getElementById('product-id')?.value;
+    if (!productId) return;
+    if (!confirm('Ushbu rasmni o\'chirmoqchimisiz?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/products/${productId}/images/${imageId}`, {
+            method: 'DELETE',
+            headers: getProductUploadHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Rasmni o\'chirishda xatolik');
+        }
+        await loadProductImagesForEdit(productId);
+    } catch (error) {
+        alert('Rasmni o\'chirishda xatolik: ' + error.message);
+    }
+}
+
+async function uploadProductImageFile(productId, file, displayOrder = 0) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('display_order', displayOrder.toString());
+    formData.append('is_primary', 'false');
+
+    const response = await fetch(`${API_BASE}/products/${productId}/images`, {
+        method: 'POST',
+        headers: getProductUploadHeaders(),
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(errorText || 'Rasm yuklashda xatolik');
+    }
+
+    return response.json();
+}
+
+async function handleMultiImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    const productId = document.getElementById('product-id')?.value;
+    const totalExisting = existingProductImages.length + pendingProductImages.length;
+    const maxImages = 4;
+    const availableSlots = maxImages - totalExisting;
+
+    if (availableSlots <= 0) {
+        alert(`Maksimal ${maxImages} ta rasm qo'shish mumkin.`);
+        event.target.value = '';
+        return;
+    }
+
+    const filesToHandle = files.slice(0, availableSlots);
+
+    if (productId) {
+        try {
+            for (let i = 0; i < filesToHandle.length; i += 1) {
+                await uploadProductImageFile(productId, filesToHandle[i], existingProductImages.length + i);
+            }
+            await loadProductImagesForEdit(productId);
+        } catch (error) {
+            alert('Rasm yuklashda xatolik: ' + error.message);
+        }
+    } else {
+        pendingProductImages = pendingProductImages.concat(filesToHandle);
+        renderProductImages();
+    }
+
+    event.target.value = '';
+}
+
+async function loadProductImagesForEdit(productId) {
+    if (!productId) return;
+    try {
+        const response = await fetch(`${API_BASE}/products/${productId}/images`);
+        if (!response.ok) {
+            existingProductImages = [];
+            renderProductImages();
+            return;
+        }
+        existingProductImages = await response.json();
+        renderProductImages();
+    } catch (error) {
+        console.error('Error loading product images:', error);
+    }
+}
+
+async function uploadPendingProductImages(productId) {
+    if (!pendingProductImages.length || !productId) return;
+    try {
+        for (let i = 0; i < pendingProductImages.length; i += 1) {
+            await uploadProductImageFile(productId, pendingProductImages[i], i);
+        }
+        pendingProductImages = [];
+        await loadProductImagesForEdit(productId);
+    } catch (error) {
+        console.error('Error uploading pending images:', error);
+        alert('Qo\'shimcha rasmlarni yuklashda xatolik: ' + error.message);
     }
 }
 
@@ -1545,6 +1727,10 @@ async function saveProduct(e) {
         }
         
         console.log('Product saved:', result);
+
+        if (!id && result?.id) {
+            await uploadPendingProductImages(result.id);
+        }
         
         closeModal('product-modal');
         loadProducts();
@@ -5649,6 +5835,60 @@ async function saveCustomerAppSettings() {
     } catch (error) {
         console.error('Error saving customer app settings:', error);
         showToast(error.message || 'Sozlamalarni saqlashda xatolik', 'error');
+    }
+}
+
+function resetBroadcastForm() {
+    const titleInput = document.getElementById('broadcast-title');
+    const bodyInput = document.getElementById('broadcast-body');
+    const linkInput = document.getElementById('broadcast-link');
+    if (titleInput) titleInput.value = '';
+    if (bodyInput) bodyInput.value = '';
+    if (linkInput) linkInput.value = '';
+}
+
+async function sendBroadcastNotification() {
+    try {
+        const title = document.getElementById('broadcast-title')?.value?.trim();
+        const body = document.getElementById('broadcast-body')?.value?.trim();
+        const link = document.getElementById('broadcast-link')?.value?.trim();
+
+        if (!title || !body) {
+            showToast('Sarlavha va matnni kiriting', 'error');
+            return;
+        }
+
+        const payload = {
+            title,
+            body,
+            data: {
+                type: 'promotion'
+            }
+        };
+
+        if (link) {
+            payload.data.link = link;
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Push yuborishda xatolik');
+        }
+
+        showToast('Push xabar yuborildi', 'success');
+        resetBroadcastForm();
+    } catch (error) {
+        console.error('Error sending broadcast notification:', error);
+        showToast(error.message || 'Push yuborishda xatolik', 'error');
     }
 }
 
