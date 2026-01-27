@@ -21,7 +21,8 @@ class NotificationService:
         body: str,
         data: Optional[Dict] = None,
         sound: str = "default",
-        priority: str = "default"
+        priority: str = "default",
+        channel_id: str = "default"
     ) -> Dict:
         """
         Send push notification to multiple Expo push tokens
@@ -48,6 +49,7 @@ class NotificationService:
                 "title": title,
                 "body": body,
                 "priority": priority,
+                "channelId": channel_id,
                 "data": data or {}
             }
             messages.append(message)
@@ -111,21 +113,25 @@ class NotificationService:
         customer_id: int,
         title: str,
         body: str,
-        data: Optional[Dict] = None
+        data: Optional[Dict] = None,
+        sound: str = "default",
+        priority: str = "default"
     ) -> Dict:
         """Send notification to a specific customer"""
         tokens = NotificationService.get_customer_tokens(db, customer_id)
         if not tokens:
             return {"success": False, "error": "No active tokens for customer"}
         
-        return NotificationService.send_notification(tokens, title, body, data)
+        return NotificationService.send_notification(tokens, title, body, data, sound=sound, priority=priority)
     
     @staticmethod
     def send_to_all_customers(
         db: Session,
         title: str,
         body: str,
-        data: Optional[Dict] = None
+        data: Optional[Dict] = None,
+        sound: str = "default",
+        priority: str = "default"
     ) -> Dict:
         """Send notification to all customers with active tokens"""
         tokens = db.query(CustomerDeviceToken.token).filter(
@@ -136,7 +142,7 @@ class NotificationService:
         if not token_list:
             return {"success": False, "error": "No active tokens found"}
         
-        return NotificationService.send_notification(token_list, title, body, data)
+        return NotificationService.send_notification(token_list, title, body, data, sound=sound, priority=priority)
     
     @staticmethod
     def send_order_status_update(
@@ -167,7 +173,15 @@ class NotificationService:
             "status": status
         }
         
-        return NotificationService.send_to_customer(db, customer_id, title, body, data)
+        return NotificationService.send_to_customer(
+            db,
+            customer_id,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_new_product_notification(
@@ -184,7 +198,14 @@ class NotificationService:
             "product_id": product_id
         }
         
-        return NotificationService.send_to_all_customers(db, title, body, data)
+        return NotificationService.send_to_all_customers(
+            db,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_price_alert(
@@ -209,7 +230,15 @@ class NotificationService:
             "new_price": new_price
         }
         
-        return NotificationService.send_to_customer(db, customer_id, title, body, data)
+        return NotificationService.send_to_customer(
+            db,
+            customer_id,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_promotion_notification(
@@ -222,4 +251,11 @@ class NotificationService:
         notification_data = data or {}
         notification_data["type"] = "promotion"
         
-        return NotificationService.send_to_all_customers(db, title, body, notification_data)
+        return NotificationService.send_to_all_customers(
+            db,
+            title,
+            body,
+            notification_data,
+            sound="default",
+            priority="high"
+        )

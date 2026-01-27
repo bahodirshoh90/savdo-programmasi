@@ -819,7 +819,7 @@ class Referal(Base):
     id = Column(Integer, primary_key=True, index=True)
     referrer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)  # Who invited
     referred_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)  # Who was invited (null if not registered yet)
-    referal_code = Column(String(20), nullable=False, unique=True, index=True)  # Unique referal code
+    referal_code = Column(String(20), nullable=False, index=True)  # Referal code (shared by referrer)
     phone = Column(String(20), nullable=True)  # Phone number of invited person (if not registered yet)
     status = Column(String(20), nullable=False, default="pending")  # pending, registered, completed
     bonus_given = Column(Boolean, nullable=False, default=False)  # Whether bonus was given to referrer

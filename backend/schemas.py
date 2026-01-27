@@ -173,6 +173,7 @@ class CustomerBase(BaseModel):
 
 class CustomerCreate(CustomerBase):
     password: Optional[str] = Field(None, min_length=4)  # Parol (sign up uchun)
+    referal_code: Optional[str] = Field(None, max_length=20, description="Referal kod (ixtiyoriy)")
 
 
 class CustomerUpdate(BaseModel):

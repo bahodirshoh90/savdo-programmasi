@@ -126,6 +126,48 @@ try:
         if 'loyalty_point_value' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL"))
             conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
+
+        # Migrate referals table to remove unique constraint on referal_code (SQLite)
+        try:
+            if engine.dialect.name == "sqlite":
+                referal_indexes = inspector.get_indexes('referals')
+                has_unique_code = any(
+                    idx.get('unique') and 'referal_code' in (idx.get('column_names') or [])
+                    for idx in referal_indexes
+                )
+                if has_unique_code:
+                    conn.execute(text("ALTER TABLE referals RENAME TO referals_old"))
+                    conn.execute(text("""
+                        CREATE TABLE referals (
+                            id INTEGER PRIMARY KEY,
+                            referrer_id INTEGER NOT NULL,
+                            referred_id INTEGER,
+                            referal_code VARCHAR(20) NOT NULL,
+                            phone VARCHAR(20),
+                            status VARCHAR(20) NOT NULL,
+                            bonus_given BOOLEAN NOT NULL DEFAULT 0,
+                            bonus_amount FLOAT,
+                            created_at DATETIME,
+                            completed_at DATETIME,
+                            FOREIGN KEY(referrer_id) REFERENCES customers (id),
+                            FOREIGN KEY(referred_id) REFERENCES customers (id)
+                        )
+                    """))
+                    conn.execute(text("""
+                        INSERT INTO referals (
+                            id, referrer_id, referred_id, referal_code, phone, status,
+                            bonus_given, bonus_amount, created_at, completed_at
+                        )
+                        SELECT id, referrer_id, referred_id, referal_code, phone, status,
+                               bonus_given, bonus_amount, created_at, completed_at
+                        FROM referals_old
+                    """))
+                    conn.execute(text("DROP TABLE referals_old"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referal_code ON referals (referal_code)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referrer_id ON referals (referrer_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referred_id ON referals (referred_id)"))
+        except Exception as e:
+            print(f"Warning: Could not migrate referals table unique constraint: {e}")
         
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
@@ -1233,6 +1275,16 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 def update_product(product_id: int, product: ProductUpdate, db: Session = Depends(get_db)):
     """Update a product"""
     from sqlalchemy.orm import joinedload
+    existing_product = db.query(Product).filter(Product.id == product_id).first()
+    if not existing_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    old_prices = {
+        "wholesale": existing_product.wholesale_price or 0.0,
+        "retail": existing_product.retail_price or 0.0,
+        "regular": existing_product.regular_price or 0.0,
+    }
+
     updated = ProductService.update_product(db, product_id, product)
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -1279,6 +1331,68 @@ def update_product(product_id: int, product: ProductUpdate, db: Session = Depend
         "created_at": product_full.created_at,
         "updated_at": product_full.updated_at
     }
+
+    # Trigger price alerts when price drops below target
+    try:
+        settings = SettingsService.get_settings(db)
+        if settings and getattr(settings, 'enable_price_alerts', False):
+            def resolve_price(price_map, customer_type_value):
+                type_value = str(customer_type_value or '').lower().strip()
+                wholesale = price_map.get("wholesale", 0.0)
+                retail = price_map.get("retail", 0.0)
+                regular = price_map.get("regular", 0.0)
+                if type_value in ("wholesale", "ulgurji"):
+                    return wholesale or retail or regular or 0.0
+                if type_value in ("retail", "dona"):
+                    return retail or regular or wholesale or 0.0
+                return regular or retail or wholesale or 0.0
+
+            new_prices = {
+                "wholesale": product_full.wholesale_price or 0.0,
+                "retail": product_full.retail_price or 0.0,
+                "regular": product_full.regular_price or 0.0,
+            }
+
+            alerts = db.query(PriceAlert).filter(
+                PriceAlert.product_id == product_id,
+                PriceAlert.is_active == True,
+                PriceAlert.notified == False
+            ).all()
+
+            if alerts:
+                customers_by_id = {
+                    customer.id: customer
+                    for customer in db.query(Customer).filter(Customer.id.in_([a.customer_id for a in alerts])).all()
+                }
+
+                notified_any = False
+                for alert in alerts:
+                    customer = customers_by_id.get(alert.customer_id)
+                    if not customer:
+                        continue
+
+                    customer_type = customer.customer_type.value if hasattr(customer.customer_type, 'value') else customer.customer_type
+                    old_price = resolve_price(old_prices, customer_type)
+                    new_price = resolve_price(new_prices, customer_type)
+
+                    if new_price <= alert.target_price and (old_price == 0.0 or new_price < old_price):
+                        NotificationService.send_price_alert(
+                            db,
+                            alert.customer_id,
+                            product_id,
+                            product_full.name,
+                            old_price,
+                            new_price
+                        )
+                        alert.notified = True
+                        alert.notified_at = datetime.utcnow()
+                        notified_any = True
+
+                if notified_any:
+                    db.commit()
+    except Exception as e:
+        print(f"[PRICE ALERT] Error processing price alerts: {e}")
+
     return ProductResponse.model_validate(product_dict)
 
 
@@ -4372,6 +4486,95 @@ async def update_order_status(
             )
         except Exception as e:
             print(f"[Order Status Update] Error sending push notification: {e}")
+
+    # Loyalty points and referral bonus on completion
+    if status == "completed" and order.customer_id:
+        try:
+            settings = SettingsService.get_settings(db)
+            # Loyalty points
+            if settings and getattr(settings, 'enable_loyalty', False):
+                from models import LoyaltyPoint, LoyaltyTransaction
+                points_per_sum = settings.loyalty_points_per_sum or 0.0
+                order_total = order.total_amount or 0.0
+                points_to_add = int(order_total * points_per_sum)
+                if points_to_add > 0:
+                    loyalty = db.query(LoyaltyPoint).filter(LoyaltyPoint.customer_id == order.customer_id).first()
+                    if not loyalty:
+                        loyalty = LoyaltyPoint(
+                            customer_id=order.customer_id,
+                            points=0,
+                            total_earned=0,
+                            total_spent=0,
+                            vip_level="bronze"
+                        )
+                        db.add(loyalty)
+                        db.commit()
+                        db.refresh(loyalty)
+
+                    loyalty.points += points_to_add
+                    loyalty.total_earned += points_to_add
+                    transaction = LoyaltyTransaction(
+                        loyalty_point_id=loyalty.id,
+                        transaction_type="earned",
+                        points=points_to_add,
+                        description=f"Buyurtma #{order_id} uchun bonus",
+                        order_id=order_id
+                    )
+                    db.add(transaction)
+                    db.commit()
+
+            # Referral bonus
+            if settings and getattr(settings, 'enable_referals', False):
+                from models import Referal, LoyaltyPoint, LoyaltyTransaction
+                referal = db.query(Referal).filter(
+                    Referal.referred_id == order.customer_id,
+                    Referal.bonus_given == False
+                ).order_by(Referal.created_at.asc()).first()
+                if referal and referal.referrer_id:
+                    base_points = settings.referal_bonus_points or 0
+                    point_value = settings.loyalty_point_value or 1.0
+                    base_bonus_amount = float(base_points) * float(point_value)
+                    percent_bonus = settings.referal_bonus_percent or 0.0
+                    order_total = order.total_amount or 0.0
+                    percent_bonus_amount = float(order_total) * (float(percent_bonus) / 100.0)
+                    total_bonus_amount = base_bonus_amount + percent_bonus_amount
+
+                    referal.status = "completed"
+                    referal.bonus_given = True
+                    referal.bonus_amount = total_bonus_amount
+                    referal.completed_at = datetime.utcnow()
+                    db.commit()
+
+                    if getattr(settings, 'enable_loyalty', False) and point_value > 0:
+                        bonus_points = int(round(total_bonus_amount / float(point_value)))
+                        if bonus_points > 0:
+                            loyalty = db.query(LoyaltyPoint).filter(
+                                LoyaltyPoint.customer_id == referal.referrer_id
+                            ).first()
+                            if not loyalty:
+                                loyalty = LoyaltyPoint(
+                                    customer_id=referal.referrer_id,
+                                    points=0,
+                                    total_earned=0,
+                                    total_spent=0,
+                                    vip_level="bronze"
+                                )
+                                db.add(loyalty)
+                                db.commit()
+                                db.refresh(loyalty)
+                            loyalty.points += bonus_points
+                            loyalty.total_earned += bonus_points
+                            transaction = LoyaltyTransaction(
+                                loyalty_point_id=loyalty.id,
+                                transaction_type="bonus",
+                                points=bonus_points,
+                                description=f"Referal bonusi (mijoz #{order.customer_id})",
+                                referal_id=referal.id
+                            )
+                            db.add(transaction)
+                            db.commit()
+        except Exception as e:
+            print(f"[LOYALTY/REFERAL] Error awarding bonuses: {e}")
     
     return order_response
 
@@ -5229,6 +5432,26 @@ async def create_price_alert(
             current_price = product.wholesale_price
         elif customer.customer_type.value == "retail":
             current_price = product.retail_price
+
+    # If price already reached target, send notification immediately (if enabled)
+    try:
+        settings = SettingsService.get_settings(db)
+        if settings and getattr(settings, 'enable_price_alerts', False):
+            if current_price is not None and current_price <= alert_obj.target_price and not alert_obj.notified:
+                NotificationService.send_price_alert(
+                    db,
+                    customer_id,
+                    product.id,
+                    product.name,
+                    current_price,
+                    current_price
+                )
+                alert_obj.notified = True
+                alert_obj.notified_at = datetime.utcnow()
+                db.commit()
+                db.refresh(alert_obj)
+    except Exception as e:
+        print(f"[PRICE ALERT] Immediate notification error: {e}")
     
     return {
         "id": alert_obj.id,
@@ -5739,22 +5962,33 @@ def get_my_referal_code(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    # Check if customer already has a referal code
+    # Check if customer already has a base referal code record
     existing_referal = db.query(Referal).filter(
-        Referal.referrer_id == customer_id
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
     ).first()
     
     if existing_referal:
         return {
             "referal_code": existing_referal.referal_code,
-            "total_referals": db.query(Referal).filter(Referal.referrer_id == customer_id).count(),
-            "total_bonus": sum([r.bonus_amount or 0 for r in db.query(Referal).filter(Referal.referrer_id == customer_id).all()])
+            "total_referals": db.query(Referal).filter(
+                Referal.referrer_id == customer_id,
+                (Referal.phone.isnot(None)) | (Referal.referred_id.isnot(None))
+            ).count(),
+            "total_bonus": sum([
+                r.bonus_amount or 0
+                for r in db.query(Referal).filter(
+                    Referal.referrer_id == customer_id,
+                    (Referal.phone.isnot(None)) | (Referal.referred_id.isnot(None))
+                ).all()
+            ])
         }
     
     # Generate new referal code
     referal_code = f"REF{customer.id}{secrets.token_hex(3).upper()}"
     
-    # Create referal record
+    # Create base referal record (without phone/referred customer)
     new_referal = Referal(
         referrer_id=customer_id,
         referal_code=referal_code,
@@ -5786,7 +6020,9 @@ def invite_friend(
         raise HTTPException(status_code=404, detail="Customer not found")
     
     existing_referal = db.query(Referal).filter(
-        Referal.referrer_id == customer_id
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
     ).first()
     
     if not existing_referal:
@@ -5827,12 +6063,20 @@ def get_referals(
     customer_id = get_customer_from_header(x_customer_id)
     """Get all referals (sent and received)"""
     from models import Referal
+    from sqlalchemy import or_
     
-    referals_sent = db.query(Referal).filter(Referal.referrer_id == customer_id).all()
+    referals_sent = db.query(Referal).filter(
+        Referal.referrer_id == customer_id,
+        or_(Referal.phone.isnot(None), Referal.referred_id.isnot(None))
+    ).all()
     referals_received = db.query(Referal).filter(Referal.referred_id == customer_id).all()
     
     my_referal_code = ""
-    existing_referal = db.query(Referal).filter(Referal.referrer_id == customer_id).first()
+    existing_referal = db.query(Referal).filter(
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
+    ).first()
     if existing_referal:
         my_referal_code = existing_referal.referal_code
     

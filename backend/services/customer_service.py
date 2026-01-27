@@ -36,6 +36,7 @@ class CustomerService:
         """Create a new customer"""
         from services.auth_service import AuthService
         from fastapi import HTTPException
+        from models import Referal
         
         # Check for duplicate username
         if customer.username:
@@ -61,6 +62,7 @@ class CustomerService:
         
         customer_dict = customer.dict()
         password = customer_dict.pop('password', None)
+        referal_code = customer_dict.pop('referal_code', None)
         
         # Hash password if provided
         if password:
@@ -70,6 +72,46 @@ class CustomerService:
         db.add(db_customer)
         db.commit()
         db.refresh(db_customer)
+
+        # Link referal invite if provided (by code or phone)
+        try:
+            referal_record = None
+            if referal_code:
+                code_record = db.query(Referal).filter(
+                    Referal.referal_code == referal_code,
+                    Referal.referrer_id != db_customer.id
+                ).first()
+                if code_record:
+                    # Prefer existing invite by phone (if any)
+                    if db_customer.phone:
+                        referal_record = db.query(Referal).filter(
+                            Referal.referrer_id == code_record.referrer_id,
+                            Referal.phone == db_customer.phone
+                        ).first()
+                    if not referal_record:
+                        referal_record = Referal(
+                            referrer_id=code_record.referrer_id,
+                            referal_code=code_record.referal_code,
+                            phone=db_customer.phone,
+                            status="registered",
+                            referred_id=db_customer.id
+                        )
+                        db.add(referal_record)
+
+            if not referal_record and db_customer.phone:
+                referal_record = db.query(Referal).filter(
+                    Referal.phone == db_customer.phone,
+                    Referal.status == "pending"
+                ).first()
+
+            if referal_record:
+                referal_record.referred_id = db_customer.id
+                if referal_record.status == "pending":
+                    referal_record.status = "registered"
+                db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[REFERAL] Failed to link referal for customer {db_customer.id}: {e}")
         return db_customer
     
     @staticmethod
