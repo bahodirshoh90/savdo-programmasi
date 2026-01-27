@@ -3095,12 +3095,24 @@ def send_notification(
     if request.customer_ids:
         # Send to specific customers
         results = []
+        total = 0
+        success_count = 0
+        error_count = 0
         for customer_id in request.customer_ids:
             result = NotificationService.send_to_customer(
                 db, customer_id, request.title, request.body, request.data
             )
             results.append({"customer_id": customer_id, **result})
-        return {"success": True, "results": results}
+            total += result.get("total", 0)
+            success_count += result.get("success_count", 0)
+            error_count += result.get("error_count", 0)
+        return {
+            "success": error_count == 0,
+            "total": total,
+            "success_count": success_count,
+            "error_count": error_count,
+            "results": results
+        }
     else:
         # Send to all customers
         result = NotificationService.send_to_all_customers(

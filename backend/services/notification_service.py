@@ -39,7 +39,13 @@ class NotificationService:
             Dict with success status and response data
         """
         if not tokens:
-            return {"success": False, "error": "No tokens provided"}
+            return {
+                "success": False,
+                "error": "No tokens provided",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
         messages = []
         for token in tokens:
@@ -53,6 +59,7 @@ class NotificationService:
                 "data": data or {}
             }
             messages.append(message)
+        total = len(messages)
         
         try:
             headers = {
@@ -73,30 +80,58 @@ class NotificationService:
                 result = response.json()
                 # Check for errors in individual messages
                 errors = []
-                if "data" in result:
-                    data_items = result["data"]
+                success_count = 0
+                error_count = 0
+                data_items = result.get("data")
+
+                if data_items is None or data_items == []:
+                    success_count = total
+                else:
                     if isinstance(data_items, dict):
                         data_items = [data_items]
                     for item in data_items:
-                        if "status" in item and item["status"] == "error":
+                        status = item.get("status")
+                        if status == "ok":
+                            success_count += 1
+                        elif status == "error":
+                            error_count += 1
                             errors.append(item.get("message", "Unknown error"))
-                
+                        else:
+                            error_count += 1
+
+                if error_count == 0 and success_count == 0:
+                    success_count = total
+
+                response_payload = {
+                    "success": error_count == 0,
+                    "response": result,
+                    "total": total,
+                    "success_count": success_count,
+                    "error_count": error_count
+                }
+
                 if errors:
-                    return {
-                        "success": False,
-                        "error": "; ".join(errors),
-                        "response": result
-                    }
-                
-                return {"success": True, "response": result}
+                    response_payload["error"] = "; ".join(errors)
+
+                return response_payload
             else:
                 return {
                     "success": False,
                     "error": f"HTTP {response.status_code}: {response.text}",
-                    "response": None
+                    "response": None,
+                    "total": total,
+                    "success_count": 0,
+                    "error_count": total
                 }
         except Exception as e:
-            return {"success": False, "error": str(e), "response": None}
+            return {
+                "success": False,
+                "error": str(e),
+                "response": None,
+                "total": len(tokens),
+                "success_count": 0,
+                "error_count": len(tokens)
+            }
     
     @staticmethod
     def get_customer_tokens(db: Session, customer_id: int) -> List[str]:
@@ -120,7 +155,13 @@ class NotificationService:
         """Send notification to a specific customer"""
         tokens = NotificationService.get_customer_tokens(db, customer_id)
         if not tokens:
-            return {"success": False, "error": "No active tokens for customer"}
+            return {
+                "success": False,
+                "error": "No active tokens for customer",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
         return NotificationService.send_notification(tokens, title, body, data, sound=sound, priority=priority)
     
@@ -140,7 +181,13 @@ class NotificationService:
         
         token_list = [token[0] for token in tokens]
         if not token_list:
-            return {"success": False, "error": "No active tokens found"}
+            return {
+                "success": False,
+                "error": "No active tokens found",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
         return NotificationService.send_notification(token_list, title, body, data, sound=sound, priority=priority)
     

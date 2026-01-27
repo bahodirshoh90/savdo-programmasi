@@ -5879,12 +5879,28 @@ async function sendBroadcastNotification() {
             body: JSON.stringify(payload)
         });
 
+        const result = await response.json().catch(() => ({}));
+
         if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.detail || 'Push yuborishda xatolik');
+            throw new Error(result.detail || 'Push yuborishda xatolik');
         }
 
-        showToast('Push xabar yuborildi', 'success');
+        if (result.success === false) {
+            throw new Error(result.error || 'Push yuborishda xatolik');
+        }
+
+        const total = result.total ?? result.token_count ?? 0;
+        const successCount = result.success_count ?? 0;
+        const errorCount = result.error_count ?? 0;
+        let message = 'Push xabar yuborildi';
+        if (total || successCount || errorCount) {
+            message = `Push yuborildi: ${successCount}/${total}`;
+            if (errorCount) {
+                message += `, xato: ${errorCount}`;
+            }
+        }
+
+        showToast(message, errorCount ? 'warning' : 'success');
         resetBroadcastForm();
     } catch (error) {
         console.error('Error sending broadcast notification:', error);
