@@ -3,6 +3,7 @@
  */
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -49,9 +50,17 @@ export async function getExpoPushToken() {
     if (!hasPermission) {
       return null;
     }
-    
+
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ||
+      Constants?.easConfig?.projectId;
+
+    if (!projectId) {
+      console.warn('Expo projectId not found for push token');
+    }
+
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'ea4b267c-a627-404a-a062-2ed13042ef22', // From app.json
+      projectId,
     });
     
     return tokenData.data;
@@ -78,6 +87,10 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
       token,
       device_id: deviceId,
       platform: platformName,
+    }, {
+      headers: {
+        'X-Customer-ID': customerId,
+      },
     });
     
     // Save token locally
