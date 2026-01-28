@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { login as authLogin, signup } from '../services/auth';
+import { login as authLogin, signup, storeAuthSession } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
 import { API_ENDPOINTS } from '../config/api';
@@ -139,7 +139,12 @@ export default function LoginScreen() {
 
       if (response.success && response.token && response.user) {
         // OTP verification successful and token received
-        await login(response.user, response.token);
+        const normalizedUser = await storeAuthSession({
+          token: response.token,
+          user: response.user,
+          customer_id: response.user?.customer_id || response.user?.id,
+        });
+        await login(normalizedUser, response.token);
         setShowOtpModal(false);
         setOtpCode('');
         setOtpSent(false);
@@ -175,7 +180,12 @@ export default function LoginScreen() {
       if (response.token && response.user) {
         // Store token and user data
         const { token, user } = response;
-        await login(user, token);
+        const normalizedUser = await storeAuthSession({
+          token,
+          user,
+          customer_id: user?.customer_id || user?.id,
+        });
+        await login(normalizedUser, token);
         Alert.alert('Muvaffaqiyatli', `${provider === 'google' ? 'Google' : 'Facebook'} orqali kirildi`);
       } else {
         Alert.alert('Xatolik', 'Ijtimoiy tarmoq orqali kirishda xatolik');

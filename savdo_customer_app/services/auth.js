@@ -47,6 +47,32 @@ const tokenStorage = {
   },
 };
 
+const normalizeCustomer = (userData = {}, fallbackCustomerId = null) => {
+  return {
+    customer_id: userData?.customer_id || userData?.id || fallbackCustomerId,
+    name: userData?.name || userData?.customer_name,
+    phone: userData?.phone,
+    customer_type: userData?.customer_type || 'regular',
+    ...userData,
+  };
+};
+
+export const storeAuthSession = async ({ token, user, customer_id }) => {
+  if (!token) {
+    throw new Error('Token topilmadi');
+  }
+
+  const normalizedUser = normalizeCustomer(user || {}, customer_id);
+
+  await tokenStorage.setItem('customer_token', token);
+  if (normalizedUser?.customer_id) {
+    await AsyncStorage.setItem('customer_id', normalizedUser.customer_id.toString());
+  }
+  await AsyncStorage.setItem('customer_data', JSON.stringify(normalizedUser));
+
+  return normalizedUser;
+};
+
 export const login = async (username, password) => {
   try {
     const response = await api.post(API_ENDPOINTS.AUTH.LOGIN, {
@@ -62,28 +88,8 @@ export const login = async (username, password) => {
 
     // ONLY allow customer login - reject seller/admin logins
     if (response.user_type === 'customer') {
-      const { token, user, customer_id, customer_name, customer_type } = response;
-
-      // Store token
-      await tokenStorage.setItem('customer_token', token);
-
-      // Prepare user data
-      const resolvedCustomerType = user?.customer_type || customer_type || 'regular';
-      const userData = user || {
-        customer_id: customer_id,
-        name: customer_name || user?.name,
-        phone: user?.phone,
-        customer_type: resolvedCustomerType,
-      };
-      if (userData && !userData.customer_type) {
-        userData.customer_type = resolvedCustomerType;
-      }
-
-      // Store user data
-      if (customer_id) {
-        await AsyncStorage.setItem('customer_id', customer_id.toString());
-      }
-      await AsyncStorage.setItem('customer_data', JSON.stringify(userData));
+      const { token, user, customer_id } = response;
+      const userData = await storeAuthSession({ token, user, customer_id });
 
       return { 
         success: true, 
