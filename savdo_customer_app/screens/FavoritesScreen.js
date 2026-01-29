@@ -17,9 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function FavoritesScreen({ navigation }) {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -153,7 +156,7 @@ export default function FavoritesScreen({ navigation }) {
   const renderProduct = ({ item }) => {
     const isFavorite = favoriteStatus[item.id] || false;
     const imageUrl = getImageUrl(item.image_url);
-    const price = item.retail_price || item.regular_price || item.wholesale_price || 0;
+    const price = getProductPrice(item, user?.customer_type);
     const isOutOfStock = item.total_pieces !== undefined && item.total_pieces !== null && item.total_pieces <= 0;
 
     return (
@@ -216,16 +219,19 @@ export default function FavoritesScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Yuklanmoqda...</Text>
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="favorites" />
+      </FooterAwareView>
     );
   }
 
   if (favorites.length === 0) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <View style={styles.emptyContainer}>
           <Ionicons name="heart-outline" size={80} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>Sevimli mahsulotlar yo'q</Text>
@@ -240,12 +246,12 @@ export default function FavoritesScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sevimli Mahsulotlar</Text>
         <Text style={styles.headerSubtitle}>
@@ -272,7 +278,7 @@ export default function FavoritesScreen({ navigation }) {
         }
       />
       <Footer currentScreen="favorites" />
-    </View>
+    </FooterAwareView>
   );
 }
 

@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
@@ -35,18 +35,41 @@ export default function DashboardScreen({ navigation }) {
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (!customerId) {
+        setStatistics(null);
+        return;
+      }
+
       const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
         ? API_ENDPOINTS.BASE_URL 
         : `${API_ENDPOINTS.BASE_URL}/api`;
       
-      const response = await fetch(`${baseUrl}/statistics?period=${period}`);
+      const response = await fetch(
+        `${baseUrl}/customers/${customerId}/stats?period=${period}`,
+        {
+          headers: {
+            'X-Customer-ID': customerId,
+          },
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
+      } else {
+        // Fallback to legacy statistics endpoint if needed
+        const fallbackResponse = await fetch(`${baseUrl}/statistics?period=${period}`);
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          setStatistics(fallbackData);
+        } else {
+          setStatistics(null);
+        }
       }
     } catch (error) {
       console.error('Error loading statistics:', error);
+      setStatistics(null);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -66,6 +89,14 @@ export default function DashboardScreen({ navigation }) {
     }).format(amount || 0);
   };
 
+  const totalOrders = statistics?.total_orders ?? statistics?.orders?.total_orders ?? 0;
+  const totalOrdersAmount =
+    statistics?.total_orders_amount ??
+    statistics?.orders?.total_orders_amount ??
+    statistics?.total_sales_amount ??
+    0;
+  const ordersByStatus = statistics?.orders_by_status ?? statistics?.orders?.orders_by_status ?? {};
+
   if (isLoading && !statistics) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -75,7 +106,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -122,7 +153,7 @@ export default function DashboardScreen({ navigation }) {
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="receipt-outline" size={32} color={Colors.primary} />
               <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {statistics.total_orders || 0}
+                {totalOrders}
               </Text>
               <Text style={[styles.summaryLabel, { color: colors.textLight }]}>Jami Buyurtmalar</Text>
             </View>
@@ -130,17 +161,17 @@ export default function DashboardScreen({ navigation }) {
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="cash-outline" size={32} color={Colors.success} />
               <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {formatMoney(statistics.total_orders_amount || 0)}
+                {formatMoney(totalOrdersAmount)}
               </Text>
               <Text style={[styles.summaryLabel, { color: colors.textLight }]}>Jami Summa</Text>
             </View>
           </View>
 
           {/* Orders by Status */}
-          {statistics.orders_by_status && Object.keys(statistics.orders_by_status).length > 0 && (
+          {ordersByStatus && Object.keys(ordersByStatus).length > 0 && (
             <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Buyurtmalar Holati</Text>
-              {Object.entries(statistics.orders_by_status).map(([status, count]) => (
+              {Object.entries(ordersByStatus).map(([status, count]) => (
                 <View key={status} style={styles.statusRow}>
                   <Text style={[styles.statusLabel, { color: colors.text }]}>
                     {status === 'pending' ? 'Kutilmoqda' :
@@ -192,8 +223,8 @@ export default function DashboardScreen({ navigation }) {
         </View>
         )}
       </ScrollView>
-      <Footer currentScreen="profile" />
-    </View>
+      <Footer currentScreen="reports" />
+    </FooterAwareView>
   );
 }
 

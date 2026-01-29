@@ -55,6 +55,8 @@ class ProductUpdate(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=100, description="Kategoriya (legacy)")
+    category_id: Optional[int] = Field(None, description="Kategoriya ID")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
@@ -171,6 +173,7 @@ class CustomerBase(BaseModel):
 
 class CustomerCreate(CustomerBase):
     password: Optional[str] = Field(None, min_length=4)  # Parol (sign up uchun)
+    referal_code: Optional[str] = Field(None, max_length=20, description="Referal kod (ixtiyoriy)")
 
 
 class CustomerUpdate(BaseModel):
@@ -199,9 +202,11 @@ class CustomerStatsResponse(BaseModel):
     """Customer statistics for dashboard (orders & sales)"""
     customer_id: int
     total_orders: int
+    total_orders_amount: float = 0.0
     completed_orders: int
     cancelled_orders: int
     pending_orders: int
+    orders_by_status: Dict[str, int] = Field(default_factory=dict)
     total_sales_amount: float
     total_paid_amount: float
     total_debt_amount: float
@@ -731,6 +736,18 @@ class SettingsBase(BaseModel):
     notify_low_stock: bool = True  # Kam qolgan mahsulotlar
     notify_debt_limit: bool = True  # Qarz limiti oshganlar
     notify_daily_report: bool = True  # Kunlik hisobotlar
+    enable_referals: Optional[bool] = None
+    enable_loyalty: Optional[bool] = None
+    enable_price_alerts: Optional[bool] = None
+    enable_favorites: Optional[bool] = None
+    enable_tags: Optional[bool] = None
+    enable_reviews: Optional[bool] = None
+    enable_location_selection: Optional[bool] = None
+    enable_offline_orders: Optional[bool] = None
+    referal_bonus_points: Optional[int] = None
+    referal_bonus_percent: Optional[float] = None
+    loyalty_points_per_sum: Optional[float] = None
+    loyalty_point_value: Optional[float] = None
 
 
 class SettingsUpdate(SettingsBase):

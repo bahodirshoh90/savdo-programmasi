@@ -21,7 +21,7 @@ import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ReferalScreen({ navigation }) {
   const { colors } = useTheme();
@@ -169,18 +169,18 @@ export default function ReferalScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
-      style={styles.scrollView}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          colors={[colors.primary]}
-        />
-      }
-    >
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+          />
+        }
+      >
       {/* Referal Code Card */}
       <View style={[styles.codeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.codeLabel, { color: colors.textLight }]}>Sizning referal kodingiz</Text>
@@ -265,7 +265,7 @@ export default function ReferalScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

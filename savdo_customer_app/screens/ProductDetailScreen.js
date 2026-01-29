@@ -16,6 +16,7 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,11 +27,13 @@ import { TextInput, Modal, Share as RNShare } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import { getProductPrice } from '../utils/pricing';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
   const { addToCart, cartItems } = useCart();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const { colors } = useTheme();
   const [product, setProduct] = useState(routeProduct || null);
@@ -418,15 +421,16 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <FooterAwareView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
   if (!product && !isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.text }]}>Mahsulot topilmadi</Text>
@@ -438,12 +442,12 @@ export default function ProductDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="products" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   const imageUrl = getImageUrl();
-  const price = product.retail_price || product.regular_price || 0;
+  const price = getProductPrice(product, user?.customer_type);
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   // Get all images (product.image_url + productImages)
@@ -469,7 +473,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const currentImageUrl = currentImage?.image_url || imageUrl;
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.imageContainer}>
         {currentImageUrl ? (
@@ -547,9 +551,6 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
         )}
 
-        {product.barcode && (
-          <Text style={styles.barcode}>Barcode: {product.barcode}</Text>
-        )}
 
         <Text style={styles.price}>
           {price.toLocaleString('uz-UZ')} so'm
@@ -699,7 +700,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 
@@ -781,11 +782,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.textDark,
     marginBottom: 8,
-  },
-  barcode: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 12,
   },
   price: {
     fontSize: 28,

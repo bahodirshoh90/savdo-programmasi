@@ -88,6 +88,86 @@ try:
         if 'work_days' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
+
+        # Customer app settings fields
+        if 'enable_referals' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_referals BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_referals = 0 WHERE enable_referals IS NULL"))
+        if 'enable_loyalty' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_loyalty BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_loyalty = 0 WHERE enable_loyalty IS NULL"))
+        if 'enable_price_alerts' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_price_alerts BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_price_alerts = 0 WHERE enable_price_alerts IS NULL"))
+        if 'enable_favorites' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_favorites BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_favorites = 0 WHERE enable_favorites IS NULL"))
+        if 'enable_tags' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_tags BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_tags = 0 WHERE enable_tags IS NULL"))
+        if 'enable_reviews' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_reviews BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_reviews = 0 WHERE enable_reviews IS NULL"))
+        if 'enable_location_selection' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_location_selection = 0 WHERE enable_location_selection IS NULL"))
+        if 'enable_offline_orders' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_offline_orders = 0 WHERE enable_offline_orders IS NULL"))
+        if 'referal_bonus_points' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_points INTEGER"))
+            conn.execute(text("UPDATE settings SET referal_bonus_points = 100 WHERE referal_bonus_points IS NULL"))
+        if 'referal_bonus_percent' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_percent REAL"))
+            conn.execute(text("UPDATE settings SET referal_bonus_percent = 5 WHERE referal_bonus_percent IS NULL"))
+        if 'loyalty_points_per_sum' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_points_per_sum REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_points_per_sum = 0.01 WHERE loyalty_points_per_sum IS NULL"))
+        if 'loyalty_point_value' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
+
+        # Migrate referals table to remove unique constraint on referal_code (SQLite)
+        try:
+            if engine.dialect.name == "sqlite":
+                referal_indexes = inspector.get_indexes('referals')
+                has_unique_code = any(
+                    idx.get('unique') and 'referal_code' in (idx.get('column_names') or [])
+                    for idx in referal_indexes
+                )
+                if has_unique_code:
+                    conn.execute(text("ALTER TABLE referals RENAME TO referals_old"))
+                    conn.execute(text("""
+                        CREATE TABLE referals (
+                            id INTEGER PRIMARY KEY,
+                            referrer_id INTEGER NOT NULL,
+                            referred_id INTEGER,
+                            referal_code VARCHAR(20) NOT NULL,
+                            phone VARCHAR(20),
+                            status VARCHAR(20) NOT NULL,
+                            bonus_given BOOLEAN NOT NULL DEFAULT 0,
+                            bonus_amount FLOAT,
+                            created_at DATETIME,
+                            completed_at DATETIME,
+                            FOREIGN KEY(referrer_id) REFERENCES customers (id),
+                            FOREIGN KEY(referred_id) REFERENCES customers (id)
+                        )
+                    """))
+                    conn.execute(text("""
+                        INSERT INTO referals (
+                            id, referrer_id, referred_id, referal_code, phone, status,
+                            bonus_given, bonus_amount, created_at, completed_at
+                        )
+                        SELECT id, referrer_id, referred_id, referal_code, phone, status,
+                               bonus_given, bonus_amount, created_at, completed_at
+                        FROM referals_old
+                    """))
+                    conn.execute(text("DROP TABLE referals_old"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referal_code ON referals (referal_code)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referrer_id ON referals (referrer_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_referals_referred_id ON referals (referred_id)"))
+        except Exception as e:
+            print(f"Warning: Could not migrate referals table unique constraint: {e}")
         
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
@@ -948,6 +1028,7 @@ def get_products(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -960,7 +1041,8 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, category=category, supplier=supplier, location=location,
+                                      brand=brand, category=category, category_id=category_id,
+                                      supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -1022,6 +1104,7 @@ def get_products_count(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -1036,6 +1119,7 @@ def get_products_count(
         min_stock=min_stock,
         brand=brand,
         category=category,
+        category_id=category_id,
         supplier=supplier,
         location=location
     )
@@ -1191,6 +1275,16 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 def update_product(product_id: int, product: ProductUpdate, db: Session = Depends(get_db)):
     """Update a product"""
     from sqlalchemy.orm import joinedload
+    existing_product = db.query(Product).filter(Product.id == product_id).first()
+    if not existing_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    old_prices = {
+        "wholesale": existing_product.wholesale_price or 0.0,
+        "retail": existing_product.retail_price or 0.0,
+        "regular": existing_product.regular_price or 0.0,
+    }
+
     updated = ProductService.update_product(db, product_id, product)
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -1237,6 +1331,68 @@ def update_product(product_id: int, product: ProductUpdate, db: Session = Depend
         "created_at": product_full.created_at,
         "updated_at": product_full.updated_at
     }
+
+    # Trigger price alerts when price drops below target
+    try:
+        settings = SettingsService.get_settings(db)
+        if settings and getattr(settings, 'enable_price_alerts', False):
+            def resolve_price(price_map, customer_type_value):
+                type_value = str(customer_type_value or '').lower().strip()
+                wholesale = price_map.get("wholesale", 0.0)
+                retail = price_map.get("retail", 0.0)
+                regular = price_map.get("regular", 0.0)
+                if type_value in ("wholesale", "ulgurji"):
+                    return wholesale or retail or regular or 0.0
+                if type_value in ("retail", "dona"):
+                    return retail or regular or wholesale or 0.0
+                return regular or retail or wholesale or 0.0
+
+            new_prices = {
+                "wholesale": product_full.wholesale_price or 0.0,
+                "retail": product_full.retail_price or 0.0,
+                "regular": product_full.regular_price or 0.0,
+            }
+
+            alerts = db.query(PriceAlert).filter(
+                PriceAlert.product_id == product_id,
+                PriceAlert.is_active == True,
+                PriceAlert.notified == False
+            ).all()
+
+            if alerts:
+                customers_by_id = {
+                    customer.id: customer
+                    for customer in db.query(Customer).filter(Customer.id.in_([a.customer_id for a in alerts])).all()
+                }
+
+                notified_any = False
+                for alert in alerts:
+                    customer = customers_by_id.get(alert.customer_id)
+                    if not customer:
+                        continue
+
+                    customer_type = customer.customer_type.value if hasattr(customer.customer_type, 'value') else customer.customer_type
+                    old_price = resolve_price(old_prices, customer_type)
+                    new_price = resolve_price(new_prices, customer_type)
+
+                    if new_price <= alert.target_price and (old_price == 0.0 or new_price < old_price):
+                        NotificationService.send_price_alert(
+                            db,
+                            alert.customer_id,
+                            product_id,
+                            product_full.name,
+                            old_price,
+                            new_price
+                        )
+                        alert.notified = True
+                        alert.notified_at = datetime.utcnow()
+                        notified_any = True
+
+                if notified_any:
+                    db.commit()
+    except Exception as e:
+        print(f"[PRICE ALERT] Error processing price alerts: {e}")
+
     return ProductResponse.model_validate(product_dict)
 
 
@@ -1833,6 +1989,96 @@ def get_product_rating_summary(
     }
 
 
+# ==================== ADMIN PRODUCT REVIEWS ====================
+
+@app.get("/api/admin/reviews")
+def admin_get_product_reviews(
+    search: Optional[str] = None,
+    rating: Optional[int] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get product reviews for admin panel"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(ProductReview).options(joinedload(ProductReview.product)).filter(
+        ProductReview.is_deleted == False
+    )
+
+    if rating:
+        query = query.filter(ProductReview.rating == rating)
+
+    if status == "approved":
+        query = query.filter(ProductReview.is_approved == True)
+    elif status == "pending":
+        query = query.filter(ProductReview.is_approved == False)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.join(Product).filter(
+            (Product.name.ilike(search_term)) |
+            (ProductReview.customer_name.ilike(search_term)) |
+            (ProductReview.comment.ilike(search_term))
+        )
+
+    total = query.count()
+    reviews = query.order_by(ProductReview.created_at.desc()).offset(skip).limit(limit).all()
+
+    results = []
+    for review in reviews:
+        product = review.product
+        results.append({
+            "id": review.id,
+            "product_id": review.product_id,
+            "product_name": product.name if product else None,
+            "customer_id": review.customer_id,
+            "customer_name": review.customer_name,
+            "rating": review.rating,
+            "comment": review.comment,
+            "is_approved": review.is_approved,
+            "created_at": to_uzbekistan_time(review.created_at).isoformat() if review.created_at else None
+        })
+
+    return {"total": total, "reviews": results}
+
+
+@app.put("/api/admin/reviews/{review_id}")
+def admin_update_product_review(
+    review_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Approve/unapprove or delete a review (admin)"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    review = db.query(ProductReview).filter(ProductReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Baholash topilmadi")
+
+    if "is_approved" in payload:
+        review.is_approved = bool(payload["is_approved"])
+    if "is_deleted" in payload:
+        review.is_deleted = bool(payload["is_deleted"])
+
+    db.commit()
+    db.refresh(review)
+
+    return {
+        "success": True,
+        "review_id": review.id,
+        "is_approved": review.is_approved,
+        "is_deleted": review.is_deleted
+    }
+
+
 # ==================== SEARCH HISTORY ====================
 
 @app.post("/api/search-history", response_model=SearchHistoryResponse)
@@ -2060,14 +2306,55 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/customers/{customer_id}/stats", response_model=CustomerStatsResponse)
-def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
+def get_customer_stats(
+    customer_id: int,
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """Get statistics for a specific customer (orders & sales)"""
     # Ensure customer exists
     customer = CustomerService.get_customer(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    stats = CustomerService.get_customer_stats(db, customer_id)
+    # Auto-set date range based on period if not provided
+    if not start_date or not end_date:
+        now = get_uzbekistan_now()
+        if period == "daily":
+            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_day.isoformat()
+        elif period == "monthly":
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_month.isoformat()
+        elif period == "yearly":
+            start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.isoformat()
+            start_date = start_of_year.isoformat()
+
+    def parse_date(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            date_str = value.replace('Z', '+00:00') if 'Z' in value else value
+            if '+' not in date_str and 'Z' not in date_str and date_str[-1] != 'Z':
+                parsed = datetime.fromisoformat(date_str)
+                if parsed.tzinfo is None:
+                    from utils import UZBEKISTAN_TZ
+                    parsed = parsed.replace(tzinfo=UZBEKISTAN_TZ)
+            else:
+                parsed = datetime.fromisoformat(date_str)
+            return parsed
+        except (ValueError, AttributeError):
+            return None
+
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date)
+
+    stats = CustomerService.get_customer_stats(db, customer_id, start_dt, end_dt)
     return stats
 
 
@@ -2085,13 +2372,15 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
     # If customer type changed, notify customer app via WebSocket
     if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
         try:
+            old_type_value = old_customer_type.value if hasattr(old_customer_type, 'value') else str(old_customer_type)
+            new_type_value = customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type)
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_customer_type,
-                "new_type": customer.customer_type
+                "old_type": old_type_value,
+                "new_type": new_type_value
             })
-            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_type_value} -> {new_type_value}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     
@@ -2370,6 +2659,30 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["work_end_time"] = settings.work_end_time
         if hasattr(settings, 'work_days'):
             response_data["work_days"] = settings.work_days
+        if hasattr(settings, 'enable_referals'):
+            response_data["enable_referals"] = settings.enable_referals
+        if hasattr(settings, 'enable_loyalty'):
+            response_data["enable_loyalty"] = settings.enable_loyalty
+        if hasattr(settings, 'enable_price_alerts'):
+            response_data["enable_price_alerts"] = settings.enable_price_alerts
+        if hasattr(settings, 'enable_favorites'):
+            response_data["enable_favorites"] = settings.enable_favorites
+        if hasattr(settings, 'enable_tags'):
+            response_data["enable_tags"] = settings.enable_tags
+        if hasattr(settings, 'enable_reviews'):
+            response_data["enable_reviews"] = settings.enable_reviews
+        if hasattr(settings, 'enable_location_selection'):
+            response_data["enable_location_selection"] = settings.enable_location_selection
+        if hasattr(settings, 'enable_offline_orders'):
+            response_data["enable_offline_orders"] = settings.enable_offline_orders
+        if hasattr(settings, 'referal_bonus_points'):
+            response_data["referal_bonus_points"] = settings.referal_bonus_points
+        if hasattr(settings, 'referal_bonus_percent'):
+            response_data["referal_bonus_percent"] = settings.referal_bonus_percent
+        if hasattr(settings, 'loyalty_points_per_sum'):
+            response_data["loyalty_points_per_sum"] = settings.loyalty_points_per_sum
+        if hasattr(settings, 'loyalty_point_value'):
+            response_data["loyalty_point_value"] = settings.loyalty_point_value
         
         return SettingsResponse(**response_data)
     except Exception as e:
@@ -2683,6 +2996,7 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -2781,12 +3095,24 @@ def send_notification(
     if request.customer_ids:
         # Send to specific customers
         results = []
+        total = 0
+        success_count = 0
+        error_count = 0
         for customer_id in request.customer_ids:
             result = NotificationService.send_to_customer(
                 db, customer_id, request.title, request.body, request.data
             )
             results.append({"customer_id": customer_id, **result})
-        return {"success": True, "results": results}
+            total += result.get("total", 0)
+            success_count += result.get("success_count", 0)
+            error_count += result.get("error_count", 0)
+        return {
+            "success": error_count == 0,
+            "total": total,
+            "success_count": success_count,
+            "error_count": error_count,
+            "results": results
+        }
     else:
         # Send to all customers
         result = NotificationService.send_to_all_customers(
@@ -2845,6 +3171,7 @@ def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
+        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -4171,6 +4498,95 @@ async def update_order_status(
             )
         except Exception as e:
             print(f"[Order Status Update] Error sending push notification: {e}")
+
+    # Loyalty points and referral bonus on completion
+    if status == "completed" and order.customer_id:
+        try:
+            settings = SettingsService.get_settings(db)
+            # Loyalty points
+            if settings and getattr(settings, 'enable_loyalty', False):
+                from models import LoyaltyPoint, LoyaltyTransaction
+                points_per_sum = settings.loyalty_points_per_sum or 0.0
+                order_total = order.total_amount or 0.0
+                points_to_add = int(order_total * points_per_sum)
+                if points_to_add > 0:
+                    loyalty = db.query(LoyaltyPoint).filter(LoyaltyPoint.customer_id == order.customer_id).first()
+                    if not loyalty:
+                        loyalty = LoyaltyPoint(
+                            customer_id=order.customer_id,
+                            points=0,
+                            total_earned=0,
+                            total_spent=0,
+                            vip_level="bronze"
+                        )
+                        db.add(loyalty)
+                        db.commit()
+                        db.refresh(loyalty)
+
+                    loyalty.points += points_to_add
+                    loyalty.total_earned += points_to_add
+                    transaction = LoyaltyTransaction(
+                        loyalty_point_id=loyalty.id,
+                        transaction_type="earned",
+                        points=points_to_add,
+                        description=f"Buyurtma #{order_id} uchun bonus",
+                        order_id=order_id
+                    )
+                    db.add(transaction)
+                    db.commit()
+
+            # Referral bonus
+            if settings and getattr(settings, 'enable_referals', False):
+                from models import Referal, LoyaltyPoint, LoyaltyTransaction
+                referal = db.query(Referal).filter(
+                    Referal.referred_id == order.customer_id,
+                    Referal.bonus_given == False
+                ).order_by(Referal.created_at.asc()).first()
+                if referal and referal.referrer_id:
+                    base_points = settings.referal_bonus_points or 0
+                    point_value = settings.loyalty_point_value or 1.0
+                    base_bonus_amount = float(base_points) * float(point_value)
+                    percent_bonus = settings.referal_bonus_percent or 0.0
+                    order_total = order.total_amount or 0.0
+                    percent_bonus_amount = float(order_total) * (float(percent_bonus) / 100.0)
+                    total_bonus_amount = base_bonus_amount + percent_bonus_amount
+
+                    referal.status = "completed"
+                    referal.bonus_given = True
+                    referal.bonus_amount = total_bonus_amount
+                    referal.completed_at = datetime.utcnow()
+                    db.commit()
+
+                    if getattr(settings, 'enable_loyalty', False) and point_value > 0:
+                        bonus_points = int(round(total_bonus_amount / float(point_value)))
+                        if bonus_points > 0:
+                            loyalty = db.query(LoyaltyPoint).filter(
+                                LoyaltyPoint.customer_id == referal.referrer_id
+                            ).first()
+                            if not loyalty:
+                                loyalty = LoyaltyPoint(
+                                    customer_id=referal.referrer_id,
+                                    points=0,
+                                    total_earned=0,
+                                    total_spent=0,
+                                    vip_level="bronze"
+                                )
+                                db.add(loyalty)
+                                db.commit()
+                                db.refresh(loyalty)
+                            loyalty.points += bonus_points
+                            loyalty.total_earned += bonus_points
+                            transaction = LoyaltyTransaction(
+                                loyalty_point_id=loyalty.id,
+                                transaction_type="bonus",
+                                points=bonus_points,
+                                description=f"Referal bonusi (mijoz #{order.customer_id})",
+                                referal_id=referal.id
+                            )
+                            db.add(transaction)
+                            db.commit()
+        except Exception as e:
+            print(f"[LOYALTY/REFERAL] Error awarding bonuses: {e}")
     
     return order_response
 
@@ -4471,6 +4887,10 @@ def get_statistics(
                 "total_orders_amount": total_orders_amount,
                 "online_orders_amount": online_orders_amount
             }
+            # Backward-compatible top-level fields for customer app
+            stats["total_orders"] = total_orders
+            stats["total_orders_amount"] = total_orders_amount
+            stats["orders_by_status"] = orders_by_status
         except Exception as e:
             print(f"Error getting order statistics: {e}")
             import traceback
@@ -4484,6 +4904,9 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             }
+            stats["total_orders"] = 0
+            stats["total_orders_amount"] = 0
+            stats["orders_by_status"] = {}
         
         try:
             # Add inventory statistics
@@ -4524,6 +4947,9 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             },
+            "total_orders": 0,
+            "total_orders_amount": 0,
+            "orders_by_status": {},
             "inventory": {"total_value": 0, "total_packages": 0, "total_pieces": 0},
             "total_debt": 0
         }
@@ -4758,6 +5184,56 @@ def check_favorite(
     return {"is_favorite": favorite is not None}
 
 
+# ==================== ADMIN FAVORITES ====================
+
+@app.get("/api/admin/favorites")
+def admin_get_favorites(
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    seller: Optional[Seller] = Depends(get_seller_from_header)
+):
+    """Get all favorites for admin panel"""
+    if not seller:
+        raise HTTPException(status_code=401, detail="Seller authentication required")
+
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(Favorite).options(
+        joinedload(Favorite.customer),
+        joinedload(Favorite.product)
+    )
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.join(Customer).join(Product).filter(
+            (Customer.name.ilike(search_term)) |
+            (Customer.phone.ilike(search_term)) |
+            (Product.name.ilike(search_term))
+        )
+
+    total = query.count()
+    favorites = query.order_by(Favorite.created_at.desc()).offset(skip).limit(limit).all()
+
+    results = []
+    for fav in favorites:
+        product = fav.product
+        customer = fav.customer
+        results.append({
+            "id": fav.id,
+            "customer_id": fav.customer_id,
+            "customer_name": customer.name if customer else None,
+            "customer_phone": customer.phone if customer else None,
+            "product_id": fav.product_id,
+            "product_name": product.name if product else None,
+            "product_price": product.retail_price if product else 0,
+            "created_at": to_uzbekistan_time(fav.created_at).isoformat() if fav.created_at else None
+        })
+
+    return {"total": total, "favorites": results}
+
+
 # ==================== PERSONAL PRODUCT TAGS ====================
 
 @app.get("/api/product-tags", response_model=List[ProductTagResponse])
@@ -4968,6 +5444,26 @@ async def create_price_alert(
             current_price = product.wholesale_price
         elif customer.customer_type.value == "retail":
             current_price = product.retail_price
+
+    # If price already reached target, send notification immediately (if enabled)
+    try:
+        settings = SettingsService.get_settings(db)
+        if settings and getattr(settings, 'enable_price_alerts', False):
+            if current_price is not None and current_price <= alert_obj.target_price and not alert_obj.notified:
+                NotificationService.send_price_alert(
+                    db,
+                    customer_id,
+                    product.id,
+                    product.name,
+                    current_price,
+                    current_price
+                )
+                alert_obj.notified = True
+                alert_obj.notified_at = datetime.utcnow()
+                db.commit()
+                db.refresh(alert_obj)
+    except Exception as e:
+        print(f"[PRICE ALERT] Immediate notification error: {e}")
     
     return {
         "id": alert_obj.id,
@@ -5478,22 +5974,33 @@ def get_my_referal_code(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    # Check if customer already has a referal code
+    # Check if customer already has a base referal code record
     existing_referal = db.query(Referal).filter(
-        Referal.referrer_id == customer_id
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
     ).first()
     
     if existing_referal:
         return {
             "referal_code": existing_referal.referal_code,
-            "total_referals": db.query(Referal).filter(Referal.referrer_id == customer_id).count(),
-            "total_bonus": sum([r.bonus_amount or 0 for r in db.query(Referal).filter(Referal.referrer_id == customer_id).all()])
+            "total_referals": db.query(Referal).filter(
+                Referal.referrer_id == customer_id,
+                (Referal.phone.isnot(None)) | (Referal.referred_id.isnot(None))
+            ).count(),
+            "total_bonus": sum([
+                r.bonus_amount or 0
+                for r in db.query(Referal).filter(
+                    Referal.referrer_id == customer_id,
+                    (Referal.phone.isnot(None)) | (Referal.referred_id.isnot(None))
+                ).all()
+            ])
         }
     
     # Generate new referal code
     referal_code = f"REF{customer.id}{secrets.token_hex(3).upper()}"
     
-    # Create referal record
+    # Create base referal record (without phone/referred customer)
     new_referal = Referal(
         referrer_id=customer_id,
         referal_code=referal_code,
@@ -5525,7 +6032,9 @@ def invite_friend(
         raise HTTPException(status_code=404, detail="Customer not found")
     
     existing_referal = db.query(Referal).filter(
-        Referal.referrer_id == customer_id
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
     ).first()
     
     if not existing_referal:
@@ -5566,12 +6075,20 @@ def get_referals(
     customer_id = get_customer_from_header(x_customer_id)
     """Get all referals (sent and received)"""
     from models import Referal
+    from sqlalchemy import or_
     
-    referals_sent = db.query(Referal).filter(Referal.referrer_id == customer_id).all()
+    referals_sent = db.query(Referal).filter(
+        Referal.referrer_id == customer_id,
+        or_(Referal.phone.isnot(None), Referal.referred_id.isnot(None))
+    ).all()
     referals_received = db.query(Referal).filter(Referal.referred_id == customer_id).all()
     
     my_referal_code = ""
-    existing_referal = db.query(Referal).filter(Referal.referrer_id == customer_id).first()
+    existing_referal = db.query(Referal).filter(
+        Referal.referrer_id == customer_id,
+        Referal.phone.is_(None),
+        Referal.referred_id.is_(None)
+    ).first()
     if existing_referal:
         my_referal_code = existing_referal.referal_code
     

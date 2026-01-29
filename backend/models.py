@@ -649,6 +649,22 @@ class Settings(Base):
     notify_low_stock = Column(Boolean, nullable=False, default=True)  # Kam qolgan mahsulotlar
     notify_debt_limit = Column(Boolean, nullable=False, default=True)  # Qarz limiti oshganlar
     notify_daily_report = Column(Boolean, nullable=False, default=True)  # Kunlik hisobotlar
+
+    # Customer app feature toggles
+    enable_referals = Column(Boolean, nullable=False, default=False)
+    enable_loyalty = Column(Boolean, nullable=False, default=False)
+    enable_price_alerts = Column(Boolean, nullable=False, default=False)
+    enable_favorites = Column(Boolean, nullable=False, default=False)
+    enable_tags = Column(Boolean, nullable=False, default=False)
+    enable_reviews = Column(Boolean, nullable=False, default=False)
+    enable_location_selection = Column(Boolean, nullable=False, default=False)
+    enable_offline_orders = Column(Boolean, nullable=False, default=False)
+
+    # Customer app configuration
+    referal_bonus_points = Column(Integer, nullable=False, default=100)
+    referal_bonus_percent = Column(Float, nullable=False, default=5.0)
+    loyalty_points_per_sum = Column(Float, nullable=False, default=0.01)
+    loyalty_point_value = Column(Float, nullable=False, default=1.0)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -803,7 +819,7 @@ class Referal(Base):
     id = Column(Integer, primary_key=True, index=True)
     referrer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)  # Who invited
     referred_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)  # Who was invited (null if not registered yet)
-    referal_code = Column(String(20), nullable=False, unique=True, index=True)  # Unique referal code
+    referal_code = Column(String(20), nullable=False, index=True)  # Referal code (shared by referrer)
     phone = Column(String(20), nullable=True)  # Phone number of invited person (if not registered yet)
     status = Column(String(20), nullable=False, default="pending")  # pending, registered, completed
     bonus_given = Column(Boolean, nullable=False, default=False)  # Whether bonus was given to referrer
