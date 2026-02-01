@@ -21,11 +21,14 @@ import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useAppSettings } from '../context/AppSettingsContext';
+import FeatureUnavailable from '../components/FeatureUnavailable';
 import Footer from '../components/Footer';
 
 export default function ReferalScreen({ navigation }) {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { settings, isLoading: settingsLoading } = useAppSettings();
   const [referalCode, setReferalCode] = useState('');
   const [totalReferals, setTotalReferals] = useState(0);
   const [totalBonus, setTotalBonus] = useState(0);
@@ -35,14 +38,26 @@ export default function ReferalScreen({ navigation }) {
   const [invitePhone, setInvitePhone] = useState('');
   const [isInviting, setIsInviting] = useState(false);
 
+  const isFeatureEnabled = settings?.enable_referals !== false;
+
   useFocusEffect(
     useCallback(() => {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
       loadReferalData();
-    }, [])
+    }, [isFeatureEnabled])
   );
 
   const loadReferalData = async () => {
     try {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
       setIsLoading(true);
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
@@ -159,6 +174,27 @@ export default function ReferalScreen({ navigation }) {
     setIsRefreshing(true);
     loadReferalData();
   };
+
+  if (settingsLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isFeatureEnabled) {
+    return (
+      <View style={styles.container}>
+        <FeatureUnavailable
+          title="Referal o'chirilgan"
+          description="Administrator bu funksiyani vaqtincha o'chirgan."
+          icon="people-outline"
+        />
+        <Footer currentScreen="referal" />
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (

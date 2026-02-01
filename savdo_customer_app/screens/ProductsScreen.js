@@ -21,6 +21,7 @@ import { getProducts } from '../services/products';
 import ProductCard from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppSettings } from '../context/AppSettingsContext';
 import responsive from '../utils/responsive';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
@@ -36,6 +37,7 @@ export default function ProductsScreen({ navigation, route }) {
   const { isOnline, loadWithCache } = useOffline();
   const { showToast } = useToast();
   const { colors } = useTheme();
+  const { settings } = useAppSettings();
   const [products, setProducts] = useState([]);
   const [favoriteStatus, setFavoriteStatus] = useState({}); // product_id -> is_favorite
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +57,9 @@ export default function ProductsScreen({ navigation, route }) {
   const [searchHistory, setSearchHistory] = useState([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
   const PRODUCTS_PER_PAGE = 20; // Mahsulotlar bir sahifada
+
+  const isFavoritesEnabled = settings?.enable_favorites !== false;
+  const isPriceAlertsEnabled = settings?.enable_price_alerts !== false;
 
   const loadProducts = async (resetPage = false) => {
     const currentPage = resetPage ? 0 : page;
@@ -283,8 +288,12 @@ export default function ProductsScreen({ navigation, route }) {
   useFocusEffect(
     useCallback(() => {
       loadProducts(true); // Reset to first page when screen focused or filters change
-      loadFavoriteStatus(); // Load favorite status when screen is focused
-    }, [searchQuery, sortBy, filterBrand, filterCategory])
+      if (isFavoritesEnabled) {
+        loadFavoriteStatus(); // Load favorite status when screen is focused
+      } else {
+        setFavoriteStatus({});
+      }
+    }, [searchQuery, sortBy, filterBrand, filterCategory, isFavoritesEnabled])
   );
 
   const handleRefresh = async () => {
@@ -309,6 +318,10 @@ export default function ProductsScreen({ navigation, route }) {
         Alert.alert('Xatolik', 'Maksimal 3 ta mahsulotni taqqoslash mumkin');
       }
     } else if (selectForPriceAlert) {
+      if (!isPriceAlertsEnabled) {
+        showToast('Narx eslatmalari o\'chirilgan', 'error');
+        return;
+      }
       // Navigate to price alert creation
       navigation.navigate('PriceAlertCreate', { product });
     } else {
@@ -353,6 +366,9 @@ export default function ProductsScreen({ navigation, route }) {
 
   const loadFavoriteStatus = async () => {
     try {
+      if (!isFavoritesEnabled) {
+        return;
+      }
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) return;
 
@@ -381,6 +397,10 @@ export default function ProductsScreen({ navigation, route }) {
 
   const handleToggleFavorite = async (product) => {
     try {
+      if (!isFavoritesEnabled) {
+        showToast('Sevimlilar funksiyasi o\'chirilgan', 'error');
+        return;
+      }
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
         showToast('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi', 'error');
@@ -444,9 +464,9 @@ export default function ProductsScreen({ navigation, route }) {
         product={item}
         onPress={() => handleProductPress(item)}
         onAddToCart={(product, quantityChange = 1) => handleAddToCart(product, quantityChange)}
-        onFavorite={handleToggleFavorite}
+        onFavorite={isFavoritesEnabled ? handleToggleFavorite : null}
         quantity={getCartQuantity(item.id)}
-        isFavorite={favoriteStatus[item.id] || false}
+        isFavorite={isFavoritesEnabled ? (favoriteStatus[item.id] || false) : false}
         onCompare={compareMode ? () => handleProductPress(item) : null}
         isInCompare={compareMode && selectedForCompare.includes(item.id)}
       />

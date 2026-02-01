@@ -18,24 +18,39 @@ import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useAppSettings } from '../context/AppSettingsContext';
+import FeatureUnavailable from '../components/FeatureUnavailable';
 import Footer from '../components/Footer';
 
 export default function LoyaltyScreen({ navigation }) {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { settings, isLoading: settingsLoading } = useAppSettings();
   const [loyalty, setLoyalty] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const isFeatureEnabled = settings?.enable_loyalty !== false;
+
   useFocusEffect(
     useCallback(() => {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
       loadLoyaltyData();
-    }, [])
+    }, [isFeatureEnabled])
   );
 
   const loadLoyaltyData = async () => {
     try {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
       setIsLoading(true);
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
@@ -106,6 +121,27 @@ export default function LoyaltyScreen({ navigation }) {
     };
     return labels[level] || level;
   };
+
+  if (settingsLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isFeatureEnabled) {
+    return (
+      <View style={styles.container}>
+        <FeatureUnavailable
+          title="Bonus tizimi o'chirilgan"
+          description="Administrator bu funksiyani vaqtincha o'chirgan."
+          icon="trophy-outline"
+        />
+        <Footer currentScreen="loyalty" />
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (

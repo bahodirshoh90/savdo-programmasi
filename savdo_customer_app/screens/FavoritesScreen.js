@@ -17,13 +17,18 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
+import { useAppSettings } from '../context/AppSettingsContext';
+import FeatureUnavailable from '../components/FeatureUnavailable';
 import Footer from '../components/Footer';
 
 export default function FavoritesScreen({ navigation }) {
+  const { settings, isLoading: settingsLoading } = useAppSettings();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [favoriteStatus, setFavoriteStatus] = useState({}); // product_id -> is_favorite
+
+  const isFeatureEnabled = settings?.enable_favorites !== false;
 
   useEffect(() => {
     loadFavorites();
@@ -31,6 +36,11 @@ export default function FavoritesScreen({ navigation }) {
 
   const loadFavorites = async () => {
     try {
+      if (!isFeatureEnabled) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
         Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi');
@@ -213,6 +223,31 @@ export default function FavoritesScreen({ navigation }) {
       </TouchableOpacity>
     );
   };
+
+  if (settingsLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="favorites" />
+      </View>
+    );
+  }
+
+  if (!isFeatureEnabled) {
+    return (
+      <View style={styles.container}>
+        <FeatureUnavailable
+          title="Sevimlilar o'chirilgan"
+          description="Administrator bu funksiyani vaqtincha o'chirgan."
+          icon="heart-dislike-outline"
+        />
+        <Footer currentScreen="favorites" />
+      </View>
+    );
+  }
 
   if (loading) {
     return (

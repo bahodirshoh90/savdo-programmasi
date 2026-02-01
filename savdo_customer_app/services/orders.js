@@ -7,6 +7,7 @@ import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OFFLINE_ORDERS_KEY = 'offline_orders_queue';
+const SETTINGS_STORAGE_KEY = 'app_settings';
 
 const loadOfflineOrders = async () => {
   try {
@@ -26,8 +27,28 @@ const saveOfflineOrders = async (orders) => {
   }
 };
 
+const loadAppSettings = async () => {
+  try {
+    const data = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (error) {
+    console.warn('[SETTINGS] Error loading cached settings:', error);
+    return {};
+  }
+};
+
+const isOfflineOrdersEnabled = async () => {
+  const settings = await loadAppSettings();
+  return settings?.enable_offline_orders !== false;
+};
+
 export const syncOfflineOrders = async () => {
   try {
+    const offlineEnabled = await isOfflineOrdersEnabled();
+    if (!offlineEnabled) {
+      console.log('[OFFLINE] Offline orders disabled by settings');
+      return { synced: 0, disabled: true };
+    }
     const offlineOrders = await loadOfflineOrders();
     if (!offlineOrders.length) {
       console.log('[OFFLINE] No offline orders to sync');
@@ -162,6 +183,10 @@ export const createOrder = async (orderData) => {
 
       // If there is no response object, treat as network/offline error and queue order
       if (!apiError.response) {
+        const offlineEnabled = await isOfflineOrdersEnabled();
+        if (!offlineEnabled) {
+          throw new Error("Offline buyurtmalar o'chirilgan. Internetga ulanib qayta urinib ko'ring.");
+        }
         console.log('[OFFLINE] Network error detected, saving order to offline queue');
         const offlineOrders = await loadOfflineOrders();
         offlineOrders.push(orderPayload);

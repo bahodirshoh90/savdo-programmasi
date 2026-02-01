@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import Colors from '../constants/colors';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppSettings } from '../context/AppSettingsContext';
 import CartItem from '../components/CartItem';
 import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
@@ -29,6 +30,7 @@ import Footer from '../components/Footer';
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
   const { colors } = useTheme();
+  const { settings } = useAppSettings();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState('cash'); // 'cash', 'card', 'debt'
   const [showLocationModal, setShowLocationModal] = React.useState(false);
@@ -37,6 +39,8 @@ export default function CartScreen({ navigation }) {
     latitude: null,
     longitude: null,
   });
+
+  const isLocationEnabled = settings?.enable_location_selection !== false;
 
   const getImageUrl = (product) => {
     if (!product?.image_url) return null;
@@ -96,9 +100,9 @@ export default function CartScreen({ navigation }) {
     const orderData = {
       items: orderItems,
       payment_method: paymentMethod, // 'cash', 'card', 'debt' (olinadigan)
-      delivery_address: selectedLocation.address,
-      delivery_latitude: selectedLocation.latitude,
-      delivery_longitude: selectedLocation.longitude,
+      delivery_address: isLocationEnabled ? selectedLocation.address : null,
+      delivery_latitude: isLocationEnabled ? selectedLocation.latitude : null,
+      delivery_longitude: isLocationEnabled ? selectedLocation.longitude : null,
     };
 
     console.log('[CART] Step 3: Order data prepared:', JSON.stringify(orderData, null, 2));
@@ -253,27 +257,29 @@ export default function CartScreen({ navigation }) {
 
       <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         {/* Location Selection */}
-        <View style={[styles.locationContainer, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.locationLabel, { color: colors.text }]}>Yetkazib berish manzili:</Text>
-          <TouchableOpacity
-            style={[styles.locationButton, { backgroundColor: colors.background, borderColor: colors.border }]}
-            onPress={() => setShowLocationModal(true)}
-          >
-            <Ionicons name="location-outline" size={20} color={colors.primary} />
-            <Text style={[styles.locationText, { color: selectedLocation.address ? colors.text : colors.textLight }]}>
-              {selectedLocation.address || 'Xaritadan joyni tanlang'}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
-          </TouchableOpacity>
-          {selectedLocation.address && (
+        {isLocationEnabled && (
+          <View style={[styles.locationContainer, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.locationLabel, { color: colors.text }]}>Yetkazib berish manzili:</Text>
             <TouchableOpacity
-              style={styles.clearLocationButton}
-              onPress={() => setSelectedLocation({ address: null, latitude: null, longitude: null })}
+              style={[styles.locationButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+              onPress={() => setShowLocationModal(true)}
             >
-              <Ionicons name="close-circle" size={18} color={colors.danger} />
+              <Ionicons name="location-outline" size={20} color={colors.primary} />
+              <Text style={[styles.locationText, { color: selectedLocation.address ? colors.text : colors.textLight }]}>
+                {selectedLocation.address || 'Xaritadan joyni tanlang'}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
             </TouchableOpacity>
-          )}
-        </View>
+            {selectedLocation.address && (
+              <TouchableOpacity
+                style={styles.clearLocationButton}
+                onPress={() => setSelectedLocation({ address: null, latitude: null, longitude: null })}
+              >
+                <Ionicons name="close-circle" size={18} color={colors.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Payment Method Selection */}
         <View style={[styles.paymentMethodContainer, { borderBottomColor: colors.border }]}>
@@ -316,6 +322,7 @@ export default function CartScreen({ navigation }) {
       </View>
 
       {/* Location Selection Modal */}
+      {isLocationEnabled && (
       <Modal
         visible={showLocationModal}
         transparent
@@ -408,6 +415,7 @@ export default function CartScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+      )}
 
       <Footer currentScreen="cart" />
     </View>
