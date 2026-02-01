@@ -18,6 +18,7 @@ import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAppSettings } from '../context/AppSettingsContext';
 import Footer from '../components/Footer';
 import Colors from '../constants/colors';
 import api from '../services/api';
@@ -29,6 +30,7 @@ export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
   const { theme, isDark, colors, toggleTheme } = useTheme();
   const { language, changeLanguage, t } = useLanguage();
+  const { settings } = useAppSettings();
   const [customerData, setCustomerData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -51,6 +53,11 @@ export default function ProfileScreen({ navigation }) {
     message: '',
   });
   const [isSendingContact, setIsSendingContact] = useState(false);
+
+  const showFavorites = settings?.enable_favorites !== false;
+  const showPriceAlerts = settings?.enable_price_alerts !== false;
+  const showReferals = settings?.enable_referals !== false;
+  const showLoyalty = settings?.enable_loyalty !== false;
 
   useFocusEffect(
     useCallback(() => {
@@ -535,27 +542,31 @@ export default function ProfileScreen({ navigation }) {
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Yordam va Sevimlilar</Text>
+        {showFavorites && (
+          <TouchableOpacity
+            style={styles.changePasswordButton}
+            onPress={() => navigation.navigate('Favorites')}
+          >
+            <Ionicons name="heart-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
+            <Text style={styles.changePasswordButtonText}>Sevimlilar</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
-          style={styles.changePasswordButton}
-          onPress={() => navigation.navigate('Favorites')}
-        >
-          <Ionicons name="heart-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
-          <Text style={styles.changePasswordButtonText}>Sevimlilar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.changePasswordButton, { marginTop: 8 }]}
+          style={[styles.changePasswordButton, { marginTop: showFavorites ? 8 : 0 }]}
           onPress={() => navigation.navigate('ChatList')}
         >
           <Ionicons name="chatbubbles-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
           <Text style={styles.changePasswordButtonText}>Chat / Yordam</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.changePasswordButton, { marginTop: 8 }]}
-          onPress={() => navigation.navigate('PriceAlerts')}
-        >
-          <Ionicons name="notifications-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
-          <Text style={styles.changePasswordButtonText}>Narx Eslatmalari</Text>
-        </TouchableOpacity>
+        {showPriceAlerts && (
+          <TouchableOpacity
+            style={[styles.changePasswordButton, { marginTop: 8 }]}
+            onPress={() => navigation.navigate('PriceAlerts')}
+          >
+            <Ionicons name="notifications-outline" size={20} color={Colors.surface} style={{ marginRight: 8 }} />
+            <Text style={styles.changePasswordButtonText}>Narx Eslatmalari</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -573,24 +584,30 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       {/* Referal and Loyalty */}
-      <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => navigation.navigate('Referal')}
-        >
-          <Ionicons name="people-outline" size={24} color={colors.primary} />
-          <Text style={[styles.menuItemText, { color: colors.text }]}>Do'stni Taklif Qilish</Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => navigation.navigate('Loyalty')}
-        >
-          <Ionicons name="trophy-outline" size={24} color={colors.primary} />
-          <Text style={[styles.menuItemText, { color: colors.text }]}>Bonus Tizimi</Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
-        </TouchableOpacity>
-      </View>
+      {(showReferals || showLoyalty) && (
+        <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          {showReferals && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('Referal')}
+            >
+              <Ionicons name="people-outline" size={24} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Do'stni Taklif Qilish</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+          )}
+          {showLoyalty && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('Loyalty')}
+            >
+              <Ionicons name="trophy-outline" size={24} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Bonus Tizimi</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.danger }]} onPress={handleLogout}>

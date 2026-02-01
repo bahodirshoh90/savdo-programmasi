@@ -75,6 +75,8 @@ export default function Footer({ currentScreen = 'home' }) {
     <View style={[styles.footer, { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
       {navItems.map((item) => {
         const isActive = currentScreen.toLowerCase() === item.id;
+        const badgeCount = Number(item.badge) || 0;
+        const shouldShowBadge = badgeCount > 0;
         return (
           <TouchableOpacity
             key={item.id}
@@ -88,9 +90,9 @@ export default function Footer({ currentScreen = 'home' }) {
                 size={24}
                 color={isActive ? colors.primary : colors.textLight}
               />
-              {item.badge && item.badge > 0 && (
+              {shouldShowBadge && (
                 <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.badgeText}>{item.badge}</Text>
+                  <Text style={styles.badgeText}>{badgeCount}</Text>
                 </View>
               )}
             </View>

@@ -38,6 +38,7 @@ import { CartProvider, useCart } from './context/CartContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ToastProvider } from './context/ToastContext';
+import { AppSettingsProvider } from './context/AppSettingsContext';
 import Colors from './constants/colors';
 
 const Stack = createStackNavigator();
@@ -295,10 +296,12 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <CartProvider>
-              <AppNavigator />
-              <StatusBar style="auto" />
-            </CartProvider>
+            <AppSettingsProvider>
+              <CartProvider>
+                <AppNavigator />
+                <StatusBar style="auto" />
+              </CartProvider>
+            </AppSettingsProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

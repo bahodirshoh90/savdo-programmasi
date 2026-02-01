@@ -1,18 +1,116 @@
 """
 Push Notification Service for Customer App
-Uses Expo Push Notification API
+Uses Expo Push API and Firebase Cloud Messaging HTTP v1
 """
+import json
 import os
 import requests
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Iterable, Tuple
 from sqlalchemy.orm import Session
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request as GoogleRequest
 from models import CustomerDeviceToken, Customer
 
 
 class NotificationService:
-    """Service for sending push notifications via Expo Push API"""
+    """Service for sending push notifications via Expo Push API and FCM v1"""
     
     EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+    EXPO_CHUNK_SIZE = 100
+    FCM_SCOPE = ["https://www.googleapis.com/auth/firebase.messaging"]
+    FCM_URL_TEMPLATE = "https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
+    FCM_CREDENTIAL_ENV = "FCM_SERVICE_ACCOUNT_FILE"
+    _fcm_credentials = None
+    _fcm_project_id = None
+    _fcm_credentials_path = None
+
+    @staticmethod
+    def _chunk_list(items: List[str], size: int) -> Iterable[List[str]]:
+        for i in range(0, len(items), size):
+            yield items[i:i + size]
+
+    @staticmethod
+    def is_expo_push_token(token: str) -> bool:
+        if not token:
+            return False
+        return token.startswith("ExponentPushToken") or token.startswith("ExpoPushToken")
+
+    @staticmethod
+    def _resolve_fcm_service_account_path() -> Optional[str]:
+        env_path = os.getenv(NotificationService.FCM_CREDENTIAL_ENV) or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if env_path and os.path.exists(env_path):
+            return env_path
+
+        backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        candidates = [
+            os.path.join(backend_dir, "service-account.json"),
+            os.path.join(backend_dir, "firebase-service-account.json"),
+            os.path.join(backend_dir, "mijozlar-ilovasi-aa82f-e250da954562.json"),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+
+        return None
+
+    @staticmethod
+    def _load_fcm_credentials() -> Tuple[Optional[service_account.Credentials], Optional[str], Optional[str]]:
+        if NotificationService._fcm_credentials and NotificationService._fcm_project_id:
+            return NotificationService._fcm_credentials, NotificationService._fcm_project_id, None
+
+        path = NotificationService._resolve_fcm_service_account_path()
+        if not path:
+            return None, None, (
+                "FCM service account file not found. Set FCM_SERVICE_ACCOUNT_FILE or "
+                "GOOGLE_APPLICATION_CREDENTIALS to the JSON key path."
+            )
+
+        try:
+            credentials = service_account.Credentials.from_service_account_file(
+                path, scopes=NotificationService.FCM_SCOPE
+            )
+            project_id = credentials.project_id
+            if not project_id:
+                with open(path, "r", encoding="utf-8") as file:
+                    project_id = json.load(file).get("project_id")
+
+            if not project_id:
+                return None, None, "Project ID is missing in the service account file."
+
+            NotificationService._fcm_credentials = credentials
+            NotificationService._fcm_project_id = project_id
+            NotificationService._fcm_credentials_path = path
+            return credentials, project_id, None
+        except Exception as exc:
+            return None, None, f"FCM credentials error: {exc}"
+
+    @staticmethod
+    def _get_fcm_access_token() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        credentials, project_id, error = NotificationService._load_fcm_credentials()
+        if error:
+            return None, None, error
+
+        if not credentials.valid:
+            try:
+                credentials.refresh(GoogleRequest())
+            except Exception as exc:
+                return None, None, f"Unable to refresh FCM access token: {exc}"
+
+        return credentials.token, project_id, None
+
+    @staticmethod
+    def _sanitize_fcm_data(data: Optional[Dict]) -> Dict:
+        if not data:
+            return {}
+        sanitized = {}
+        for key, value in data.items():
+            if value is None:
+                continue
+            if isinstance(value, (dict, list)):
+                sanitized[key] = json.dumps(value, ensure_ascii=True)
+            else:
+                sanitized[key] = str(value)
+        return sanitized
     
     @staticmethod
     def send_notification(
@@ -38,59 +136,174 @@ class NotificationService:
             Dict with success status and response data
         """
         if not tokens:
-            return {"success": False, "error": "No tokens provided"}
-        
-        messages = []
-        for token in tokens:
-            message = {
-                "to": token,
-                "sound": sound,
-                "title": title,
-                "body": body,
-                "priority": priority,
-                "data": data or {}
-            }
-            messages.append(message)
-        
-        try:
-            headers = {
-                "Accept": "application/json",
-                "Accept-Encoding": "gzip, deflate",
-                "Content-Type": "application/json"
-            }
-            
-            response = requests.post(
-                NotificationService.EXPO_PUSH_URL,
-                json={"messages": messages},
-                headers=headers,
-                timeout=10
+            return {"success": False, "error": "No tokens provided", "results": {}}
+
+        expo_tokens = [t for t in tokens if NotificationService.is_expo_push_token(t)]
+        fcm_tokens = [t for t in tokens if not NotificationService.is_expo_push_token(t)]
+
+        results: Dict[str, Dict] = {}
+        errors: List[str] = []
+        provider_success = 0
+        provider_total = 0
+
+        if expo_tokens:
+            provider_total += 1
+            expo_result = NotificationService._send_expo_notifications(
+                expo_tokens, title, body, data, sound, priority
             )
-            
-            if response.status_code == 200:
+            results["expo"] = expo_result
+            if expo_result.get("success"):
+                provider_success += 1
+            else:
+                errors.append(expo_result.get("error", "Expo push error"))
+
+        if fcm_tokens:
+            provider_total += 1
+            fcm_result = NotificationService._send_fcm_notifications(
+                fcm_tokens, title, body, data, priority
+            )
+            results["fcm"] = fcm_result
+            if fcm_result.get("success"):
+                provider_success += 1
+            else:
+                errors.append(fcm_result.get("error", "FCM push error"))
+
+        success = provider_success > 0 if provider_total > 0 else False
+        warning = "; ".join(errors) if errors and success else None
+        error = "; ".join(errors) if errors and not success else None
+        return {
+            "success": success,
+            "error": error,
+            "warning": warning,
+            "results": results
+        }
+
+    @staticmethod
+    def _send_expo_notifications(
+        tokens: List[str],
+        title: str,
+        body: str,
+        data: Optional[Dict],
+        sound: str,
+        priority: str
+    ) -> Dict:
+        """Send notifications to Expo push tokens."""
+        if not tokens:
+            return {"success": False, "error": "No Expo tokens provided", "response": None}
+
+        headers = {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate",
+            "Content-Type": "application/json"
+        }
+
+        errors: List[str] = []
+        responses: List[Dict] = []
+
+        try:
+            for chunk in NotificationService._chunk_list(tokens, NotificationService.EXPO_CHUNK_SIZE):
+                messages = [
+                    {
+                        "to": token,
+                        "sound": sound,
+                        "title": title,
+                        "body": body,
+                        "priority": priority,
+                        "data": data or {}
+                    }
+                    for token in chunk
+                ]
+
+                response = requests.post(
+                    NotificationService.EXPO_PUSH_URL,
+                    json=messages if len(messages) > 1 else messages[0],
+                    headers=headers,
+                    timeout=10
+                )
+
+                if response.status_code != 200:
+                    errors.append(f"HTTP {response.status_code}: {response.text}")
+                    continue
+
                 result = response.json()
-                # Check for errors in individual messages
-                errors = []
+                responses.append(result)
                 if "data" in result:
                     for item in result["data"]:
-                        if "status" in item and item["status"] == "error":
-                            errors.append(item.get("message", "Unknown error"))
-                
-                if errors:
-                    return {
-                        "success": False,
-                        "error": "; ".join(errors),
-                        "response": result
-                    }
-                
-                return {"success": True, "response": result}
-            else:
-                return {
-                    "success": False,
-                    "error": f"HTTP {response.status_code}: {response.text}",
-                    "response": None
-                }
+                        if item.get("status") == "error":
+                            errors.append(item.get("message", "Unknown Expo error"))
+
+            if errors:
+                return {"success": False, "error": "; ".join(errors), "response": responses}
+
+            return {"success": True, "response": responses}
         except Exception as e:
             return {"success": False, "error": str(e), "response": None}
+
+    @staticmethod
+    def _send_fcm_notifications(
+        tokens: List[str],
+        title: str,
+        body: str,
+        data: Optional[Dict],
+        priority: str
+    ) -> Dict:
+        """Send notifications to FCM tokens (Android) using HTTP v1."""
+        if not tokens:
+            return {"success": False, "error": "No FCM tokens provided", "response": None}
+        token, project_id, error = NotificationService._get_fcm_access_token()
+        if error:
+            return {"success": False, "error": error, "response": None}
+
+        url = NotificationService.FCM_URL_TEMPLATE.format(project_id=project_id)
+        errors: List[str] = []
+        responses: List[Dict] = []
+        fcm_priority = "HIGH" if priority == "high" else "NORMAL"
+        data_payload = NotificationService._sanitize_fcm_data(data)
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            for target in tokens:
+                message = {
+                    "message": {
+                        "token": target,
+                        "notification": {
+                            "title": title,
+                            "body": body
+                        },
+                        "data": data_payload,
+                        "android": {
+                            "priority": fcm_priority
+                        }
+                    }
+                }
+
+                response = requests.post(url, json=message, headers=headers, timeout=10)
+
+                if response.status_code in (401, 403):
+                    # Refresh token and retry once
+                    retry_token, _, retry_error = NotificationService._get_fcm_access_token()
+                    if retry_error:
+                        errors.append(retry_error)
+                        continue
+                    headers["Authorization"] = f"Bearer {retry_token}"
+                    response = requests.post(url, json=message, headers=headers, timeout=10)
+
+                if response.status_code != 200:
+                    errors.append(f"HTTP {response.status_code}: {response.text}")
+                    continue
+
+                responses.append(response.json())
+
+            if errors:
+                return {"success": False, "error": "; ".join(errors), "response": responses}
+
+            return {"success": True, "response": responses}
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "response": None}
     
     @staticmethod
     def get_customer_tokens(db: Session, customer_id: int) -> List[str]:

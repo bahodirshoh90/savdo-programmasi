@@ -21,10 +21,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
+import { useAppSettings } from '../context/AppSettingsContext';
+import FeatureUnavailable from '../components/FeatureUnavailable';
 import Footer from '../components/Footer';
 
 export default function PriceAlertsScreen({ navigation, route }) {
   const { colors } = useTheme();
+  const { settings, isLoading: settingsLoading } = useAppSettings();
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -32,19 +35,32 @@ export default function PriceAlertsScreen({ navigation, route }) {
   const [selectedProduct, setSelectedProduct] = useState(route?.params?.product || null);
   const [targetPrice, setTargetPrice] = useState('');
 
+  const isFeatureEnabled = settings?.enable_price_alerts !== false;
+
   useFocusEffect(
     useCallback(() => {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        setShowAddModal(false);
+        return;
+      }
       loadAlerts();
       // Check if product was passed from navigation
       if (route?.params?.product) {
         setSelectedProduct(route.params.product);
         setShowAddModal(true);
       }
-    }, [route?.params?.product])
+    }, [route?.params?.product, isFeatureEnabled])
   );
 
   const loadAlerts = async () => {
     try {
+      if (!isFeatureEnabled) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) {
         setIsLoading(false);
@@ -286,6 +302,27 @@ export default function PriceAlertsScreen({ navigation, route }) {
       </View>
     );
   };
+
+  if (settingsLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isFeatureEnabled) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <FeatureUnavailable
+          title="Narx eslatmalari o'chirilgan"
+          description="Administrator bu funksiyani vaqtincha o'chirgan."
+          icon="notifications-off-outline"
+        />
+        <Footer currentScreen="price-alerts" />
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (

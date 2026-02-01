@@ -109,6 +109,16 @@ body {
     font-size: 0.9rem;
 }
 
+.success-message {
+    background: #dcfce7;
+    color: #16a34a;
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
 .container {
     display: flex;
     min-height: 100vh;

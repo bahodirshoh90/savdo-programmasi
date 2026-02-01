@@ -16,6 +16,7 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppSettings } from '../context/AppSettingsContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +34,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const { addToCart, cartItems } = useCart();
   const { showToast } = useToast();
   const { colors } = useTheme();
+  const { settings } = useAppSettings();
   const [product, setProduct] = useState(routeProduct || null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +49,9 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const isFavoritesEnabled = settings?.enable_favorites !== false;
+  const isReviewsEnabled = settings?.enable_reviews !== false;
   
   // Get current cart quantity for this product
   const getCartQuantity = () => {
@@ -74,17 +79,35 @@ export default function ProductDetailScreen({ route, navigation }) {
         console.log('[ProductDetail] Using routeProduct:', routeProduct.id);
         setIsLoading(false);
         setProduct(routeProduct);
-        checkFavoriteStatus();
-        loadReviews(routeProduct.id);
-        loadRatingSummary(routeProduct.id);
+        if (isFavoritesEnabled) {
+          checkFavoriteStatus();
+        } else {
+          setIsFavorite(false);
+        }
+        if (isReviewsEnabled) {
+          loadReviews(routeProduct.id);
+          loadRatingSummary(routeProduct.id);
+        } else {
+          setReviews([]);
+          setRatingSummary(null);
+        }
         loadProductImages();
       } else if (product && product.id === currentProductId) {
         // If product is already loaded, use it
         console.log('[ProductDetail] Using existing product:', product.id);
         setIsLoading(false);
-        checkFavoriteStatus();
-        loadReviews();
-        loadRatingSummary();
+        if (isFavoritesEnabled) {
+          checkFavoriteStatus();
+        } else {
+          setIsFavorite(false);
+        }
+        if (isReviewsEnabled) {
+          loadReviews();
+          loadRatingSummary();
+        } else {
+          setReviews([]);
+          setRatingSummary(null);
+        }
         loadProductImages();
       } else {
         // Otherwise, load from API
@@ -95,11 +118,15 @@ export default function ProductDetailScreen({ route, navigation }) {
       console.warn('[ProductDetail] No productId found in route params');
       setIsLoading(false);
     }
-  }, [currentProductId, routeProduct]);
+  }, [currentProductId, routeProduct, isFavoritesEnabled, isReviewsEnabled]);
 
   const checkFavoriteStatus = async () => {
     const currentProduct = product || routeProduct;
     if (!currentProduct || !currentProduct.id) return;
+    if (!isFavoritesEnabled) {
+      setIsFavorite(false);
+      return;
+    }
     
     try {
       const customerId = await AsyncStorage.getItem('customer_id');
@@ -136,6 +163,11 @@ export default function ProductDetailScreen({ route, navigation }) {
     const currentProduct = product || routeProduct;
     if (!currentProduct) {
       console.error('No product available for favorite toggle');
+      return;
+    }
+
+    if (!isFavoritesEnabled) {
+      showToast('Sevimlilar funksiyasi o\'chirilgan', 'error');
       return;
     }
 
@@ -244,6 +276,10 @@ export default function ProductDetailScreen({ route, navigation }) {
   const loadReviews = async (productIdToLoad = null) => {
     const targetProductId = productIdToLoad || currentProductId;
     if (!targetProductId) return;
+    if (!isReviewsEnabled) {
+      setReviews([]);
+      return;
+    }
 
     try {
       const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
@@ -293,6 +329,10 @@ export default function ProductDetailScreen({ route, navigation }) {
   const loadRatingSummary = async (productIdToLoad = null) => {
     const targetProductId = productIdToLoad || currentProductId;
     if (!targetProductId) return;
+    if (!isReviewsEnabled) {
+      setRatingSummary(null);
+      return;
+    }
 
     try {
       const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
@@ -318,6 +358,11 @@ export default function ProductDetailScreen({ route, navigation }) {
   const handleSubmitReview = async () => {
     if (!currentProductId) {
       Alert.alert('Xatolik', 'Mahsulot topilmadi');
+      return;
+    }
+
+    if (!isReviewsEnabled) {
+      Alert.alert('Xatolik', 'Baholash funksiyasi o\'chirilgan');
       return;
     }
 
@@ -518,23 +563,25 @@ export default function ProductDetailScreen({ route, navigation }) {
           </>
         )}
         
-        <TouchableOpacity
-          style={styles.favoriteButton}
-          onPress={toggleFavorite}
-        >
-          <Ionicons
-            name={isFavorite ? 'heart' : 'heart-outline'}
-            size={24}
-            color={isFavorite ? '#ff3b30' : Colors.surface}
-          />
-        </TouchableOpacity>
+        {isFavoritesEnabled && (
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={toggleFavorite}
+          >
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isFavorite ? '#ff3b30' : Colors.surface}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.content}>
         <Text style={styles.name}>{product.name}</Text>
 
         {/* Rating Summary */}
-        {ratingSummary && ratingSummary.total_reviews > 0 && (
+        {isReviewsEnabled && ratingSummary && ratingSummary.total_reviews > 0 && (
           <View style={styles.ratingContainer}>
             <StarRating 
               rating={ratingSummary.average_rating} 
@@ -623,6 +670,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
 
       {/* Reviews Section */}
+      {isReviewsEnabled && (
       <View style={styles.reviewsSection}>
         <View style={styles.reviewsHeader}>
           <Text style={styles.reviewsTitle}>Baholashlar va Sharhlar</Text>
@@ -697,6 +745,7 @@ export default function ProductDetailScreen({ route, navigation }) {
           <Text style={styles.noReviewsText}>Hozircha baholashlar yo'q</Text>
         )}
       </View>
+      )}
       </ScrollView>
       <Footer currentScreen="products" />
     </View>

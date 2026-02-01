@@ -62,9 +62,30 @@ export async function getExpoPushToken() {
 }
 
 /**
+ * Get native device push token (FCM for Android)
+ */
+export async function getDevicePushToken() {
+  try {
+    if (Platform.OS !== 'android') {
+      return null;
+    }
+
+    const deviceToken = await Notifications.getDevicePushTokenAsync();
+    if (deviceToken?.type === 'fcm') {
+      return deviceToken.data;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting device push token:', error);
+    return null;
+  }
+}
+
+/**
  * Register device token with backend
  */
-export async function registerDeviceToken(token, deviceId = null, platform = null) {
+export async function registerDeviceToken(token, deviceId = null, platform = null, storageKey = 'expo_push_token') {
   try {
     const customerId = await AsyncStorage.getItem('customer_id');
     if (!customerId) {
@@ -81,7 +102,7 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
     });
     
     // Save token locally
-    await AsyncStorage.setItem('expo_push_token', token);
+    await AsyncStorage.setItem(storageKey, token);
     
     console.log('Device token registered successfully');
     return true;
@@ -167,22 +188,44 @@ export async function initializeNotifications(navigation) {
       console.warn('Notification permissions not granted');
       return null;
     }
-    
-    // Get push token
-    const token = await getExpoPushToken();
-    if (!token) {
-      console.warn('Could not get Expo push token');
-      return null;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
     }
     
-    // Register token with backend
-    await registerDeviceToken(token);
+    // Get push token
+    const expoToken = await getExpoPushToken();
+    const deviceToken = await getDevicePushToken();
+
+    if (!expoToken && !deviceToken) {
+      console.warn('Could not get push token');
+      return null;
+    }
+
+    // Register FCM token first (Android)
+    if (deviceToken) {
+      await registerDeviceToken(deviceToken, null, 'android', 'fcm_push_token');
+    }
+
+    // Register Expo token for iOS or as fallback
+    if (expoToken && (Platform.OS !== 'android' || !deviceToken)) {
+      await registerDeviceToken(expoToken, null, Platform.OS, 'expo_push_token');
+    }
     
     // Setup listeners
     const subscriptions = setupNotificationListeners(navigation);
     
     return {
-      token,
+      token: expoToken || deviceToken,
+      tokens: {
+        expo: expoToken,
+        device: deviceToken,
+      },
       subscriptions,
     };
   } catch (error) {
