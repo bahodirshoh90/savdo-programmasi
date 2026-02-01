@@ -19,7 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getOrders, syncOfflineOrders } from '../services/orders';
 import OrderCard from '../components/OrderCard';
 import websocketService from '../services/websocket';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function OrdersScreen({ navigation }) {
   const { colors } = useTheme();
@@ -174,7 +174,7 @@ export default function OrdersScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: 70 }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Status Filter - Modern Design */}
       <View style={styles.filterContainer}>
         <View style={styles.filterCard}>
@@ -249,7 +249,7 @@ export default function OrdersScreen({ navigation }) {
         />
       )}
       <Footer currentScreen="orders" />
-    </View>
+    </FooterAwareView>
   );
 }
 

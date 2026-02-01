@@ -19,7 +19,7 @@ import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { syncOfflineOrders } from '../services/orders';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 const OFFLINE_ORDERS_KEY = 'offline_orders_queue';
 
@@ -194,7 +194,7 @@ export default function OfflineSyncScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -257,7 +257,7 @@ export default function OfflineSyncScreen({ navigation }) {
         </View>
       )}
       <Footer currentScreen="orders" />
-    </View>
+    </FooterAwareView>
   );
 }
 

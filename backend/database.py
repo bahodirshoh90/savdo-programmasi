@@ -38,10 +38,11 @@ def init_db():
     # Initialize default roles and permissions
     db = SessionLocal()
     try:
-        # Check if permissions already exist
-        if db.query(Permission).count() == 0:
-            # Create permissions
-            for code, name in PERMISSIONS.items():
+        # Ensure permissions exist (create missing ones)
+        existing_permissions = {p.code: p for p in db.query(Permission).all()}
+        created_permissions = False
+        for code, name in PERMISSIONS.items():
+            if code not in existing_permissions:
                 category = code.split('.')[0]
                 permission = Permission(
                     code=code,
@@ -50,11 +51,16 @@ def init_db():
                     description=f"Ruxsat: {name}"
                 )
                 db.add(permission)
-            
+                created_permissions = True
+        if created_permissions:
             db.commit()
-            
-            # Create default roles
-            # 1. Super Admin - all permissions
+            existing_permissions = {p.code: p for p in db.query(Permission).all()}
+
+        all_permissions = list(existing_permissions.values())
+
+        # Create default roles if missing
+        super_admin = db.query(Role).filter(Role.name == "Super Admin").first()
+        if not super_admin:
             super_admin = Role(
                 name="Super Admin",
                 description="Barcha ruxsatlarga ega",
@@ -62,11 +68,9 @@ def init_db():
             )
             db.add(super_admin)
             db.flush()
-            
-            all_permissions = db.query(Permission).all()
-            super_admin.permissions = all_permissions
-            
-            # 2. Manager - most permissions except admin
+
+        manager = db.query(Role).filter(Role.name == "Manager").first()
+        if not manager:
             manager = Role(
                 name="Manager",
                 description="Ko'pchilik ruxsatlarga ega, admin ruxsatlari yo'q",
@@ -74,11 +78,9 @@ def init_db():
             )
             db.add(manager)
             db.flush()
-            
-            manager_permissions = [p for p in all_permissions if not p.code.startswith("admin.")]
-            manager.permissions = manager_permissions
-            
-            # 3. Seller - basic selling permissions
+
+        seller_role = db.query(Role).filter(Role.name == "Seller").first()
+        if not seller_role:
             seller_role = Role(
                 name="Seller",
                 description="Asosiy sotish ruxsatlari",
@@ -86,19 +88,9 @@ def init_db():
             )
             db.add(seller_role)
             db.flush()
-            
-            seller_permissions = [
-                p for p in all_permissions 
-                if p.code in [
-                    "products.view", "customers.view", "customers.create",
-                    "sales.create", "sales.view", "sales.receipt",
-                    "orders.create", "orders.view", "prices.view",
-                    "gps.update"
-                ]
-            ]
-            seller_role.permissions = seller_permissions
-            
-            # 4. Viewer - read only
+
+        viewer = db.query(Role).filter(Role.name == "Viewer").first()
+        if not viewer:
             viewer = Role(
                 name="Viewer",
                 description="Faqat ko'rish ruxsati",
@@ -106,11 +98,28 @@ def init_db():
             )
             db.add(viewer)
             db.flush()
-            
-            viewer_permissions = [p for p in all_permissions if p.code.endswith(".view")]
-            viewer.permissions = viewer_permissions
-            
-            db.commit()
+
+        # Sync permissions for system roles
+        super_admin.permissions = all_permissions
+
+        manager_permissions = [p for p in all_permissions if not p.code.startswith("admin.")]
+        manager.permissions = manager_permissions
+
+        seller_permissions = [
+            p for p in all_permissions
+            if p.code in [
+                "products.view", "customers.view", "customers.create",
+                "sales.create", "sales.view", "sales.receipt",
+                "orders.create", "orders.view", "prices.view",
+                "gps.update"
+            ]
+        ]
+        seller_role.permissions = seller_permissions
+
+        viewer_permissions = [p for p in all_permissions if p.code.endswith(".view")]
+        viewer.permissions = viewer_permissions
+
+        db.commit()
     finally:
         db.close()
 

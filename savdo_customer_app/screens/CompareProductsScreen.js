@@ -18,10 +18,13 @@ import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import StarRating from '../components/StarRating';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function CompareProductsScreen({ route, navigation }) {
   const { productIds } = route.params || { productIds: [] };
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -116,13 +119,12 @@ export default function CompareProductsScreen({ route, navigation }) {
     { key: 'name', label: 'Nomi', type: 'text' },
     { key: 'brand', label: 'Brend', type: 'text' },
     { key: 'category', label: 'Kategoriya', type: 'text' },
-    { key: 'retail_price', label: 'Narx', type: 'price' },
+    { key: 'price', label: 'Narx', type: 'price' },
     { key: 'total_pieces', label: 'Omborda', type: 'stock' },
-    { key: 'barcode', label: 'Barcode', type: 'text' },
   ];
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -136,7 +138,6 @@ export default function CompareProductsScreen({ route, navigation }) {
       <View style={styles.productsContainer}>
         {products.map((product, index) => {
           const imageUrl = getImageUrl(product.image_url);
-          const price = product.retail_price || product.regular_price || 0;
           
           return (
             <View key={product.id} style={styles.productColumn}>
@@ -166,6 +167,10 @@ export default function CompareProductsScreen({ route, navigation }) {
               {comparisonFields.map((field) => {
                 let value = product[field.key];
                 let displayValue = '-';
+
+                if (field.type === 'price') {
+                  value = getProductPrice(product, user?.customer_type);
+                }
 
                 if (field.type === 'price' && value) {
                   displayValue = formatPrice(value);
@@ -207,7 +212,7 @@ export default function CompareProductsScreen({ route, navigation }) {
       )}
       </ScrollView>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 

@@ -18,11 +18,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { login as authLogin, signup } from '../services/auth';
+import { login as authLogin, signup, storeAuthSession } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
-import Footer from '../components/Footer';
 import { API_ENDPOINTS } from '../config/api';
+// ✅ PUSH NOTIFICATION IMPORT
+import { getExpoPushToken, registerDeviceToken } from '../services/notifications';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -53,6 +54,7 @@ export default function LoginScreen() {
     password: '',
     confirm_password: '',
     address: '',
+    referal_code: '',
   });
   const [isRegistering, setIsRegistering] = useState(false);
   
@@ -139,7 +141,25 @@ export default function LoginScreen() {
 
       if (response.success && response.token && response.user) {
         // OTP verification successful and token received
-        await login(response.user, response.token);
+        const normalizedUser = await storeAuthSession({
+          token: response.token,
+          user: response.user,
+          customer_id: response.user?.customer_id || response.user?.id,
+        });
+        
+        // ✅ PUSH TOKEN REGISTER - OTP LOGIN
+        try {
+          console.log('[OTP] Registering push token...');
+          const pushToken = await getExpoPushToken();
+          if (pushToken) {
+            const registered = await registerDeviceToken(pushToken);
+            console.log('[OTP] Push token registration:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+          }
+        } catch (pushError) {
+          console.error('[OTP] Push token error:', pushError);
+        }
+        
+        await login(normalizedUser, response.token);
         setShowOtpModal(false);
         setOtpCode('');
         setOtpSent(false);
@@ -175,7 +195,25 @@ export default function LoginScreen() {
       if (response.token && response.user) {
         // Store token and user data
         const { token, user } = response;
-        await login(user, token);
+        const normalizedUser = await storeAuthSession({
+          token,
+          user,
+          customer_id: user?.customer_id || user?.id,
+        });
+        
+        // ✅ PUSH TOKEN REGISTER - SOCIAL LOGIN
+        try {
+          console.log('[SOCIAL] Registering push token...');
+          const pushToken = await getExpoPushToken();
+          if (pushToken) {
+            const registered = await registerDeviceToken(pushToken);
+            console.log('[SOCIAL] Push token registration:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+          }
+        } catch (pushError) {
+          console.error('[SOCIAL] Push token error:', pushError);
+        }
+        
+        await login(normalizedUser, token);
         Alert.alert('Muvaffaqiyatli', `${provider === 'google' ? 'Google' : 'Facebook'} orqali kirildi`);
       } else {
         Alert.alert('Xatolik', 'Ijtimoiy tarmoq orqali kirishda xatolik');
@@ -278,6 +316,7 @@ export default function LoginScreen() {
         username: registerData.username.trim(),
         password: registerData.password,
         address: registerData.address.trim() || '',
+        referal_code: registerData.referal_code.trim() || null,
       });
 
       if (result.success) {
@@ -293,6 +332,7 @@ export default function LoginScreen() {
                 password: '',
                 confirm_password: '',
                 address: '',
+                referal_code: '',
               });
             },
           },
@@ -717,6 +757,17 @@ export default function LoginScreen() {
               />
             </View>
 
+            <View style={styles.inputContainer}>
+              <Ionicons name="gift-outline" size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Referal kod (ixtiyoriy)"
+                value={registerData.referal_code}
+                onChangeText={(text) => setRegisterData({ ...registerData, referal_code: text })}
+                autoCapitalize="characters"
+              />
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.button, styles.buttonSecondary]}
@@ -729,6 +780,7 @@ export default function LoginScreen() {
                     password: '',
                     confirm_password: '',
                     address: '',
+                    referal_code: '',
                   });
                 }}
               >

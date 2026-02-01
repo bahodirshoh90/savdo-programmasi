@@ -2,7 +2,9 @@
  * Authentication Context for Customer App
  */
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isLoggedIn, getCurrentUser, logout as authLogout, verifyToken } from '../services/auth';
+import websocketService from '../services/websocket';
 
 const AuthContext = createContext();
 
@@ -31,7 +33,12 @@ export const AuthProvider = ({ children }) => {
         try {
           const tokenResult = await verifyToken();
           if (tokenResult?.success && tokenResult?.user) {
-            setUser(tokenResult.user);
+            const normalizedUser = {
+              ...tokenResult.user,
+              customer_id: tokenResult.user?.customer_id || tokenResult.user?.id,
+              customer_type: tokenResult.user?.customer_type || 'regular',
+            };
+            setUser(normalizedUser);
             setIsAuthenticated(true);
             setIsLoading(false);
             return;
@@ -49,7 +56,12 @@ export const AuthProvider = ({ children }) => {
         try {
           const userData = await getCurrentUser();
           if (userData) {
-            setUser(userData);
+            const normalizedUser = {
+              ...userData,
+              customer_id: userData?.customer_id || userData?.id,
+              customer_type: userData?.customer_type || 'regular',
+            };
+            setUser(normalizedUser);
             setIsAuthenticated(true);
           } else {
             setIsAuthenticated(false);
@@ -67,7 +79,12 @@ export const AuthProvider = ({ children }) => {
       try {
         const userData = await getCurrentUser();
         if (userData) {
-          setUser(userData);
+          const normalizedUser = {
+            ...userData,
+            customer_id: userData?.customer_id || userData?.id,
+            customer_type: userData?.customer_type || 'regular',
+          };
+          setUser(normalizedUser);
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
@@ -88,11 +105,47 @@ export const AuthProvider = ({ children }) => {
       customer_id: userData?.customer_id || userData?.id,
       name: userData?.name || userData?.customer_name,
       phone: userData?.phone,
+      customer_type: userData?.customer_type || 'regular',
       ...userData,
     };
     setUser(normalizedUser);
     setIsAuthenticated(true);
   };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    websocketService.connect();
+    const unsubscribe = websocketService.on('customer_type_changed', async (message) => {
+      const newType = message?.new_type || message?.data?.new_type;
+      if (!newType) {
+        return;
+      }
+      setUser((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return { ...prev, customer_type: newType };
+      });
+      try {
+        const existing = await getCurrentUser();
+        if (existing) {
+          const updated = { ...existing, customer_type: newType };
+          await AsyncStorage.setItem('customer_data', JSON.stringify(updated));
+        }
+      } catch (error) {
+        console.warn('[AUTH CONTEXT] Failed to update stored customer type:', error);
+      }
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [isAuthenticated]);
 
   const logout = async () => {
     console.log('[AUTH CONTEXT] Logout called');

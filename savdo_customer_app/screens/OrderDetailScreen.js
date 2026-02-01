@@ -15,7 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getOrder } from '../services/orders';
 import OrderTrackingStepper from '../components/OrderTrackingStepper';
 import websocketService from '../services/websocket';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -74,17 +74,19 @@ export default function OrderDetailScreen({ route }) {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <FooterAwareView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+        <Footer currentScreen="orders" />
+      </FooterAwareView>
     );
   }
 
   if (!order) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <Text style={styles.errorText}>Buyurtma topilmadi</Text>
-      </View>
+        <Footer currentScreen="orders" />
+      </FooterAwareView>
     );
   }
 
@@ -106,7 +108,7 @@ export default function OrderDetailScreen({ route }) {
     : null;
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Order Tracking Stepper */}
       <OrderTrackingStepper
@@ -168,7 +170,7 @@ export default function OrderDetailScreen({ route }) {
       </View>
       </ScrollView>
       <Footer currentScreen="orders" />
-    </View>
+    </FooterAwareView>
   );
 }
 

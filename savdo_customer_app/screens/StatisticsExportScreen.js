@@ -19,7 +19,7 @@ import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import API_CONFIG from '../config/api';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function StatisticsExportScreen({ navigation }) {
   const { showToast } = useToast();
@@ -62,7 +62,7 @@ export default function StatisticsExportScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -137,7 +137,7 @@ export default function StatisticsExportScreen({ navigation }) {
         </View>
       </View>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

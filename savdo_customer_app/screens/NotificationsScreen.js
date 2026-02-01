@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Appbar, FAB, Dialog, Portal, Button, TextInput, List, Snackbar, ActivityIndicator, Text } from 'react-native-paper';
 
-const API_BASE = 'http://localhost:8000/api'; // Change to your backend URL
+const API_BASE = 'https://uztoysavdo.uz/api'; // Production API URL
 
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);

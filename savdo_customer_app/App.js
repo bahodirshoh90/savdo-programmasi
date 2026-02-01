@@ -8,8 +8,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+// ✅ NOTIFICATION SERVICE IMPORT
 import { initializeNotifications, removeNotificationListeners } from './services/notifications';
-import { useAuth } from './context/AuthContext';
 
 // Import screens
 import LoginScreen from './screens/LoginScreen';
@@ -22,7 +24,6 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
-import QRScannerScreen from './screens/QRScannerScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import NewChatScreen from './screens/NewChatScreen';
@@ -33,7 +34,7 @@ import ReferalScreen from './screens/ReferalScreen';
 import LoyaltyScreen from './screens/LoyaltyScreen';
 
 // Import context
-import { AuthProvider} from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider, useCart } from './context/CartContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -180,12 +181,15 @@ function AppNavigator() {
   const navigationRef = useRef(null);
   const notificationSubscriptionsRef = useRef(null);
 
+  // ✅ NOTIFICATION INITIALIZATION - Faqat user authenticated bo'lganda
   useEffect(() => {
     // Initialize notifications when user is authenticated
     if (isAuthenticated && !isLoading) {
+      console.log('[APP] User is authenticated, initializing notifications...');
       initializeNotifications(navigationRef.current).then((result) => {
         if (result) {
           notificationSubscriptionsRef.current = result.subscriptions;
+          console.log('[APP] ✅ Notifications initialized in AppNavigator');
         }
       });
     }
@@ -238,11 +242,6 @@ function AppNavigator() {
               options={{ title: 'Buyurtma detallari' }}
             />
             <Stack.Screen
-              name="QRScanner"
-              component={QRScannerScreen}
-              options={{ title: 'QR Kod Skaner', headerShown: false }}
-            />
-            <Stack.Screen
               name="ChatList"
               component={ChatListScreen}
               options={{ title: t('support') || 'Yordam', headerShown: false }}
@@ -290,19 +289,50 @@ function AppNavigator() {
 }
 
 export default function App() {
+  const navigationRef = useRef();
+  const notificationSubscriptions = useRef(null);
+
+  // ✅ GLOBAL NOTIFICATION INITIALIZATION - App ochilganda
+  useEffect(() => {
+    // Initialize notifications when app starts
+    const setupNotifications = async () => {
+      try {
+        console.log('[APP] 🚀 Initializing notifications globally...');
+        const result = await initializeNotifications(navigationRef.current);
+        if (result?.subscriptions) {
+          notificationSubscriptions.current = result.subscriptions;
+          console.log('[APP] ✅ Global notifications initialized successfully');
+        }
+      } catch (error) {
+        console.error('[APP] ❌ Notification setup error:', error);
+      }
+    };
+
+    setupNotifications();
+
+    // Cleanup when app closes
+    return () => {
+      if (notificationSubscriptions.current) {
+        removeNotificationListeners(notificationSubscriptions.current);
+      }
+    };
+  }, []);
+
   return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <CartProvider>
-              <AppNavigator />
-              <StatusBar style="auto" />
-            </CartProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    <SafeAreaProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <CartProvider>
+                <AppNavigator />
+                <StatusBar style="auto" />
+              </CartProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
 

@@ -21,9 +21,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function PriceAlertsScreen({ navigation, route }) {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -296,7 +299,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Narx Eslatmalari</Text>
         <TouchableOpacity
@@ -387,7 +390,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
                 <View style={[styles.productInfo, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.productName, { color: colors.text }]}>{selectedProduct.name}</Text>
                   <Text style={[styles.productPrice, { color: colors.primary }]}>
-                    Joriy narx: {(selectedProduct.retail_price || selectedProduct.regular_price || 0).toLocaleString('uz-UZ')} so'm
+                    Joriy narx: {getProductPrice(selectedProduct, user?.customer_type).toLocaleString('uz-UZ')} so'm
                   </Text>
                 </View>
 
@@ -446,7 +449,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
       </Modal>
 
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

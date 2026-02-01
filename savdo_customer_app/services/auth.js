@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import api from './api';
 import { API_ENDPOINTS } from '../config/api';
+// ✅ PUSH NOTIFICATION IMPORT
+import { getExpoPushToken, registerDeviceToken } from './notifications';
 
 const isWeb = Platform.OS === 'web';
 
@@ -47,8 +49,35 @@ const tokenStorage = {
   },
 };
 
+const normalizeCustomer = (userData = {}, fallbackCustomerId = null) => {
+  return {
+    customer_id: userData?.customer_id || userData?.id || fallbackCustomerId,
+    name: userData?.name || userData?.customer_name,
+    phone: userData?.phone,
+    customer_type: userData?.customer_type || 'regular',
+    ...userData,
+  };
+};
+
+export const storeAuthSession = async ({ token, user, customer_id }) => {
+  if (!token) {
+    throw new Error('Token topilmadi');
+  }
+
+  const normalizedUser = normalizeCustomer(user || {}, customer_id);
+
+  await tokenStorage.setItem('customer_token', token);
+  if (normalizedUser?.customer_id) {
+    await AsyncStorage.setItem('customer_id', normalizedUser.customer_id.toString());
+  }
+  await AsyncStorage.setItem('customer_data', JSON.stringify(normalizedUser));
+
+  return normalizedUser;
+};
+
 export const login = async (username, password) => {
   try {
+    console.log('[AUTH] 🔐 Starting login process...');
     const response = await api.post(API_ENDPOINTS.AUTH.LOGIN, {
       username,
       password,
@@ -57,28 +86,46 @@ export const login = async (username, password) => {
     console.log('[AUTH] Login response:', { 
       hasUserType: !!response.user_type, 
       userType: response.user_type,
-      hasToken: !!response.token 
+      hasToken: !!response.token,
+      hasUser: !!response.user,
+      customerId: response.customer_id || response.user?.customer_id || response.user?.id
     });
 
     // ONLY allow customer login - reject seller/admin logins
     if (response.user_type === 'customer') {
-      const { token, user, customer_id, customer_name } = response;
+      const { token, user, customer_id } = response;
+      const userData = await storeAuthSession({ token, user, customer_id });
 
-      // Store token
-      await tokenStorage.setItem('customer_token', token);
+      console.log('[AUTH] ✅ Customer data stored:', {
+        customer_id: userData.customer_id,
+        name: userData.name
+      });
 
-      // Prepare user data
-      const userData = user || {
-        customer_id: customer_id,
-        name: customer_name || user?.name,
-        phone: user?.phone,
-      };
-
-      // Store user data
-      if (customer_id) {
-        await AsyncStorage.setItem('customer_id', customer_id.toString());
+      // ✅✅✅ PUSH TOKEN REGISTER QILISH - TUZATILDI ✅✅✅
+      try {
+        console.log('[AUTH] 📱 Registering push token after login...');
+        
+        // Wait a bit for AsyncStorage to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const pushToken = await getExpoPushToken();
+        console.log('[AUTH] Push token obtained:', pushToken ? '✅' : '❌');
+        
+        if (pushToken) {
+          const registered = await registerDeviceToken(pushToken);
+          console.log('[AUTH] Push token registration result:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+          
+          if (!registered) {
+            console.error('[AUTH] ⚠️ Failed to register push token with server');
+          }
+        } else {
+          console.warn('[AUTH] ⚠️ Could not get push token');
+        }
+      } catch (pushError) {
+        console.error('[AUTH] ❌ Push token registration error:', pushError);
+        // ✅ TUZATILDI - Don't fail login if push notification fails
       }
-      await AsyncStorage.setItem('customer_data', JSON.stringify(userData));
+      // ✅✅✅ PUSH TOKEN QISM TUGADI ✅✅✅
 
       return { 
         success: true, 
@@ -89,15 +136,15 @@ export const login = async (username, password) => {
 
     // If user_type is not 'customer', it means it's a seller/admin login
     // Reject it with appropriate error message
-    console.warn('[AUTH] Login attempt with non-customer account:', response.user_type || 'seller/admin');
+    console.warn('[AUTH] ⚠️ Login attempt with non-customer account:', response.user_type || 'seller/admin');
     return { 
       success: false, 
       error: 'Bu login faqat mijozlar uchun. Siz sotuvchi yoki admin hisobidan foydalanmoqchisiz. Iltimos, mijozlar ro\'yxatida bo\'lgan login va parolni kiriting.' 
     };
   } catch (error) {
-    console.error('Login error:', error);
-    console.error('Login error response:', error.response?.data);
-    console.error('Login error status:', error.response?.status);
+    console.error('[AUTH] ❌ Login error:', error);
+    console.error('[AUTH] Login error response:', error.response?.data);
+    console.error('[AUTH] Login error status:', error.response?.status);
     
     // Extract error message from response
     let errorMessage = 'Noto\'g\'ri login yoki parol';
@@ -137,7 +184,7 @@ export const login = async (username, password) => {
       errorMessage = 'Noto\'g\'ri login yoki parol';
     }
     
-    console.log('Returning error message:', errorMessage);
+    console.log('[AUTH] Returning error message:', errorMessage);
     return { success: false, error: errorMessage };
   }
 };
@@ -149,7 +196,7 @@ export const logout = async () => {
     
     // Remove auth data
     await tokenStorage.removeItem('customer_token');
-    await AsyncStorage.multiRemove(['customer_id', 'customer_data']);
+    await AsyncStorage.multiRemove(['customer_id', 'customer_data', 'expo_push_token']);
     
     // Clear cart for this customer
     if (customerId) {
@@ -160,9 +207,10 @@ export const logout = async () => {
       }
     }
     
+    console.log('[AUTH] ✅ Logout successful');
     return { success: true };
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('[AUTH] ❌ Logout error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -204,6 +252,8 @@ export const verifyToken = async () => {
  */
 export const signup = async (customerData) => {
   try {
+    console.log('[SIGNUP] 📝 Starting registration process...');
+    
     // Create customer with username and password
     const customerResponse = await api.post(API_ENDPOINTS.CUSTOMERS.CREATE, {
       name: customerData.name,
@@ -212,9 +262,36 @@ export const signup = async (customerData) => {
       username: customerData.username,
       password: customerData.password,
       customer_type: 'regular', // Mijoz ilovasida yaratiladigan mijozlar oddiy mijoz bo'ladi
+      referal_code: customerData.referal_code || null,
     });
 
-    console.log('Customer created:', customerResponse);
+    console.log('[SIGNUP] ✅ Customer created:', customerResponse);
+
+    // ✅✅✅ SIGNUP QILGANDA HAM TOKEN REGISTER - TUZATILDI ✅✅✅
+    try {
+      if (customerResponse.id || customerResponse.customer_id) {
+        const customerId = customerResponse.customer_id || customerResponse.id;
+        console.log('[SIGNUP] 📱 Registering push token for new customer:', customerId);
+        
+        // Save customer_id temporarily for push token registration
+        await AsyncStorage.setItem('customer_id', customerId.toString());
+        
+        // Wait a bit
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const pushToken = await getExpoPushToken();
+        console.log('[SIGNUP] Push token obtained:', pushToken ? '✅' : '❌');
+        
+        if (pushToken) {
+          const registered = await registerDeviceToken(pushToken);
+          console.log('[SIGNUP] Push token registration:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+        }
+      }
+    } catch (pushError) {
+      console.error('[SIGNUP] ❌ Push token error:', pushError);
+      // ✅ TUZATILDI - Don't fail signup if push notification fails
+    }
+    // ✅✅✅ QISM TUGADI ✅✅✅
 
     return {
       success: true,
@@ -222,7 +299,7 @@ export const signup = async (customerData) => {
       message: 'Ro\'yxatdan o\'tdingiz!',
     };
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('[SIGNUP] ❌ Signup error:', error);
     const errorMessage = error.response?.data?.detail || error.message || 'Ro\'yxatdan o\'tishda xatolik';
     return { success: false, error: errorMessage };
   }

@@ -46,6 +46,10 @@ let totalOrders = 0;
 // Selected products for bulk operations
 let selectedProducts = new Set();
 
+// Product image state (multi-image uploads)
+let pendingProductImages = [];
+let existingProductImages = [];
+
 // Authentication state
 let currentAdminToken = null;
 let currentAdminUser = null;
@@ -337,6 +341,21 @@ function showPage(pageName) {
             break;
         case 'categories':
             loadCategoriesPage();
+            break;
+        case 'customer-favorites':
+            loadCustomerFavorites();
+            break;
+        case 'product-reviews':
+            loadProductReviews();
+            break;
+        case 'conversations':
+            loadConversations();
+            break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
+            break;
+        case 'customer-push':
+            resetBroadcastForm();
             break;
     }
 }
@@ -1204,6 +1223,7 @@ async function showAddProductModal() {
     document.getElementById('product-image-url').value = '';
     document.getElementById('product-total-pieces-input').value = '0';
     updateProductImagePreview('');
+    resetProductImagesState();
     // Load categories for dropdown - wait for it to complete
     await loadProductCategories();
     document.getElementById('product-modal').style.display = 'block';
@@ -1212,6 +1232,7 @@ async function showAddProductModal() {
 async function editProduct(id) {
     try {
         const product = await fetch(`${API_BASE}/products/${id}`).then(r => r.json());
+        resetProductImagesState();
         document.getElementById('product-modal-title').textContent = 'Mahsulotni Tahrirlash';
         document.getElementById('product-id').value = product.id;
         document.getElementById('product-name').value = product.name;
@@ -1221,7 +1242,7 @@ async function editProduct(id) {
         await loadProductCategories();
         
         // Set category_id if available, otherwise use category name
-        const categorySelect = document.getElementById('product-category-select');
+        const categorySelect = document.getElementById('product-category');
         if (categorySelect) {
             if (product.category_id) {
                 categorySelect.value = product.category_id;
@@ -1233,12 +1254,6 @@ async function editProduct(id) {
                     categorySelect.value = category.id;
                 }
             }
-        }
-        
-        // Legacy category field (for backward compatibility)
-        const categoryInput = document.getElementById('product-category');
-        if (categoryInput) {
-            categoryInput.value = product.category || '';
         }
         
         document.getElementById('product-brand').value = product.brand || '';
@@ -1264,6 +1279,7 @@ async function editProduct(id) {
         document.getElementById('product-regular-price').value = product.regular_price || 0;
         document.getElementById('product-packages-in-stock').value = product.packages_in_stock;
         document.getElementById('product-pieces-in-stock').value = product.pieces_in_stock;
+        await loadProductImagesForEdit(product.id);
         document.getElementById('product-modal').style.display = 'block';
     } catch (error) {
         alert('Xatolik: ' + error.message);
@@ -1320,6 +1336,178 @@ async function handleProductImageUpload(event) {
     } catch (error) {
         console.error('Image upload error:', error);
         alert('Rasm yuklashda xatolik: ' + error.message);
+    }
+}
+
+function getProductUploadHeaders() {
+    const headers = getAuthHeaders();
+    if (!headers['X-Seller-ID'] && currentAdminUser && currentAdminUser.id) {
+        headers['X-Seller-ID'] = currentAdminUser.id.toString();
+    }
+    return headers;
+}
+
+function resetProductImagesState() {
+    pendingProductImages = [];
+    existingProductImages = [];
+    const multiInput = document.getElementById('product-multi-image-file');
+    if (multiInput) {
+        multiInput.value = '';
+    }
+    renderProductImages();
+}
+
+function renderProductImages() {
+    const container = document.getElementById('product-images-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const allImages = [];
+    existingProductImages.forEach((img) => allImages.push({ ...img, type: 'existing' }));
+    pendingProductImages.forEach((file, index) => allImages.push({ file, index, type: 'pending' }));
+
+    if (allImages.length === 0) {
+        container.innerHTML = '<small style="color: var(--text-light);">Hozircha qo\'shimcha rasm yo\'q</small>';
+        return;
+    }
+
+    allImages.forEach((image) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: inline-flex; flex-direction: column; align-items: center; margin-right: 8px; margin-bottom: 8px;';
+
+        const img = document.createElement('img');
+        if (image.type === 'existing') {
+            const url = image.image_url && image.image_url.startsWith('http')
+                ? image.image_url
+                : `${window.location.origin}${image.image_url || ''}`;
+            img.src = url;
+        } else {
+            img.src = URL.createObjectURL(image.file);
+        }
+        img.style.cssText = 'width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color);';
+        wrapper.appendChild(img);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'O\'chirish';
+        removeBtn.style.cssText = 'margin-top: 4px; padding: 4px 6px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border-color); background: #fff; cursor: pointer;';
+        if (image.type === 'existing') {
+            removeBtn.onclick = () => deleteExistingProductImage(image.id);
+        } else {
+            removeBtn.onclick = () => removePendingProductImage(image.index);
+        }
+        wrapper.appendChild(removeBtn);
+
+        container.appendChild(wrapper);
+    });
+}
+
+function removePendingProductImage(index) {
+    pendingProductImages.splice(index, 1);
+    renderProductImages();
+}
+
+async function deleteExistingProductImage(imageId) {
+    const productId = document.getElementById('product-id')?.value;
+    if (!productId) return;
+    if (!confirm('Ushbu rasmni o\'chirmoqchimisiz?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/products/${productId}/images/${imageId}`, {
+            method: 'DELETE',
+            headers: getProductUploadHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Rasmni o\'chirishda xatolik');
+        }
+        await loadProductImagesForEdit(productId);
+    } catch (error) {
+        alert('Rasmni o\'chirishda xatolik: ' + error.message);
+    }
+}
+
+async function uploadProductImageFile(productId, file, displayOrder = 0) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('display_order', displayOrder.toString());
+    formData.append('is_primary', 'false');
+
+    const response = await fetch(`${API_BASE}/products/${productId}/images`, {
+        method: 'POST',
+        headers: getProductUploadHeaders(),
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(errorText || 'Rasm yuklashda xatolik');
+    }
+
+    return response.json();
+}
+
+async function handleMultiImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    const productId = document.getElementById('product-id')?.value;
+    const totalExisting = existingProductImages.length + pendingProductImages.length;
+    const maxImages = 4;
+    const availableSlots = maxImages - totalExisting;
+
+    if (availableSlots <= 0) {
+        alert(`Maksimal ${maxImages} ta rasm qo'shish mumkin.`);
+        event.target.value = '';
+        return;
+    }
+
+    const filesToHandle = files.slice(0, availableSlots);
+
+    if (productId) {
+        try {
+            for (let i = 0; i < filesToHandle.length; i += 1) {
+                await uploadProductImageFile(productId, filesToHandle[i], existingProductImages.length + i);
+            }
+            await loadProductImagesForEdit(productId);
+        } catch (error) {
+            alert('Rasm yuklashda xatolik: ' + error.message);
+        }
+    } else {
+        pendingProductImages = pendingProductImages.concat(filesToHandle);
+        renderProductImages();
+    }
+
+    event.target.value = '';
+}
+
+async function loadProductImagesForEdit(productId) {
+    if (!productId) return;
+    try {
+        const response = await fetch(`${API_BASE}/products/${productId}/images`);
+        if (!response.ok) {
+            existingProductImages = [];
+            renderProductImages();
+            return;
+        }
+        existingProductImages = await response.json();
+        renderProductImages();
+    } catch (error) {
+        console.error('Error loading product images:', error);
+    }
+}
+
+async function uploadPendingProductImages(productId) {
+    if (!pendingProductImages.length || !productId) return;
+    try {
+        for (let i = 0; i < pendingProductImages.length; i += 1) {
+            await uploadProductImageFile(productId, pendingProductImages[i], i);
+        }
+        pendingProductImages = [];
+        await loadProductImagesForEdit(productId);
+    } catch (error) {
+        console.error('Error uploading pending images:', error);
+        alert('Qo\'shimcha rasmlarni yuklashda xatolik: ' + error.message);
     }
 }
 
@@ -1428,7 +1616,14 @@ async function saveProduct(e) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
-        data.category = document.getElementById('product-category').value.trim() || null;
+        const categorySelect = document.getElementById('product-category');
+        const categoryValue = categorySelect ? categorySelect.value : '';
+        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
+        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
+            ? categorySelect.selectedOptions[0].textContent.trim()
+            : null;
+        data.category_id = !isNaN(categoryId) ? categoryId : null;
+        data.category = categoryName;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
@@ -1442,8 +1637,14 @@ async function saveProduct(e) {
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
-        const categoryValue = document.getElementById('product-category').value.trim();
-        if (categoryValue) data.category = categoryValue;
+        const categorySelect = document.getElementById('product-category');
+        const categoryValue = categorySelect ? categorySelect.value : '';
+        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
+        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
+            ? categorySelect.selectedOptions[0].textContent.trim()
+            : null;
+        if (!isNaN(categoryId) && categoryId) data.category_id = categoryId;
+        if (categoryName) data.category = categoryName;
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -1526,6 +1727,10 @@ async function saveProduct(e) {
         }
         
         console.log('Product saved:', result);
+
+        if (!id && result?.id) {
+            await uploadPendingProductImages(result.id);
+        }
         
         closeModal('product-modal');
         loadProducts();
@@ -5524,6 +5729,185 @@ async function loadSettings() {
     }
 }
 
+async function loadCustomerAppSettings() {
+    const defaults = {
+        enable_referals: false,
+        enable_loyalty: false,
+        enable_price_alerts: false,
+        enable_favorites: false,
+        enable_tags: false,
+        enable_reviews: false,
+        enable_location_selection: false,
+        enable_offline_orders: false,
+        referal_bonus_points: 100,
+        referal_bonus_percent: 5,
+        loyalty_points_per_sum: 0.01,
+        loyalty_point_value: 1
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/settings`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Mijoz ilovasi sozlamalarini yuklashda xatolik');
+        }
+        const settings = await response.json();
+        const resolved = { ...defaults, ...settings };
+
+        const setCheckbox = (id, value) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.checked = Boolean(value);
+            }
+        };
+
+        const setNumber = (id, value) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.value = value ?? '';
+            }
+        };
+
+        setCheckbox('enable-referals', resolved.enable_referals);
+        setCheckbox('enable-loyalty', resolved.enable_loyalty);
+        setCheckbox('enable-price-alerts', resolved.enable_price_alerts);
+        setCheckbox('enable-favorites', resolved.enable_favorites);
+        setCheckbox('enable-tags', resolved.enable_tags);
+        setCheckbox('enable-reviews', resolved.enable_reviews);
+        setCheckbox('enable-location-selection', resolved.enable_location_selection);
+        setCheckbox('enable-offline-orders', resolved.enable_offline_orders);
+
+        setNumber('referal-bonus-points', resolved.referal_bonus_points);
+        setNumber('referal-bonus-percent', resolved.referal_bonus_percent);
+        setNumber('loyalty-points-per-sum', resolved.loyalty_points_per_sum);
+        setNumber('loyalty-point-value', resolved.loyalty_point_value);
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        showToast(error.message || 'Sozlamalarni yuklashda xatolik', 'error');
+    }
+}
+
+async function saveCustomerAppSettings() {
+    try {
+        const getCheckbox = (id) => {
+            const input = document.getElementById(id);
+            return input ? input.checked : false;
+        };
+
+        const getNumber = (id, fallback = 0) => {
+            const input = document.getElementById(id);
+            if (!input) return fallback;
+            const parsed = parseFloat(input.value);
+            return Number.isNaN(parsed) ? fallback : parsed;
+        };
+
+        const payload = {
+            enable_referals: getCheckbox('enable-referals'),
+            enable_loyalty: getCheckbox('enable-loyalty'),
+            enable_price_alerts: getCheckbox('enable-price-alerts'),
+            enable_favorites: getCheckbox('enable-favorites'),
+            enable_tags: getCheckbox('enable-tags'),
+            enable_reviews: getCheckbox('enable-reviews'),
+            enable_location_selection: getCheckbox('enable-location-selection'),
+            enable_offline_orders: getCheckbox('enable-offline-orders'),
+            referal_bonus_points: Math.round(getNumber('referal-bonus-points', 100)),
+            referal_bonus_percent: getNumber('referal-bonus-percent', 5),
+            loyalty_points_per_sum: getNumber('loyalty-points-per-sum', 0.01),
+            loyalty_point_value: getNumber('loyalty-point-value', 1)
+        };
+
+        const response = await fetch(`${API_BASE}/settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+        }
+
+        showToast('Sozlamalar saqlandi', 'success');
+    } catch (error) {
+        console.error('Error saving customer app settings:', error);
+        showToast(error.message || 'Sozlamalarni saqlashda xatolik', 'error');
+    }
+}
+
+function resetBroadcastForm() {
+    const titleInput = document.getElementById('broadcast-title');
+    const bodyInput = document.getElementById('broadcast-body');
+    const linkInput = document.getElementById('broadcast-link');
+    if (titleInput) titleInput.value = '';
+    if (bodyInput) bodyInput.value = '';
+    if (linkInput) linkInput.value = '';
+}
+
+async function sendBroadcastNotification() {
+    try {
+        const title = document.getElementById('broadcast-title')?.value?.trim();
+        const body = document.getElementById('broadcast-body')?.value?.trim();
+        const link = document.getElementById('broadcast-link')?.value?.trim();
+
+        if (!title || !body) {
+            showToast('Sarlavha va matnni kiriting', 'error');
+            return;
+        }
+
+        const payload = {
+            title,
+            body,
+            data: {
+                type: 'promotion'
+            }
+        };
+
+        if (link) {
+            payload.data.link = link;
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.detail || 'Push yuborishda xatolik');
+        }
+
+        if (result.success === false) {
+            throw new Error(result.error || 'Push yuborishda xatolik');
+        }
+
+        const total = result.total ?? result.token_count ?? 0;
+        const successCount = result.success_count ?? 0;
+        const errorCount = result.error_count ?? 0;
+        let message = 'Push xabar yuborildi';
+        if (total || successCount || errorCount) {
+            message = `Push yuborildi: ${successCount}/${total}`;
+            if (errorCount) {
+                message += `, xato: ${errorCount}`;
+            }
+        }
+
+        showToast(message, errorCount ? 'warning' : 'success');
+        resetBroadcastForm();
+    } catch (error) {
+        console.error('Error sending broadcast notification:', error);
+        showToast(error.message || 'Push yuborishda xatolik', 'error');
+    }
+}
+
 function setupSettingsListeners() {
     // Logo file preview
     const logoFile = document.getElementById('logo-file');
@@ -6197,7 +6581,7 @@ async function loadProductCategories() {
         const categories = await response.json();
         
         // Update product category select
-        const select = document.getElementById('product-category-select');
+        const select = document.getElementById('product-category');
         if (select) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Kategoriya tanlash...</option>';
@@ -6222,7 +6606,7 @@ async function loadProductCategories() {
             }
             categories.forEach(category => {
                 const option = document.createElement('option');
-                option.value = category.id;
+                option.value = category.name;
                 option.textContent = category.name;
                 filterSelect.appendChild(option);
             });
@@ -6232,5 +6616,358 @@ async function loadProductCategories() {
         }
     } catch (error) {
         console.error('Error loading categories from API:', error);
+    }
+}
+
+// ==================== CUSTOMER FAVORITES ====================
+async function loadCustomerFavorites() {
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('favorites-search')?.value || '';
+        const url = search
+            ? `${API_BASE}/admin/favorites?search=${encodeURIComponent(search)}`
+            : `${API_BASE}/admin/favorites`;
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Sevimli mahsulotlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const favorites = data.favorites || [];
+
+        if (favorites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Sevimli mahsulotlar topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = favorites.map(fav => `
+            <tr>
+                <td>${fav.id}</td>
+                <td>
+                    ${escapeHtml(fav.customer_name || '-')}
+                    <div style="color: var(--text-light); font-size: 0.8rem;">${escapeHtml(fav.customer_phone || '')}</div>
+                </td>
+                <td>${escapeHtml(fav.product_name || '-')}</td>
+                <td>${formatMoney(fav.product_price || 0)}</td>
+                <td>${formatDate(fav.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+// ==================== PRODUCT REVIEWS ====================
+async function loadProductReviews() {
+    const tbody = document.getElementById('reviews-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('reviews-search')?.value || '';
+        const rating = document.getElementById('reviews-rating-filter')?.value || '';
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (rating) params.append('rating', rating);
+
+        const url = `${API_BASE}/admin/reviews${params.toString() ? `?${params.toString()}` : ''}`;
+        const response = await fetch(url, { headers: getAuthHeaders() });
+
+        if (!response.ok) {
+            throw new Error('Sharhlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const reviews = data.reviews || [];
+
+        if (reviews.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Sharhlar topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = reviews.map(review => `
+            <tr>
+                <td>${review.id}</td>
+                <td>${escapeHtml(review.customer_name || '-')}</td>
+                <td>${escapeHtml(review.product_name || '-')}</td>
+                <td>${'★'.repeat(review.rating)} (${review.rating})</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(review.comment || '')}">
+                    ${escapeHtml(review.comment || '-')}
+                </td>
+                <td>${formatDate(review.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm ${review.is_approved ? 'btn-secondary' : 'btn-success'}"
+                        onclick="setReviewApproval(${review.id}, ${review.is_approved ? 'false' : 'true'})"
+                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
+                        ${review.is_approved ? 'Bekor' : 'Tasdiqlash'}
+                    </button>
+                    <button class="btn btn-sm btn-danger"
+                        onclick="deleteReview(${review.id})"
+                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        O'chirish
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+async function setReviewApproval(reviewId, isApproved) {
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_approved: isApproved })
+        });
+
+        if (!response.ok) {
+            throw new Error('Sharh holatini yangilashda xatolik');
+        }
+
+        showToast(isApproved ? 'Sharh tasdiqlandi' : 'Sharh bekor qilindi', 'success');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error updating review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteReview(reviewId) {
+    if (!confirm('Sharhni o\'chirishni xohlaysizmi?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_deleted: true })
+        });
+
+        if (!response.ok) {
+            throw new Error('Sharhni o\'chirishda xatolik');
+        }
+
+        showToast('Sharh o\'chirildi', 'success');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// ==================== CUSTOMER CONVERSATIONS ====================
+async function loadConversations() {
+    const tbody = document.getElementById('conversations-tbody');
+    if (!tbody) return;
+
+    try {
+        const search = document.getElementById('conversations-search')?.value || '';
+        const status = document.getElementById('conversation-status-filter')?.value || '';
+        const url = status ? `${API_BASE}/conversations?status=${encodeURIComponent(status)}` : `${API_BASE}/conversations`;
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Suhbatlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        let conversations = data.conversations || [];
+
+        if (search) {
+            const term = search.toLowerCase();
+            conversations = conversations.filter(conv => {
+                const customerName = (conv.customer_name || '').toLowerCase();
+                const subject = (conv.subject || '').toLowerCase();
+                const lastMessage = (conv.last_message?.message || '').toLowerCase();
+                return customerName.includes(term) || subject.includes(term) || lastMessage.includes(term);
+            });
+        }
+
+        if (conversations.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Suhbatlar topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            open: 'Ochiq',
+            closed: 'Yopiq'
+        };
+
+        tbody.innerHTML = conversations.map(conv => {
+            const lastMessage = conv.last_message?.message
+                ? `${conv.last_message.sender_name || ''}: ${conv.last_message.message}`
+                : '-';
+            const unreadBadge = conv.unread_count > 0
+                ? `<span class="badge" style="background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">${conv.unread_count}</span>`
+                : '-';
+            return `
+                <tr>
+                    <td>${conv.id}</td>
+                    <td>${escapeHtml(conv.customer_name || '-')}</td>
+                    <td>${escapeHtml(conv.subject || '-')}</td>
+                    <td>${statusLabels[conv.status] || conv.status}</td>
+                    <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(lastMessage)}">
+                        ${escapeHtml(lastMessage)}
+                    </td>
+                    <td>${formatDate(conv.last_message_at || conv.updated_at)}</td>
+                    <td>${unreadBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
+                            Ko'rish
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="updateConversationStatus(${conv.id}, '${conv.status === 'closed' ? 'open' : 'closed'}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            ${conv.status === 'closed' ? 'Ochish' : 'Yopish'}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+    }
+}
+
+function openConversation(conversationId) {
+    const modal = document.getElementById('conversation-modal');
+    const input = document.getElementById('conversation-id');
+    if (input) {
+        input.value = conversationId;
+    }
+    if (modal) {
+        modal.style.display = 'block';
+    }
+    loadConversationMessages(conversationId);
+}
+
+function closeConversationModal() {
+    const modal = document.getElementById('conversation-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    const messageInput = document.getElementById('conversation-message-input');
+    if (messageInput) {
+        messageInput.value = '';
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    const container = document.getElementById('conversation-messages');
+    if (!container) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Xabarlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const messages = data.messages || [];
+        const conversation = data.conversation || {};
+
+        const titleEl = document.getElementById('conversation-modal-title');
+        if (titleEl) {
+            titleEl.textContent = `Suhbat #${conversationId}`;
+        }
+
+        const metaEl = document.getElementById('conversation-meta');
+        if (metaEl) {
+            const statusLabel = conversation.status === 'closed' ? 'Yopiq' : 'Ochiq';
+            metaEl.textContent = `Mijoz: ${conversation.customer_name || '-'} • Holat: ${statusLabel}`;
+        }
+
+        if (messages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: var(--text-light);">Xabarlar yo\'q</div>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => {
+            const messageClass = msg.sender_type === 'admin' ? 'admin' : 'customer';
+            return `
+                <div class="chat-message ${messageClass}">
+                    <div>
+                        <div class="chat-bubble ${messageClass}">${escapeHtml(msg.message || '')}</div>
+                        <div class="chat-meta">${escapeHtml(msg.sender_name || '')} • ${formatDate(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.scrollTop = container.scrollHeight;
+    } catch (error) {
+        console.error('Error loading conversation messages:', error);
+        container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
+    }
+}
+
+async function sendConversationMessage(event) {
+    event.preventDefault();
+    const conversationId = document.getElementById('conversation-id')?.value;
+    const messageInput = document.getElementById('conversation-message-input');
+    const message = messageInput?.value?.trim();
+
+    if (!conversationId || !message) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            method: 'POST',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+
+        if (!response.ok) {
+            throw new Error('Xabar yuborishda xatolik');
+        }
+
+        if (messageInput) {
+            messageInput.value = '';
+        }
+        await loadConversationMessages(conversationId);
+        loadConversations();
+    } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function updateConversationStatus(conversationId, status) {
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/status`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) {
+            throw new Error('Holatni yangilashda xatolik');
+        }
+
+        loadConversations();
+    } catch (error) {
+        console.error('Error updating conversation status:', error);
+        alert('Xatolik: ' + error.message);
     }
 }

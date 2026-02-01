@@ -24,7 +24,7 @@ import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
@@ -219,7 +219,7 @@ export default function CartScreen({ navigation }) {
 
   if (cartItems.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
           <Text style={[styles.emptyText, { color: colors.text }]}>Savatcha bo'sh</Text>
           <TouchableOpacity
@@ -230,12 +230,12 @@ export default function CartScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="cart" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={[styles.content, { paddingBottom: 300 }]}
@@ -410,7 +410,7 @@ export default function CartScreen({ navigation }) {
       </Modal>
 
       <Footer currentScreen="cart" />
-    </View>
+    </FooterAwareView>
   );
 }
 

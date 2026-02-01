@@ -21,7 +21,8 @@ class NotificationService:
         body: str,
         data: Optional[Dict] = None,
         sound: str = "default",
-        priority: str = "default"
+        priority: str = "default",
+        channel_id: str = "default"
     ) -> Dict:
         """
         Send push notification to multiple Expo push tokens
@@ -38,7 +39,13 @@ class NotificationService:
             Dict with success status and response data
         """
         if not tokens:
-            return {"success": False, "error": "No tokens provided"}
+            return {
+                "success": False,
+                "error": "No tokens provided",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
         messages = []
         for token in tokens:
@@ -48,9 +55,11 @@ class NotificationService:
                 "title": title,
                 "body": body,
                 "priority": priority,
+                "channelId": channel_id,
                 "data": data or {}
             }
             messages.append(message)
+        total = len(messages)
         
         try:
             headers = {
@@ -59,9 +68,10 @@ class NotificationService:
                 "Content-Type": "application/json"
             }
             
+            payload = messages[0] if len(messages) == 1 else messages
             response = requests.post(
                 NotificationService.EXPO_PUSH_URL,
-                json={"messages": messages},
+                json=payload,
                 headers=headers,
                 timeout=10
             )
@@ -70,27 +80,58 @@ class NotificationService:
                 result = response.json()
                 # Check for errors in individual messages
                 errors = []
-                if "data" in result:
-                    for item in result["data"]:
-                        if "status" in item and item["status"] == "error":
+                success_count = 0
+                error_count = 0
+                data_items = result.get("data")
+
+                if data_items is None or data_items == []:
+                    success_count = total
+                else:
+                    if isinstance(data_items, dict):
+                        data_items = [data_items]
+                    for item in data_items:
+                        status = item.get("status")
+                        if status == "ok":
+                            success_count += 1
+                        elif status == "error":
+                            error_count += 1
                             errors.append(item.get("message", "Unknown error"))
-                
+                        else:
+                            error_count += 1
+
+                if error_count == 0 and success_count == 0:
+                    success_count = total
+
+                response_payload = {
+                    "success": error_count == 0,
+                    "response": result,
+                    "total": total,
+                    "success_count": success_count,
+                    "error_count": error_count
+                }
+
                 if errors:
-                    return {
-                        "success": False,
-                        "error": "; ".join(errors),
-                        "response": result
-                    }
-                
-                return {"success": True, "response": result}
+                    response_payload["error"] = "; ".join(errors)
+
+                return response_payload
             else:
                 return {
                     "success": False,
                     "error": f"HTTP {response.status_code}: {response.text}",
-                    "response": None
+                    "response": None,
+                    "total": total,
+                    "success_count": 0,
+                    "error_count": total
                 }
         except Exception as e:
-            return {"success": False, "error": str(e), "response": None}
+            return {
+                "success": False,
+                "error": str(e),
+                "response": None,
+                "total": len(tokens),
+                "success_count": 0,
+                "error_count": len(tokens)
+            }
     
     @staticmethod
     def get_customer_tokens(db: Session, customer_id: int) -> List[str]:
@@ -107,21 +148,31 @@ class NotificationService:
         customer_id: int,
         title: str,
         body: str,
-        data: Optional[Dict] = None
+        data: Optional[Dict] = None,
+        sound: str = "default",
+        priority: str = "default"
     ) -> Dict:
         """Send notification to a specific customer"""
         tokens = NotificationService.get_customer_tokens(db, customer_id)
         if not tokens:
-            return {"success": False, "error": "No active tokens for customer"}
+            return {
+                "success": False,
+                "error": "No active tokens for customer",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
-        return NotificationService.send_notification(tokens, title, body, data)
+        return NotificationService.send_notification(tokens, title, body, data, sound=sound, priority=priority)
     
     @staticmethod
     def send_to_all_customers(
         db: Session,
         title: str,
         body: str,
-        data: Optional[Dict] = None
+        data: Optional[Dict] = None,
+        sound: str = "default",
+        priority: str = "default"
     ) -> Dict:
         """Send notification to all customers with active tokens"""
         tokens = db.query(CustomerDeviceToken.token).filter(
@@ -130,9 +181,15 @@ class NotificationService:
         
         token_list = [token[0] for token in tokens]
         if not token_list:
-            return {"success": False, "error": "No active tokens found"}
+            return {
+                "success": False,
+                "error": "No active tokens found",
+                "total": 0,
+                "success_count": 0,
+                "error_count": 0
+            }
         
-        return NotificationService.send_notification(token_list, title, body, data)
+        return NotificationService.send_notification(token_list, title, body, data, sound=sound, priority=priority)
     
     @staticmethod
     def send_order_status_update(
@@ -163,7 +220,15 @@ class NotificationService:
             "status": status
         }
         
-        return NotificationService.send_to_customer(db, customer_id, title, body, data)
+        return NotificationService.send_to_customer(
+            db,
+            customer_id,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_new_product_notification(
@@ -180,7 +245,14 @@ class NotificationService:
             "product_id": product_id
         }
         
-        return NotificationService.send_to_all_customers(db, title, body, data)
+        return NotificationService.send_to_all_customers(
+            db,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_price_alert(
@@ -205,7 +277,15 @@ class NotificationService:
             "new_price": new_price
         }
         
-        return NotificationService.send_to_customer(db, customer_id, title, body, data)
+        return NotificationService.send_to_customer(
+            db,
+            customer_id,
+            title,
+            body,
+            data,
+            sound="default",
+            priority="high"
+        )
     
     @staticmethod
     def send_promotion_notification(
@@ -218,4 +298,11 @@ class NotificationService:
         notification_data = data or {}
         notification_data["type"] = "promotion"
         
-        return NotificationService.send_to_all_customers(db, title, body, notification_data)
+        return NotificationService.send_to_all_customers(
+            db,
+            title,
+            body,
+            notification_data,
+            sound="default",
+            priority="high"
+        )

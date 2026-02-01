@@ -4,6 +4,7 @@ Product Service
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from sqlalchemy import func
+from datetime import datetime
 from models import Product
 from schemas import ProductCreate, ProductUpdate, ProductResponse
 
@@ -185,6 +186,52 @@ class ProductService:
             print(f"[ProductService.create_product] ERROR: {str(e)}")
             print(f"[ProductService.create_product] Traceback:\n{error_details}")
             raise e
+
+    @staticmethod
+    def product_to_response(product: Product) -> ProductResponse:
+        """Convert Product model to ProductResponse with computed fields"""
+        last_sold = None
+        days_since = None
+        is_slow = False
+        try:
+            last_sold = product.last_sold_date
+            days_since = product.days_since_last_sale
+            is_slow = product.is_slow_moving
+        except Exception as e:
+            print(f"Warning: Error computing properties for product {product.id}: {e}")
+
+        product_dict = {
+            "id": product.id,
+            "name": product.name,
+            "item_number": product.item_number,
+            "barcode": product.barcode,
+            "category": product.category,
+            "category_id": product.category_id,
+            "brand": product.brand,
+            "supplier": product.supplier,
+            "received_date": product.received_date,
+            "image_url": product.image_url,
+            "location": product.location,
+            "pieces_per_package": product.pieces_per_package,
+            "cost_price": max(0.0, product.cost_price or 0.0),
+            "wholesale_price": max(0.0, product.wholesale_price or 0.0),
+            "retail_price": max(0.0, product.retail_price or 0.0),
+            "regular_price": max(0.0, product.regular_price or 0.0),
+            "product_url": f"/product/{product.id}",
+            "packages_in_stock": max(0, product.packages_in_stock or 0),
+            "pieces_in_stock": max(0, product.pieces_in_stock or 0),
+            "total_pieces": product.total_pieces,
+            "total_value": product.total_value,
+            "total_value_cost": product.total_value_cost,
+            "total_value_wholesale": product.total_value_wholesale,
+            "last_sold_date": last_sold,
+            "days_since_last_sale": days_since,
+            "is_slow_moving": is_slow,
+            "created_at": product.created_at if product.created_at is not None else datetime.now(),
+            "updated_at": product.updated_at if product.updated_at is not None else datetime.now()
+        }
+
+        return ProductResponse.model_validate(product_dict)
     
     @staticmethod
     def get_products(
@@ -196,6 +243,7 @@ class ProductService:
         min_stock: int = 0,
         brand: Optional[str] = None,
         category: Optional[str] = None,
+        category_id: Optional[int] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
         min_price: Optional[float] = None,
@@ -220,9 +268,20 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
-        # Filter by category
+        # Filter by category (accept id or name)
+        if category_id is not None:
+            query = query.filter(Product.category_id == category_id)
         if category:
-            query = query.filter(Product.category.ilike(f"%{category}%"))
+            category_value = str(category).strip()
+            if category_value:
+                if category_value.isdigit():
+                    category_id = int(category_value)
+                    query = query.filter(
+                        (Product.category_id == category_id) |
+                        (Product.category.ilike(f"%{category_value}%"))
+                    )
+                else:
+                    query = query.filter(Product.category.ilike(f"%{category_value}%"))
         
         # Filter by supplier
         if supplier:
@@ -334,6 +393,7 @@ class ProductService:
         min_stock: int = 0,
         brand: Optional[str] = None,
         category: Optional[str] = None,
+        category_id: Optional[int] = None,
         supplier: Optional[str] = None,
         location: Optional[str] = None,
         min_price: Optional[float] = None,
@@ -353,8 +413,20 @@ class ProductService:
         if brand:
             query = query.filter(Product.brand.ilike(f"%{brand}%"))
         
+        if category_id is not None:
+            query = query.filter(Product.category_id == category_id)
+
         if category:
-            query = query.filter(Product.category.ilike(f"%{category}%"))
+            category_value = str(category).strip()
+            if category_value:
+                if category_value.isdigit():
+                    category_id = int(category_value)
+                    query = query.filter(
+                        (Product.category_id == category_id) |
+                        (Product.category.ilike(f"%{category_value}%"))
+                    )
+                else:
+                    query = query.filter(Product.category.ilike(f"%{category_value}%"))
         
         if supplier:
             query = query.filter(Product.supplier.ilike(f"%{supplier}%"))
@@ -415,7 +487,7 @@ class ProductService:
             del update_data['location']
         
         # Handle other optional string fields - convert empty strings to None
-        for field in ['brand', 'supplier', 'barcode', 'image_url']:
+        for field in ['brand', 'supplier', 'barcode', 'image_url', 'category']:
             if field in update_data:
                 if update_data[field] == '':
                     setattr(db_product, field, None)

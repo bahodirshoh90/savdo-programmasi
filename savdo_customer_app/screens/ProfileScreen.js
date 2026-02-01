@@ -18,12 +18,16 @@ import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 import Colors from '../constants/colors';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+// ✅ PUSH NOTIFICATION IMPORTS
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { getExpoPushToken, registerDeviceToken, requestNotificationPermissions } from '../services/notifications';
 
 export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
@@ -126,7 +130,6 @@ export default function ProfileScreen({ navigation }) {
     
     try {
       console.log('[LOGOUT] Step 2: Calling logout function from AuthContext...');
-      // Logout first - this will set isAuthenticated to false
       await logout();
       logoutSuccess = true;
       console.log('[LOGOUT] Step 3: Logout function completed successfully');
@@ -139,7 +142,6 @@ export default function ProfileScreen({ navigation }) {
         stack: error.stack,
       });
       
-      // Show error to user
       if (isWeb) {
         alert(`Chiqishda xatolik: ${errorMessage}`);
       } else {
@@ -147,8 +149,6 @@ export default function ProfileScreen({ navigation }) {
       }
     }
     
-    // Navigation should happen automatically when isAuthenticated changes
-    // But we'll also try manual navigation as backup
     console.log('[LOGOUT] Step 4: Attempting navigation reset...');
     let navigationSuccess = false;
     
@@ -156,7 +156,6 @@ export default function ProfileScreen({ navigation }) {
       try {
         if (navigation) {
           console.log('[LOGOUT] Step 5: Navigation object available');
-          // Try to get root navigator
           let rootNav = navigation;
           try {
             const parent1 = navigation.getParent?.();
@@ -207,12 +206,10 @@ export default function ProfileScreen({ navigation }) {
         console.error('[LOGOUT] Error message:', e.message);
         console.error('[LOGOUT] Error stack:', e.stack);
         
-        // Show navigation error to user if logout was successful but navigation failed
         if (logoutSuccess && !navigationSuccess) {
           const navErrorMsg = `Chiqish muvaffaqiyatli, lekin sahifaga o'tishda xatolik: ${e.message || 'Noma\'lum xatolik'}`;
           if (isWeb) {
             alert(navErrorMsg);
-            // Force page reload as last resort
             window.location.href = '/';
           } else {
             Alert.alert('Xatolik', navErrorMsg);
@@ -223,7 +220,6 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleChangePassword = async () => {
-    // Validation
     if (!passwordData.currentPassword.trim()) {
       Alert.alert('Xatolik', 'Joriy parolni kiriting');
       return;
@@ -248,11 +244,6 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
 
-      // Note: Current password verification would require a separate endpoint
-      // For now, we'll rely on backend validation. In production, you might want
-      // to add a dedicated password verification endpoint
-
-      // Update password
       const updateData = {
         password: passwordData.newPassword,
       };
@@ -323,7 +314,6 @@ export default function ProfileScreen({ navigation }) {
   const handleLogout = async () => {
     console.log('[LOGOUT] Logout button pressed');
     
-    // For web platform, use window.confirm instead of Alert.alert for better compatibility
     const Platform = require('react-native').Platform;
     const isWeb = Platform.OS === 'web';
     
@@ -334,7 +324,6 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
       console.log('[LOGOUT] User confirmed logout (web)');
-      // For web, perform logout directly
       performLogout();
     } else {
       Alert.alert(
@@ -370,11 +359,14 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <Text style={styles.title}>Profil</Text>
       </View>
+
+      {/* ✅ ADVANCED DEBUG PUSH TOKEN COMPONENT */}
+      <AdvancedDebugPushToken />
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Shaxsiy ma'lumotlar</Text>
@@ -467,7 +459,6 @@ export default function ProfileScreen({ navigation }) {
         <TouchableOpacity
           style={styles.settingButton}
           onPress={() => {
-            // Toggle theme
             const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark';
             toggleTheme(newTheme);
           }}
@@ -493,7 +484,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
-        {/* Language Setting */}
         <TouchableOpacity
           style={styles.settingButton}
           onPress={() => {
@@ -572,7 +562,6 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Referal and Loyalty */}
       <View style={[styles.section, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.menuItem}
@@ -598,7 +587,6 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Contact Admin Modal */}
       <Modal
         visible={showContactModal}
         transparent={true}
@@ -673,7 +661,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Password Change Modal */}
       <Modal
         visible={showPasswordModal}
         transparent={true}
@@ -755,9 +742,263 @@ export default function ProfileScreen({ navigation }) {
       </Modal>
       </ScrollView>
       <Footer currentScreen="profile" />
+    </FooterAwareView>
+  );
+}
+
+// ✅✅✅ ADVANCED DEBUG PUSH TOKEN COMPONENT - ProfileScreen ichida ✅✅✅
+function AdvancedDebugPushToken() {
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState({});
+  
+  const updateResult = (key, value) => {
+    setResults(prev => ({ ...prev, [key]: value }));
+  };
+  
+  const testStep1_CheckCustomerId = async () => {
+    try {
+      const customerId = await AsyncStorage.getItem('customer_id');
+      updateResult('customerId', customerId || 'YO\'Q ❌');
+      console.log('1. Customer ID:', customerId);
+      
+      if (!customerId) {
+        Alert.alert('Xatolik', 'Customer ID topilmadi! Login qiling.');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Step 1 error:', e);
+      updateResult('customerId', 'ERROR: ' + e.message);
+      return false;
+    }
+  };
+  
+  const testStep2_CheckPermissions = async () => {
+    try {
+      console.log('2. Checking permissions...');
+      const { status } = await Notifications.getPermissionsAsync();
+      updateResult('permission', status);
+      console.log('2. Permission status:', status);
+      
+      if (status !== 'granted') {
+        console.log('2. Requesting permissions...');
+        const result = await Notifications.requestPermissionsAsync();
+        updateResult('permission', result.status);
+        console.log('2. Permission result:', result.status);
+        
+        if (result.status !== 'granted') {
+          Alert.alert('Xatolik', 'Notification ruxsati berilmadi!\n\nSettings > Apps > YourApp > Permissions > Notifications ni yoqing.');
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('Step 2 error:', e);
+      updateResult('permission', 'ERROR: ' + e.message);
+      Alert.alert('Xatolik', 'Permission tekshirishda xatolik: ' + e.message);
+      return false;
+    }
+  };
+  
+  const testStep3_CheckProjectId = async () => {
+    try {
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || 
+                       Constants?.easConfig?.projectId;
+      updateResult('projectId', projectId || 'YO\'Q ⚠️');
+      console.log('3. Project ID:', projectId);
+      
+      if (!projectId) {
+        Alert.alert('Ogohlantirish', 'Project ID topilmadi. Bu muammo keltirib chiqarishi mumkin.');
+      }
+      return true;
+    } catch (e) {
+      console.error('Step 3 error:', e);
+      updateResult('projectId', 'ERROR: ' + e.message);
+      return true;
+    }
+  };
+  
+  const testStep4_GetToken = async () => {
+    try {
+      console.log('4. Getting push token...');
+      const token = await getExpoPushToken();
+      
+      if (!token) {
+        updateResult('token', 'YO\'Q ❌');
+        Alert.alert('Xatolik', 'Push token olinmadi!\n\nConsoleni tekshiring.');
+        return null;
+      }
+      
+      updateResult('token', token.substring(0, 40) + '...');
+      console.log('4. Token:', token);
+      return token;
+    } catch (e) {
+      console.error('Step 4 error:', e);
+      updateResult('token', 'ERROR: ' + e.message);
+      Alert.alert('Xatolik', 'Token olishda xatolik: ' + e.message);
+      return null;
+    }
+  };
+  
+  const testStep5_RegisterToken = async (token) => {
+    try {
+      console.log('5. Registering token...');
+      const registered = await registerDeviceToken(token);
+      updateResult('registered', registered ? 'HA ✅' : 'YO\'Q ❌');
+      console.log('5. Registration result:', registered);
+      
+      if (!registered) {
+        Alert.alert('Xatolik', 'Token register qilishda xatolik!\n\nBackend loglarini tekshiring.');
+        return false;
+      }
+      
+      return true;
+    } catch (e) {
+      console.error('Step 5 error:', e);
+      updateResult('registered', 'ERROR: ' + e.message);
+      Alert.alert('Xatolik', 'Register qilishda xatolik: ' + e.message);
+      return false;
+    }
+  };
+  
+  const runFullTest = async () => {
+    setLoading(true);
+    setResults({});
+    
+    try {
+      console.log('=== FULL PUSH TOKEN TEST START ===');
+      
+      const hasCustomerId = await testStep1_CheckCustomerId();
+      if (!hasCustomerId) {
+        setLoading(false);
+        return;
+      }
+      
+      const hasPermission = await testStep2_CheckPermissions();
+      if (!hasPermission) {
+        setLoading(false);
+        return;
+      }
+      
+      await testStep3_CheckProjectId();
+      
+      const token = await testStep4_GetToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
+      const registered = await testStep5_RegisterToken(token);
+      
+      if (registered) {
+        Alert.alert(
+          'Muvaffaqiyat! ✅', 
+          'Push token muvaffaqiyatli ro\'yxatdan o\'tdi!\n\nEndi admin paneldan push xabar yuboring.'
+        );
+      }
+      
+      console.log('=== FULL PUSH TOKEN TEST END ===');
+    } catch (e) {
+      console.error('Full test error:', e);
+      Alert.alert('Xatolik', 'Test davomida xatolik: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <View style={advDebugStyles.container}>
+      <Text style={advDebugStyles.title}>🔔 Push Token Testi</Text>
+      
+      <ScrollView style={advDebugStyles.resultsContainer}>
+        {Object.keys(results).length > 0 && (
+          <>
+            <Text style={advDebugStyles.resultsTitle}>Natijalar:</Text>
+            {Object.entries(results).map(([key, value]) => (
+              <View key={key} style={advDebugStyles.resultRow}>
+                <Text style={advDebugStyles.resultKey}>{key}:</Text>
+                <Text style={advDebugStyles.resultValue}>{value}</Text>
+              </View>
+            ))}
+          </>
+        )}
+      </ScrollView>
+      
+      <TouchableOpacity 
+        onPress={runFullTest} 
+        style={[advDebugStyles.button, loading && advDebugStyles.buttonDisabled]}
+        disabled={loading}
+      >
+        <Text style={advDebugStyles.buttonText}>
+          {loading ? 'Testing...' : 'TO\'LIQ TEST BOSHLASH'}
+        </Text>
+      </TouchableOpacity>
+      
+      <Text style={advDebugStyles.hint}>
+        Console loglarini tekshiring (adb logcat)
+      </Text>
     </View>
   );
 }
+
+const advDebugStyles = StyleSheet.create({
+  container: {
+    padding: 20,
+    backgroundColor: '#f0f0f0',
+    margin: 10,
+    borderRadius: 10,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  resultsContainer: {
+    maxHeight: 200,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  resultsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    paddingVertical: 4,
+  },
+  resultKey: {
+    fontWeight: '600',
+    width: 100,
+  },
+  resultValue: {
+    flex: 1,
+    fontSize: 12,
+  },
+  button: {
+    backgroundColor: '#4f46e5',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -881,6 +1122,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   changePasswordButtonText: {
     color: Colors.surface,
@@ -946,5 +1189,54 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  settingButton: {
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingIcon: {
+    marginRight: 12,
+  },
+  settingContent: {
+    flex: 1,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  settingValue: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  paymentHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  paymentHistoryButtonText: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
   },
 });
