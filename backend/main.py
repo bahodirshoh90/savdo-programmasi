@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import or_
 from typing import List, Optional
 import uvicorn
 from datetime import datetime, timedelta
@@ -88,6 +89,44 @@ try:
         if 'work_days' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
+
+        # Customer app feature toggles and settings
+        if 'enable_referals' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_referals BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_referals = 1 WHERE enable_referals IS NULL"))
+        if 'enable_loyalty' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_loyalty BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_loyalty = 1 WHERE enable_loyalty IS NULL"))
+        if 'enable_price_alerts' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_price_alerts BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_price_alerts = 1 WHERE enable_price_alerts IS NULL"))
+        if 'enable_favorites' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_favorites BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_favorites = 1 WHERE enable_favorites IS NULL"))
+        if 'enable_tags' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_tags BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_tags = 1 WHERE enable_tags IS NULL"))
+        if 'enable_reviews' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_reviews BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_reviews = 1 WHERE enable_reviews IS NULL"))
+        if 'enable_location_selection' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_location_selection = 1 WHERE enable_location_selection IS NULL"))
+        if 'enable_offline_orders' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_offline_orders = 1 WHERE enable_offline_orders IS NULL"))
+        if 'referal_bonus_points' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_points INTEGER"))
+            conn.execute(text("UPDATE settings SET referal_bonus_points = 100 WHERE referal_bonus_points IS NULL"))
+        if 'referal_bonus_percent' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_percent INTEGER"))
+            conn.execute(text("UPDATE settings SET referal_bonus_percent = 5 WHERE referal_bonus_percent IS NULL"))
+        if 'loyalty_points_per_sum' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_points_per_sum REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_points_per_sum = 0.01 WHERE loyalty_points_per_sum IS NULL"))
+        if 'loyalty_point_value' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL"))
+            conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
         
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
@@ -2359,6 +2398,10 @@ def get_settings(db: Session = Depends(get_db)):
             "logo_url": settings.logo_url,
             "receipt_footer_text": settings.receipt_footer_text,
             "receipt_show_logo": settings.receipt_show_logo,
+            "notify_new_sale": settings.notify_new_sale,
+            "notify_low_stock": settings.notify_low_stock,
+            "notify_debt_limit": settings.notify_debt_limit,
+            "notify_daily_report": settings.notify_daily_report,
             "created_at": settings.created_at,
             "updated_at": settings.updated_at,
         }
@@ -2370,6 +2413,30 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["work_end_time"] = settings.work_end_time
         if hasattr(settings, 'work_days'):
             response_data["work_days"] = settings.work_days
+        if hasattr(settings, 'enable_referals'):
+            response_data["enable_referals"] = settings.enable_referals
+        if hasattr(settings, 'enable_loyalty'):
+            response_data["enable_loyalty"] = settings.enable_loyalty
+        if hasattr(settings, 'enable_price_alerts'):
+            response_data["enable_price_alerts"] = settings.enable_price_alerts
+        if hasattr(settings, 'enable_favorites'):
+            response_data["enable_favorites"] = settings.enable_favorites
+        if hasattr(settings, 'enable_tags'):
+            response_data["enable_tags"] = settings.enable_tags
+        if hasattr(settings, 'enable_reviews'):
+            response_data["enable_reviews"] = settings.enable_reviews
+        if hasattr(settings, 'enable_location_selection'):
+            response_data["enable_location_selection"] = settings.enable_location_selection
+        if hasattr(settings, 'enable_offline_orders'):
+            response_data["enable_offline_orders"] = settings.enable_offline_orders
+        if hasattr(settings, 'referal_bonus_points'):
+            response_data["referal_bonus_points"] = settings.referal_bonus_points
+        if hasattr(settings, 'referal_bonus_percent'):
+            response_data["referal_bonus_percent"] = settings.referal_bonus_percent
+        if hasattr(settings, 'loyalty_points_per_sum'):
+            response_data["loyalty_points_per_sum"] = settings.loyalty_points_per_sum
+        if hasattr(settings, 'loyalty_point_value'):
+            response_data["loyalty_point_value"] = settings.loyalty_point_value
         
         return SettingsResponse(**response_data)
     except Exception as e:
@@ -2793,6 +2860,398 @@ def send_notification(
             db, request.title, request.body, request.data
         )
         return result
+
+
+@app.get("/api/notifications/stats")
+def get_notification_stats(
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("notifications.send"))
+):
+    """Get push token statistics (admin only)"""
+    tokens = db.query(CustomerDeviceToken).filter(CustomerDeviceToken.is_active == True).all()
+    total_tokens = len(tokens)
+    expo_tokens = sum(1 for token in tokens if NotificationService.is_expo_push_token(token.token))
+    fcm_tokens = total_tokens - expo_tokens
+    unique_customers = len({token.customer_id for token in tokens})
+
+    return {
+        "total_tokens": total_tokens,
+        "expo_tokens": expo_tokens,
+        "fcm_tokens": fcm_tokens,
+        "active_customers": unique_customers
+    }
+
+
+# ==================== ADMIN CUSTOMER APP REPORTS ====================
+
+@app.get("/api/admin/referals")
+def admin_get_referals(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get referal data for admin panel"""
+    referrer = aliased(Customer)
+    referred = aliased(Customer)
+    query = db.query(Referal, referrer, referred).join(
+        referrer, Referal.referrer_id == referrer.id
+    ).outerjoin(
+        referred, Referal.referred_id == referred.id
+    )
+
+    if status:
+        query = query.filter(Referal.status == status)
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            referrer.name.ilike(like) |
+            referrer.phone.ilike(like) |
+            Referal.referal_code.ilike(like) |
+            Referal.phone.ilike(like) |
+            referred.name.ilike(like) |
+            referred.phone.ilike(like)
+        )
+
+    rows = query.order_by(Referal.created_at.desc()).all()
+    results = []
+    for referal, referrer_obj, referred_obj in rows:
+        results.append({
+            "id": referal.id,
+            "referal_code": referal.referal_code,
+            "status": referal.status,
+            "bonus_given": referal.bonus_given,
+            "bonus_amount": referal.bonus_amount,
+            "created_at": referal.created_at,
+            "completed_at": referal.completed_at,
+            "referrer_id": referal.referrer_id,
+            "referrer_name": referrer_obj.name if referrer_obj else None,
+            "referrer_phone": referrer_obj.phone if referrer_obj else None,
+            "referred_id": referal.referred_id,
+            "referred_name": referred_obj.name if referred_obj else None,
+            "referred_phone": referred_obj.phone if referred_obj else None,
+            "invited_phone": referal.phone
+        })
+
+    return results
+
+
+@app.get("/api/admin/loyalty")
+def admin_get_loyalty(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get loyalty accounts for admin panel"""
+    query = db.query(LoyaltyPoint, Customer).join(
+        Customer, LoyaltyPoint.customer_id == Customer.id
+    )
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            Customer.name.ilike(like) |
+            Customer.phone.ilike(like)
+        )
+
+    rows = query.order_by(LoyaltyPoint.updated_at.desc()).all()
+    return [
+        {
+            "id": loyalty.id,
+            "customer_id": loyalty.customer_id,
+            "customer_name": customer.name,
+            "customer_phone": customer.phone,
+            "points": loyalty.points,
+            "total_earned": loyalty.total_earned,
+            "total_spent": loyalty.total_spent,
+            "vip_level": loyalty.vip_level,
+            "updated_at": loyalty.updated_at,
+            "created_at": loyalty.created_at
+        }
+        for loyalty, customer in rows
+    ]
+
+
+@app.get("/api/admin/price-alerts")
+def admin_get_price_alerts(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get price alerts for admin panel"""
+    query = db.query(PriceAlert, Customer, Product).join(
+        Customer, PriceAlert.customer_id == Customer.id
+    ).join(
+        Product, PriceAlert.product_id == Product.id
+    )
+
+    if status == "active":
+        query = query.filter(PriceAlert.is_active == True)
+    elif status == "inactive":
+        query = query.filter(PriceAlert.is_active == False)
+    elif status == "notified":
+        query = query.filter(PriceAlert.notified == True)
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            Customer.name.ilike(like) |
+            Customer.phone.ilike(like) |
+            Product.name.ilike(like)
+        )
+
+    rows = query.order_by(PriceAlert.created_at.desc()).all()
+    results = []
+    for alert, customer, product in rows:
+        current_price = product.regular_price
+        if customer and customer.customer_type:
+            if customer.customer_type.value == "wholesale":
+                current_price = product.wholesale_price
+            elif customer.customer_type.value == "retail":
+                current_price = product.retail_price
+
+        results.append({
+            "id": alert.id,
+            "customer_id": alert.customer_id,
+            "customer_name": customer.name if customer else None,
+            "customer_phone": customer.phone if customer else None,
+            "product_id": alert.product_id,
+            "product_name": product.name,
+            "current_price": current_price,
+            "target_price": alert.target_price,
+            "is_active": alert.is_active,
+            "notified": alert.notified,
+            "notified_at": alert.notified_at,
+            "created_at": alert.created_at,
+            "updated_at": alert.updated_at
+        })
+
+    return results
+
+
+@app.get("/api/admin/favorites")
+def admin_get_favorites(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get favorites for admin panel"""
+    query = db.query(Favorite, Customer, Product).join(
+        Customer, Favorite.customer_id == Customer.id
+    ).join(
+        Product, Favorite.product_id == Product.id
+    )
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            Customer.name.ilike(like) |
+            Customer.phone.ilike(like) |
+            Product.name.ilike(like)
+        )
+
+    rows = query.order_by(Favorite.created_at.desc()).all()
+    return [
+        {
+            "id": favorite.id,
+            "customer_id": favorite.customer_id,
+            "customer_name": customer.name,
+            "customer_phone": customer.phone,
+            "product_id": favorite.product_id,
+            "product_name": product.name,
+            "product_price": product.regular_price,
+            "created_at": favorite.created_at
+        }
+        for favorite, customer, product in rows
+    ]
+
+
+@app.get("/api/admin/product-tags")
+def admin_get_product_tags(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get personal product tags for admin panel"""
+    query = db.query(CustomerProductTag, Customer, Product).join(
+        Customer, CustomerProductTag.customer_id == Customer.id
+    ).join(
+        Product, CustomerProductTag.product_id == Product.id
+    )
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            Customer.name.ilike(like) |
+            Customer.phone.ilike(like) |
+            Product.name.ilike(like) |
+            CustomerProductTag.tag.ilike(like)
+        )
+
+    rows = query.order_by(CustomerProductTag.created_at.desc()).all()
+    return [
+        {
+            "id": tag.id,
+            "customer_id": tag.customer_id,
+            "customer_name": customer.name,
+            "customer_phone": customer.phone,
+            "product_id": tag.product_id,
+            "product_name": product.name,
+            "tag": tag.tag,
+            "created_at": tag.created_at
+        }
+        for tag, customer, product in rows
+    ]
+
+
+@app.get("/api/admin/reviews")
+def admin_get_reviews(
+    search: Optional[str] = None,
+    rating: Optional[int] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get product reviews for admin panel"""
+    query = db.query(ProductReview, Product, Customer).join(
+        Product, ProductReview.product_id == Product.id
+    ).outerjoin(
+        Customer, ProductReview.customer_id == Customer.id
+    )
+
+    if rating:
+        query = query.filter(ProductReview.rating == rating)
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(
+            Product.name.ilike(like) |
+            ProductReview.customer_name.ilike(like) |
+            ProductReview.comment.ilike(like)
+        )
+
+    rows = query.order_by(ProductReview.created_at.desc()).all()
+    return [
+        {
+            "id": review.id,
+            "product_id": review.product_id,
+            "product_name": product.name,
+            "customer_id": review.customer_id,
+            "customer_name": review.customer_name,
+            "customer_phone": customer.phone if customer else None,
+            "rating": review.rating,
+            "comment": review.comment,
+            "is_verified_purchase": review.is_verified_purchase,
+            "helpful_count": review.helpful_count,
+            "is_approved": review.is_approved,
+            "is_deleted": review.is_deleted,
+            "created_at": review.created_at
+        }
+        for review, product, customer in rows
+    ]
+
+
+@app.patch("/api/admin/reviews/{review_id}")
+def admin_update_review(
+    review_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Moderate product reviews (approve/reject/delete)"""
+    review = db.query(ProductReview).filter(ProductReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    if "is_approved" in payload:
+        review.is_approved = bool(payload["is_approved"])
+    if "is_deleted" in payload:
+        review.is_deleted = bool(payload["is_deleted"])
+
+    db.commit()
+    db.refresh(review)
+    return {"success": True, "review_id": review.id}
+
+
+@app.get("/api/admin/payments")
+def admin_get_payments(
+    search: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("customers.view"))
+):
+    """Get customer payment history for admin panel (from orders)"""
+    query = db.query(Order, Customer).outerjoin(
+        Customer, Order.customer_id == Customer.id
+    )
+
+    if search:
+        like = f"%{search.strip()}%"
+        filters = [
+            Customer.name.ilike(like),
+            Customer.phone.ilike(like)
+        ]
+        try:
+            order_id_filter = int(search.strip())
+            filters.append(Order.id == order_id_filter)
+        except ValueError:
+            pass
+        query = query.filter(or_(*filters))
+
+    orders = query.order_by(Order.created_at.desc()).all()
+    results = []
+
+    for order, customer in orders:
+        if not order.payment_method or order.total_amount is None:
+            continue
+
+        if start_date or end_date:
+            order_date = order.created_at
+            if isinstance(order_date, datetime):
+                if order_date.tzinfo is not None:
+                    from utils import UZBEKISTAN_TZ
+                    order_date = order_date.astimezone(UZBEKISTAN_TZ)
+
+                if start_date:
+                    try:
+                        start_str = start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date
+                        start_dt = datetime.fromisoformat(start_str)
+                        if start_dt.tzinfo is None:
+                            from utils import UZBEKISTAN_TZ
+                            start_dt = start_dt.replace(tzinfo=UZBEKISTAN_TZ)
+                        if order_date < start_dt:
+                            continue
+                    except (ValueError, AttributeError):
+                        pass
+
+                if end_date:
+                    try:
+                        end_str = end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date
+                        end_dt = datetime.fromisoformat(end_str)
+                        if end_dt.tzinfo is None:
+                            from utils import UZBEKISTAN_TZ
+                            end_dt = end_dt.replace(hour=23, minute=59, second=59, tzinfo=UZBEKISTAN_TZ)
+                        else:
+                            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+                        if order_date > end_dt:
+                            continue
+                    except (ValueError, AttributeError):
+                        pass
+
+        results.append({
+            "order_id": order.id,
+            "customer_id": order.customer_id,
+            "customer_name": customer.name if customer else None,
+            "customer_phone": customer.phone if customer else None,
+            "amount": order.total_amount,
+            "payment_method": order.payment_method.value if hasattr(order.payment_method, "value") else str(order.payment_method),
+            "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+            "created_at": order.created_at
+        })
+
+    return results
 
 
 @app.post("/api/auth/social-login")

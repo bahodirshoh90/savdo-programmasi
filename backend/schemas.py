@@ -298,7 +298,7 @@ class ScanCodeRequest(BaseModel):
 
 class DeviceTokenRequest(BaseModel):
     """Request to register/update device token for push notifications"""
-    token: str = Field(..., min_length=1, max_length=500, description="Expo push token")
+    token: str = Field(..., min_length=1, max_length=500, description="Expo or FCM push token")
     device_id: Optional[str] = Field(None, max_length=200, description="Device identifier")
     platform: Optional[str] = Field(None, max_length=50, description="Platform: ios, android, web")
 
@@ -731,6 +731,20 @@ class SettingsBase(BaseModel):
     notify_low_stock: bool = True  # Kam qolgan mahsulotlar
     notify_debt_limit: bool = True  # Qarz limiti oshganlar
     notify_daily_report: bool = True  # Kunlik hisobotlar
+
+    enable_referals: bool = True
+    enable_loyalty: bool = True
+    enable_price_alerts: bool = True
+    enable_favorites: bool = True
+    enable_tags: bool = True
+    enable_reviews: bool = True
+    enable_location_selection: bool = True
+    enable_offline_orders: bool = True
+
+    referal_bonus_points: int = 100
+    referal_bonus_percent: int = 5
+    loyalty_points_per_sum: float = 0.01
+    loyalty_point_value: float = 1.0
 
 
 class SettingsUpdate(SettingsBase):

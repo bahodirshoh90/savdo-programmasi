@@ -338,6 +338,33 @@ function showPage(pageName) {
         case 'categories':
             loadCategoriesPage();
             break;
+        case 'push-notifications':
+            loadPushNotificationsPage();
+            break;
+        case 'customer-referals':
+            loadCustomerReferals();
+            break;
+        case 'customer-loyalty':
+            loadCustomerLoyalty();
+            break;
+        case 'customer-price-alerts':
+            loadCustomerPriceAlerts();
+            break;
+        case 'customer-favorites':
+            loadCustomerFavorites();
+            break;
+        case 'customer-tags':
+            loadCustomerTags();
+            break;
+        case 'product-reviews':
+            loadProductReviews();
+            break;
+        case 'customer-payments':
+            loadCustomerPayments();
+            break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
+            break;
     }
 }
 
@@ -6233,4 +6260,640 @@ async function loadProductCategories() {
     } catch (error) {
         console.error('Error loading categories from API:', error);
     }
+}
+
+// ==================== PUSH NOTIFICATIONS (ADMIN) ====================
+
+function resetPushStatus() {
+    const statusEl = document.getElementById('push-status');
+    if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+        statusEl.classList.remove('success-message');
+        statusEl.classList.add('error-message');
+    }
+}
+
+async function loadPushNotificationsPage() {
+    resetPushStatus();
+    await loadPushNotificationStats();
+}
+
+async function loadPushNotificationStats() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/stats`, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Push statistikani yuklashda xatolik');
+        }
+        const data = await response.json();
+        const totalEl = document.getElementById('push-total-tokens');
+        const expoEl = document.getElementById('push-expo-tokens');
+        const fcmEl = document.getElementById('push-fcm-tokens');
+        const customersEl = document.getElementById('push-active-customers');
+        if (totalEl) totalEl.textContent = data.total_tokens || 0;
+        if (expoEl) expoEl.textContent = data.expo_tokens || 0;
+        if (fcmEl) fcmEl.textContent = data.fcm_tokens || 0;
+        if (customersEl) customersEl.textContent = data.active_customers || 0;
+    } catch (error) {
+        console.error('Error loading push stats:', error);
+    }
+}
+
+function parseCustomerIds(rawValue) {
+    if (!rawValue) return [];
+    return rawValue
+        .split(',')
+        .map(val => parseInt(val.trim(), 10))
+        .filter(val => !isNaN(val));
+}
+
+function parseJsonData(rawValue) {
+    if (!rawValue) return null;
+    try {
+        return JSON.parse(rawValue);
+    } catch (error) {
+        return { __invalid_json: true, error: error.message };
+    }
+}
+
+async function sendBroadcastNotification(event) {
+    if (event) event.preventDefault();
+    resetPushStatus();
+
+    const title = document.getElementById('push-title')?.value?.trim();
+    const body = document.getElementById('push-body')?.value?.trim();
+    const dataText = document.getElementById('push-data')?.value?.trim();
+    const customerIdsRaw = document.getElementById('push-customer-ids')?.value?.trim();
+    const statusEl = document.getElementById('push-status');
+    const sendBtn = document.getElementById('push-send-btn');
+
+    if (!title || !body) {
+        if (statusEl) {
+            statusEl.textContent = 'Sarlavha va xabar matni majburiy.';
+            statusEl.style.display = 'block';
+        }
+        return;
+    }
+
+    const dataPayload = parseJsonData(dataText);
+    if (dataPayload && dataPayload.__invalid_json) {
+        if (statusEl) {
+            statusEl.textContent = `JSON xato: ${dataPayload.error}`;
+            statusEl.style.display = 'block';
+        }
+        return;
+    }
+
+    const customerIds = parseCustomerIds(customerIdsRaw);
+    const payload = {
+        title,
+        body
+    };
+    if (customerIds.length > 0) {
+        payload.customer_ids = customerIds;
+    }
+    if (dataPayload) {
+        payload.data = dataPayload;
+    }
+
+    try {
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Yuborilmoqda...';
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            const errorMessage = result.error || result.detail || 'Push yuborishda xatolik';
+            if (statusEl) {
+                statusEl.textContent = `Xatolik: ${errorMessage}`;
+                statusEl.style.display = 'block';
+            }
+            return;
+        }
+
+        if (statusEl) {
+            const warningText = result.warning ? ` (Ogohlantirish: ${result.warning})` : '';
+            statusEl.textContent = `Push xabar yuborildi!${warningText}`;
+            statusEl.style.display = 'block';
+            statusEl.classList.remove('error-message');
+            statusEl.classList.add('success-message');
+        }
+
+        if (result.warning) {
+            showToast(`Push yuborildi, ogohlantirish: ${result.warning}`);
+        } else {
+            showToast('Push xabar yuborildi!');
+        }
+        await loadPushNotificationStats();
+    } catch (error) {
+        console.error('Error sending push notification:', error);
+        if (statusEl) {
+            statusEl.textContent = 'Xatolik: ' + error.message;
+            statusEl.style.display = 'block';
+        }
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Yuborish';
+        }
+    }
+}
+
+// ==================== CUSTOMER APP PAGES (ADMIN) ====================
+
+function renderEmptyTable(tbody, colSpan, message) {
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center">${escapeHtml(message)}</td></tr>`;
+}
+
+async function loadCustomerReferals() {
+    const tbody = document.getElementById('referals-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 7, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('referal-search')?.value?.trim();
+        const status = document.getElementById('referal-status-filter')?.value;
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/referals?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Referallarni yuklashda xatolik');
+        }
+        const referals = await response.json();
+
+        if (!referals.length) {
+            renderEmptyTable(tbody, 7, 'Referallar topilmadi');
+            return;
+        }
+
+        const statusLabels = {
+            pending: 'Kutilmoqda',
+            registered: 'Ro\'yxatdan o\'tgan',
+            completed: 'Yakunlangan'
+        };
+
+        tbody.innerHTML = referals.map(item => {
+            const referrer = `${escapeHtml(item.referrer_name || '-')}` +
+                (item.referrer_phone ? `<br><small>${escapeHtml(item.referrer_phone)}</small>` : '');
+            const referredName = item.referred_name || item.invited_phone || '-';
+            const referred = `${escapeHtml(referredName)}` +
+                (item.referred_phone ? `<br><small>${escapeHtml(item.referred_phone)}</small>` : '');
+            const bonus = item.bonus_amount ? formatMoney(item.bonus_amount) : '-';
+            const statusText = statusLabels[item.status] || item.status || '-';
+
+            return `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${referrer}</td>
+                    <td>${referred}</td>
+                    <td>${escapeHtml(item.referal_code)}</td>
+                    <td>${bonus}</td>
+                    <td>${statusText}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading referals:', error);
+        renderEmptyTable(tbody, 7, 'Xatolik yuz berdi');
+    }
+}
+
+async function loadCustomerLoyalty() {
+    const tbody = document.getElementById('loyalty-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 7, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('loyalty-search')?.value?.trim();
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/loyalty?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Loyalty ma\'lumotlarini yuklashda xatolik');
+        }
+        const loyaltyData = await response.json();
+
+        if (!loyaltyData.length) {
+            renderEmptyTable(tbody, 7, 'Ma\'lumot topilmadi');
+            return;
+        }
+
+        tbody.innerHTML = loyaltyData.map(item => `
+            <tr>
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-') }</td>
+                <td>${escapeHtml(item.customer_phone || '-') }</td>
+                <td>${item.points}</td>
+                <td>${item.total_spent}</td>
+                <td>${item.total_earned}</td>
+                <td>${formatDate(item.updated_at || item.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading loyalty:', error);
+        renderEmptyTable(tbody, 7, 'Xatolik yuz berdi');
+    }
+}
+
+async function loadCustomerPriceAlerts() {
+    const tbody = document.getElementById('price-alerts-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 7, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('price-alert-search')?.value?.trim();
+        const status = document.getElementById('price-alert-status-filter')?.value;
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/price-alerts?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Narx eslatmalarini yuklashda xatolik');
+        }
+        const alerts = await response.json();
+
+        if (!alerts.length) {
+            renderEmptyTable(tbody, 7, 'Eslatmalar topilmadi');
+            return;
+        }
+
+        tbody.innerHTML = alerts.map(item => {
+            const statusLabel = item.notified
+                ? 'Xabar berilgan'
+                : (item.is_active ? 'Faol' : 'Faol emas');
+
+            const customerLabel = `${escapeHtml(item.customer_name || '-')}` +
+                (item.customer_phone ? `<br><small>${escapeHtml(item.customer_phone)}</small>` : '');
+
+            return `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${customerLabel}</td>
+                    <td>${escapeHtml(item.product_name)}</td>
+                    <td>${formatMoney(item.current_price || 0)}</td>
+                    <td>${formatMoney(item.target_price || 0)}</td>
+                    <td>${statusLabel}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading price alerts:', error);
+        renderEmptyTable(tbody, 7, 'Xatolik yuz berdi');
+    }
+}
+
+async function loadCustomerFavorites() {
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 5, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('favorites-search')?.value?.trim();
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/favorites?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Sevimli mahsulotlarni yuklashda xatolik');
+        }
+        const favorites = await response.json();
+
+        if (!favorites.length) {
+            renderEmptyTable(tbody, 5, 'Sevimlilar topilmadi');
+            return;
+        }
+
+        tbody.innerHTML = favorites.map(item => {
+            const customerLabel = `${escapeHtml(item.customer_name || '-')}` +
+                (item.customer_phone ? `<br><small>${escapeHtml(item.customer_phone)}</small>` : '');
+            return `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${customerLabel}</td>
+                    <td>${escapeHtml(item.product_name)}</td>
+                    <td>${formatMoney(item.product_price || 0)}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+        renderEmptyTable(tbody, 5, 'Xatolik yuz berdi');
+    }
+}
+
+async function loadCustomerTags() {
+    const tbody = document.getElementById('tags-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 5, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('tags-search')?.value?.trim();
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/product-tags?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Teglarni yuklashda xatolik');
+        }
+        const tags = await response.json();
+
+        if (!tags.length) {
+            renderEmptyTable(tbody, 5, 'Teglar topilmadi');
+            return;
+        }
+
+        tbody.innerHTML = tags.map(item => {
+            const customerLabel = `${escapeHtml(item.customer_name || '-')}` +
+                (item.customer_phone ? `<br><small>${escapeHtml(item.customer_phone)}</small>` : '');
+            return `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${customerLabel}</td>
+                    <td>${escapeHtml(item.product_name)}</td>
+                    <td>${escapeHtml(item.tag)}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        renderEmptyTable(tbody, 5, 'Xatolik yuz berdi');
+    }
+}
+
+async function loadProductReviews() {
+    const tbody = document.getElementById('reviews-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 7, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('reviews-search')?.value?.trim();
+        const rating = document.getElementById('reviews-rating-filter')?.value;
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (rating) params.append('rating', rating);
+
+        const response = await fetch(`${API_BASE}/admin/reviews?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Sharhlarni yuklashda xatolik');
+        }
+        const reviews = await response.json();
+
+        if (!reviews.length) {
+            renderEmptyTable(tbody, 7, 'Sharhlar topilmadi');
+            return;
+        }
+
+        tbody.innerHTML = reviews.map(item => {
+            const customerLabel = `${escapeHtml(item.customer_name || '-')}` +
+                (item.customer_phone ? `<br><small>${escapeHtml(item.customer_phone)}</small>` : '');
+            const ratingStars = `${'★'.repeat(item.rating || 0)}${'☆'.repeat(5 - (item.rating || 0))}`;
+            const statusLabel = item.is_deleted ? 'O\'chirilgan' : (item.is_approved ? 'Tasdiqlangan' : 'Tasdiqlanmagan');
+            const approveBtn = item.is_deleted ? '' : (item.is_approved
+                ? `<button class="btn btn-secondary btn-sm" onclick="toggleReviewApproval(${item.id}, false)">Bekor qilish</button>`
+                : `<button class="btn btn-primary btn-sm" onclick="toggleReviewApproval(${item.id}, true)">Tasdiqlash</button>`);
+            const deleteBtn = item.is_deleted ? '' : `<button class="btn btn-danger btn-sm" onclick="deleteReview(${item.id})">O'chirish</button>`;
+
+            return `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${customerLabel}</td>
+                    <td>${escapeHtml(item.product_name)}</td>
+                    <td>${ratingStars}</td>
+                    <td>${escapeHtml(item.comment || '-')}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                    <td>
+                        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                            <span>${statusLabel}</span>
+                            ${approveBtn}
+                            ${deleteBtn}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        renderEmptyTable(tbody, 7, 'Xatolik yuz berdi');
+    }
+}
+
+async function toggleReviewApproval(reviewId, approved) {
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ is_approved: approved })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Sharhni yangilashda xatolik');
+        }
+
+        showToast('Sharh holati yangilandi');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error updating review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteReview(reviewId) {
+    if (!confirm('Sharhni o\'chirishni xohlaysizmi?')) return;
+    try {
+        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ is_deleted: true })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Sharhni o\'chirishda xatolik');
+        }
+
+        showToast('Sharh o\'chirildi');
+        loadProductReviews();
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function loadCustomerPayments() {
+    const tbody = document.getElementById('payments-tbody');
+    if (!tbody) return;
+    renderEmptyTable(tbody, 6, 'Yuklanmoqda...');
+
+    try {
+        const search = document.getElementById('payments-search')?.value?.trim();
+        const dateFrom = document.getElementById('payments-date-from')?.value;
+        const dateTo = document.getElementById('payments-date-to')?.value;
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (dateFrom) params.append('start_date', dateFrom);
+        if (dateTo) params.append('end_date', dateTo);
+
+        const response = await fetch(`${API_BASE}/admin/payments?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('To\'lovlar tarixini yuklashda xatolik');
+        }
+        const payments = await response.json();
+
+        if (!payments.length) {
+            renderEmptyTable(tbody, 6, 'To\'lovlar topilmadi');
+            return;
+        }
+
+        const methodLabels = {
+            cash: 'Naqd',
+            card: 'Karta',
+            bank_transfer: 'Hisob raqam',
+            debt: 'Qarz'
+        };
+
+        tbody.innerHTML = payments.map(item => {
+            const customerLabel = `${escapeHtml(item.customer_name || '-')}` +
+                (item.customer_phone ? `<br><small>${escapeHtml(item.customer_phone)}</small>` : '');
+            const method = methodLabels[item.payment_method] || item.payment_method || '-';
+            return `
+                <tr>
+                    <td>${item.order_id}</td>
+                    <td>${customerLabel}</td>
+                    <td>${formatMoney(item.amount || 0)}</td>
+                    <td>${method}</td>
+                    <td>${item.order_id}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading payments:', error);
+        renderEmptyTable(tbody, 6, 'Xatolik yuz berdi');
+    }
+}
+
+// Customer app settings (admin)
+let customerAppSettingsSaveTimeout = null;
+
+async function loadCustomerAppSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        if (!response.ok) throw new Error('Sozlamalarni yuklashda xatolik');
+        const settings = await response.json();
+
+        const setChecked = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = value !== false;
+        };
+        const setValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined && value !== null) el.value = value;
+        };
+
+        setChecked('enable-referals', settings.enable_referals);
+        setChecked('enable-loyalty', settings.enable_loyalty);
+        setChecked('enable-price-alerts', settings.enable_price_alerts);
+        setChecked('enable-favorites', settings.enable_favorites);
+        setChecked('enable-tags', settings.enable_tags);
+        setChecked('enable-reviews', settings.enable_reviews);
+        setChecked('enable-location-selection', settings.enable_location_selection);
+        setChecked('enable-offline-orders', settings.enable_offline_orders);
+
+        setValue('referal-bonus-points', settings.referal_bonus_points);
+        setValue('referal-bonus-percent', settings.referal_bonus_percent);
+        setValue('loyalty-points-per-sum', settings.loyalty_points_per_sum);
+        setValue('loyalty-point-value', settings.loyalty_point_value);
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        alert('Sozlamalarni yuklashda xatolik yuz berdi');
+    }
+}
+
+function saveCustomerAppSettings() {
+    if (customerAppSettingsSaveTimeout) {
+        clearTimeout(customerAppSettingsSaveTimeout);
+    }
+
+    customerAppSettingsSaveTimeout = setTimeout(async () => {
+        try {
+            const payload = {
+                enable_referals: document.getElementById('enable-referals')?.checked,
+                enable_loyalty: document.getElementById('enable-loyalty')?.checked,
+                enable_price_alerts: document.getElementById('enable-price-alerts')?.checked,
+                enable_favorites: document.getElementById('enable-favorites')?.checked,
+                enable_tags: document.getElementById('enable-tags')?.checked,
+                enable_reviews: document.getElementById('enable-reviews')?.checked,
+                enable_location_selection: document.getElementById('enable-location-selection')?.checked,
+                enable_offline_orders: document.getElementById('enable-offline-orders')?.checked,
+                referal_bonus_points: parseInt(document.getElementById('referal-bonus-points')?.value || '0', 10),
+                referal_bonus_percent: parseInt(document.getElementById('referal-bonus-percent')?.value || '0', 10),
+                loyalty_points_per_sum: parseFloat(document.getElementById('loyalty-points-per-sum')?.value || '0'),
+                loyalty_point_value: parseFloat(document.getElementById('loyalty-point-value')?.value || '0')
+            };
+
+            const sellerId = localStorage.getItem('admin_seller_id');
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (sellerId) {
+                headers['X-Seller-ID'] = sellerId;
+            }
+
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+            }
+
+            showToast('Mijoz ilovasi sozlamalari saqlandi');
+        } catch (error) {
+            console.error('Error saving customer app settings:', error);
+            alert('Xatolik: ' + error.message);
+        }
+    }, 300);
 }

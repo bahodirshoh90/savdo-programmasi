@@ -649,6 +649,22 @@ class Settings(Base):
     notify_low_stock = Column(Boolean, nullable=False, default=True)  # Kam qolgan mahsulotlar
     notify_debt_limit = Column(Boolean, nullable=False, default=True)  # Qarz limiti oshganlar
     notify_daily_report = Column(Boolean, nullable=False, default=True)  # Kunlik hisobotlar
+
+    # Customer app feature toggles
+    enable_referals = Column(Boolean, nullable=False, default=True)
+    enable_loyalty = Column(Boolean, nullable=False, default=True)
+    enable_price_alerts = Column(Boolean, nullable=False, default=True)
+    enable_favorites = Column(Boolean, nullable=False, default=True)
+    enable_tags = Column(Boolean, nullable=False, default=True)
+    enable_reviews = Column(Boolean, nullable=False, default=True)
+    enable_location_selection = Column(Boolean, nullable=False, default=True)
+    enable_offline_orders = Column(Boolean, nullable=False, default=True)
+
+    # Customer app settings
+    referal_bonus_points = Column(Integer, nullable=False, default=100)
+    referal_bonus_percent = Column(Integer, nullable=False, default=5)
+    loyalty_points_per_sum = Column(Float, nullable=False, default=0.01)
+    loyalty_point_value = Column(Float, nullable=False, default=1.0)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -721,12 +737,12 @@ class OtpCode(Base):
 
 
 class CustomerDeviceToken(Base):
-    """Device token for push notifications (Expo Push Token)"""
+    """Device token for push notifications (Expo or FCM token)"""
     __tablename__ = "customer_device_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    token = Column(String(500), nullable=False, unique=True, index=True)  # Expo push token
+    token = Column(String(500), nullable=False, unique=True, index=True)  # Expo or FCM token
     device_id = Column(String(200), nullable=True)  # Device identifier (optional)
     platform = Column(String(50), nullable=True)  # "ios", "android", "web"
     is_active = Column(Boolean, nullable=False, default=True)
