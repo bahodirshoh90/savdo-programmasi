@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mijozlar Ilovasi",
     "slug": "savdo-customer-app",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -24,15 +24,10 @@
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "com.android.alarm.permission.SET_ALARM"
-      ],
-      "notification": {
-        "icon": "./assets/notification-icon.png",
-        "color": "#4f46e5",
-        "sound": true,
-        "androidMode": "default",
-        "androidCollapsedTitle": "Yangi xabar"
-      }
+        "POST_NOTIFICATIONS",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -46,7 +41,8 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "savdo",
     "extra": {

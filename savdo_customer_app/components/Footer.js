@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useCart } from '../context/CartContext';
-import Colors from '../constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const FOOTER_BASE_HEIGHT = 56;
@@ -118,9 +117,11 @@ export default function Footer({ currentScreen = 'home' }) {
                 size={24}
                 color={isActive ? colors.primary : colors.textLight}
               />
-              {item.badge && item.badge > 0 && (
+              {item.badge > 0 && (
                 <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.badgeText}>{item.badge}</Text>
+                  <Text style={styles.badgeText}>
+                    {item.badge}
+                  </Text>
                 </View>
               )}
             </View>
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: {
-    color: Colors.surface,
+    color: '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
   },

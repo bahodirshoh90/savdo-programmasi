@@ -22,6 +22,8 @@ import { login as authLogin, signup, storeAuthSession } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
 import { API_ENDPOINTS } from '../config/api';
+// ✅ PUSH NOTIFICATION IMPORT
+import { getExpoPushToken, registerDeviceToken } from '../services/notifications';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -144,6 +146,19 @@ export default function LoginScreen() {
           user: response.user,
           customer_id: response.user?.customer_id || response.user?.id,
         });
+        
+        // ✅ PUSH TOKEN REGISTER - OTP LOGIN
+        try {
+          console.log('[OTP] Registering push token...');
+          const pushToken = await getExpoPushToken();
+          if (pushToken) {
+            const registered = await registerDeviceToken(pushToken);
+            console.log('[OTP] Push token registration:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+          }
+        } catch (pushError) {
+          console.error('[OTP] Push token error:', pushError);
+        }
+        
         await login(normalizedUser, response.token);
         setShowOtpModal(false);
         setOtpCode('');
@@ -185,6 +200,19 @@ export default function LoginScreen() {
           user,
           customer_id: user?.customer_id || user?.id,
         });
+        
+        // ✅ PUSH TOKEN REGISTER - SOCIAL LOGIN
+        try {
+          console.log('[SOCIAL] Registering push token...');
+          const pushToken = await getExpoPushToken();
+          if (pushToken) {
+            const registered = await registerDeviceToken(pushToken);
+            console.log('[SOCIAL] Push token registration:', registered ? 'SUCCESS ✅' : 'FAILED ❌');
+          }
+        } catch (pushError) {
+          console.error('[SOCIAL] Push token error:', pushError);
+        }
+        
         await login(normalizedUser, token);
         Alert.alert('Muvaffaqiyatli', `${provider === 'google' ? 'Google' : 'Facebook'} orqali kirildi`);
       } else {
