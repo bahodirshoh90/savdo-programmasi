@@ -2099,14 +2099,26 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/customers/{customer_id}/stats", response_model=CustomerStatsResponse)
-def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
+def get_customer_stats(
+    customer_id: int,
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """Get statistics for a specific customer (orders & sales)"""
     # Ensure customer exists
     customer = CustomerService.get_customer(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    stats = CustomerService.get_customer_stats(db, customer_id)
+    stats = CustomerService.get_customer_stats(
+        db,
+        customer_id,
+        period=period,
+        start_date=start_date,
+        end_date=end_date
+    )
     return stats
 
 
@@ -2124,13 +2136,15 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
     # If customer type changed, notify customer app via WebSocket
     if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
         try:
+            old_type_value = old_customer_type.value if hasattr(old_customer_type, "value") else str(old_customer_type)
+            new_type_value = customer.customer_type.value if hasattr(customer.customer_type, "value") else str(customer.customer_type)
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_customer_type,
-                "new_type": customer.customer_type
+                "old_type": old_type_value,
+                "new_type": new_type_value
             })
-            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_type_value} -> {new_type_value}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     

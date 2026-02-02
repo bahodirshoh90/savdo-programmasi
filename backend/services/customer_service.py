@@ -183,30 +183,77 @@ class CustomerService:
             raise ValueError("Mijozni o'chirib bo'lmaydi: bog'liq ma'lumotlar mavjud.")
 
     @staticmethod
-    def get_customer_stats(db: Session, customer_id: int) -> CustomerStatsResponse:
+    def get_customer_stats(
+        db: Session,
+        customer_id: int,
+        period: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> CustomerStatsResponse:
         """Get aggregated statistics for a customer (orders & sales)"""
+        from datetime import datetime, timedelta
+        from utils import get_uzbekistan_now, UZBEKISTAN_TZ
+
+        def parse_date(value: Optional[str]) -> Optional[datetime]:
+            if not value:
+                return None
+            try:
+                date_str = value.replace('Z', '+00:00') if 'Z' in value else value
+                parsed = datetime.fromisoformat(date_str)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UZBEKISTAN_TZ)
+                return parsed
+            except (ValueError, AttributeError) as exc:
+                print(f"[CustomerStats] Invalid date format '{value}': {exc}")
+                return None
+
+        start = parse_date(start_date)
+        end = parse_date(end_date)
+
+        if not start or not end:
+            now = get_uzbekistan_now()
+            if period == "daily":
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            elif period == "monthly":
+                start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            elif period == "yearly":
+                start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            else:
+                if not start:
+                    start = now - timedelta(days=30)
+                if not end:
+                    end = now
+
+        base_orders_query = db.query(Order).filter(Order.customer_id == customer_id)
+        base_sales_query = db.query(Sale).filter(Sale.customer_id == customer_id)
+
+        if start:
+            base_orders_query = base_orders_query.filter(Order.created_at >= start)
+            base_sales_query = base_sales_query.filter(Sale.created_at >= start)
+        if end:
+            base_orders_query = base_orders_query.filter(Order.created_at <= end)
+            base_sales_query = base_sales_query.filter(Sale.created_at <= end)
+
         # Total orders per status
-        total_orders = db.query(func.count(Order.id)).filter(Order.customer_id == customer_id).scalar() or 0
-        completed_orders = db.query(func.count(Order.id)).filter(
-            Order.customer_id == customer_id,
-            Order.status == 'completed'
-        ).scalar() or 0
-        cancelled_orders = db.query(func.count(Order.id)).filter(
-            Order.customer_id == customer_id,
-            Order.status == 'cancelled'
-        ).scalar() or 0
-        pending_orders = db.query(func.count(Order.id)).filter(
-            Order.customer_id == customer_id,
-            Order.status == 'pending'
-        ).scalar() or 0
+        total_orders = base_orders_query.count() or 0
+        completed_orders = base_orders_query.filter(Order.status == 'completed').count() or 0
+        cancelled_orders = base_orders_query.filter(Order.status == 'cancelled').count() or 0
+        pending_orders = base_orders_query.filter(Order.status == 'pending').count() or 0
 
         # Sales amounts
         total_sales_amount = db.query(func.coalesce(func.sum(Sale.total_amount), 0.0)).filter(
-            Sale.customer_id == customer_id
+            Sale.customer_id == customer_id,
+            Sale.created_at >= start,
+            Sale.created_at <= end
         ).scalar() or 0.0
 
         total_paid_amount = db.query(func.coalesce(func.sum(Sale.payment_amount), 0.0)).filter(
-            Sale.customer_id == customer_id
+            Sale.customer_id == customer_id,
+            Sale.created_at >= start,
+            Sale.created_at <= end
         ).scalar() or 0.0
 
         # Debt amount is difference
@@ -216,17 +263,23 @@ class CustomerService:
         average_order_amount = 0.0
         if total_orders > 0:
             total_order_amount = db.query(func.coalesce(func.sum(Order.total_amount), 0.0)).filter(
-                Order.customer_id == customer_id
+                Order.customer_id == customer_id,
+                Order.created_at >= start,
+                Order.created_at <= end
             ).scalar() or 0.0
             average_order_amount = float(total_order_amount) / float(total_orders)
 
         # Last order & sale dates
         last_order_date = db.query(func.max(Order.created_at)).filter(
-            Order.customer_id == customer_id
+            Order.customer_id == customer_id,
+            Order.created_at >= start,
+            Order.created_at <= end
         ).scalar()
 
         last_sale_date = db.query(func.max(Sale.created_at)).filter(
-            Sale.customer_id == customer_id
+            Sale.customer_id == customer_id,
+            Sale.created_at >= start,
+            Sale.created_at <= end
         ).scalar()
 
         return CustomerStatsResponse(
