@@ -61,7 +61,7 @@ class NotificationService:
             
             response = requests.post(
                 NotificationService.EXPO_PUSH_URL,
-                json={"messages": messages},
+                json=messages,
                 headers=headers,
                 timeout=10
             )

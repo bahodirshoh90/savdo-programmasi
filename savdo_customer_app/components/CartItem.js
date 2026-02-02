@@ -3,55 +3,57 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import Colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import responsive from '../utils/responsive';
 
 export default function CartItem({ item, onUpdateQuantity, onRemove, getImageUrl }) {
+  const { colors } = useTheme();
   const product = item.product;
   const price = product.retail_price || product.regular_price || 0;
   const subtotal = price * item.quantity;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {getImageUrl && getImageUrl(product) ? (
         <Image
           source={{ uri: getImageUrl(product) }}
-          style={styles.image}
+          style={[styles.image, { backgroundColor: colors.borderLight }]}
           resizeMode="cover"
         />
       ) : (
-        <View style={styles.imagePlaceholder}>
+        <View style={[styles.imagePlaceholder, { backgroundColor: colors.borderLight }]}>
           <Text style={styles.imagePlaceholderText}>📦</Text>
         </View>
       )}
 
       <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={2}>
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
           {product.name}
         </Text>
-        <Text style={styles.price}>
+        <Text style={[styles.price, { color: colors.textLight }]}>
           {price.toLocaleString('uz-UZ')} so'm
         </Text>
 
         <View style={styles.quantityContainer}>
           <TouchableOpacity
-            style={styles.quantityButton}
+            style={[styles.quantityButton, { borderColor: colors.border, backgroundColor: colors.borderLight }]}
             onPress={() => onUpdateQuantity(product.id, item.quantity - 1)}
           >
-            <Ionicons name="remove" size={20} color={Colors.primary} />
+            <Ionicons name="remove" size={20} color={colors.primary} />
           </TouchableOpacity>
 
-          <Text style={styles.quantity}>{item.quantity}</Text>
+          <Text style={[styles.quantity, { color: colors.text }]}>{item.quantity}</Text>
 
           <TouchableOpacity
-            style={styles.quantityButton}
+            style={[styles.quantityButton, { borderColor: colors.border, backgroundColor: colors.borderLight }]}
             onPress={() => onUpdateQuantity(product.id, item.quantity + 1)}
           >
-            <Ionicons name="add" size={20} color={Colors.primary} />
+            <Ionicons name="add" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.subtotal}>
+        <Text style={[styles.subtotal, { color: colors.primary }]}>
           Jami: {subtotal.toLocaleString('uz-UZ')} so'm
         </Text>
       </View>
@@ -60,7 +62,7 @@ export default function CartItem({ item, onUpdateQuantity, onRemove, getImageUrl
         style={styles.removeButton}
         onPress={() => onRemove(product.id)}
       >
-        <Ionicons name="trash-outline" size={24} color={Colors.danger} />
+        <Ionicons name="trash-outline" size={24} color={colors.danger} />
       </TouchableOpacity>
     </View>
   );
@@ -69,43 +71,37 @@ export default function CartItem({ item, onUpdateQuantity, onRemove, getImageUrl
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: responsive.getSpacing(12),
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   image: {
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: Colors.borderLight,
   },
   imagePlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: Colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   imagePlaceholderText: {
-    fontSize: 32,
+    fontSize: responsive.getFontSize(32),
   },
   content: {
     flex: 1,
     marginLeft: 12,
   },
   name: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: '600',
-    color: Colors.textDark,
     marginBottom: 4,
   },
   price: {
-    fontSize: 14,
-    color: Colors.textLight,
+    fontSize: responsive.getFontSize(14),
     marginBottom: 8,
   },
   quantityContainer: {
@@ -118,21 +114,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   quantity: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: '600',
-    color: Colors.textDark,
     minWidth: 30,
     textAlign: 'center',
   },
   subtotal: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: 'bold',
-    color: Colors.primary,
   },
   removeButton: {
     justifyContent: 'center',

@@ -4,10 +4,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
 import AnimatedView from './AnimatedView';
 import OptimizedImage from './OptimizedImage';
 import AnimatedButton from './AnimatedButton';
+import { useTheme } from '../context/ThemeContext';
+import responsive from '../utils/responsive';
 
 export default function ProductCard({
   product,
@@ -20,8 +21,11 @@ export default function ProductCard({
   quantity = 0,
   index = 0,
 }) {
+  const { colors, isDark } = useTheme();
   const price = product.retail_price || product.regular_price || 0;
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
+  const imageHeight = responsive.isSmallPhone() ? 150 : (responsive.isTablet() ? 220 : 180);
+  const favoriteBg = isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)';
 
   return (
     <AnimatedView
@@ -31,36 +35,36 @@ export default function ProductCard({
       style={styles.container}
     >
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => onPress && onPress(product)}
         activeOpacity={0.7}
       >
         {/* Product Image */}
-        <View style={styles.imageContainer}>
+        <View style={[styles.imageContainer, { height: imageHeight, backgroundColor: colors.background }]}>
           <OptimizedImage
             source={product.image_url}
             style={styles.image}
             resizeMode="cover"
             placeholder={
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="image-outline" size={40} color={Colors.textLight} />
+              <View style={[styles.imagePlaceholder, { backgroundColor: colors.background }]}>
+                <Ionicons name="image-outline" size={40} color={colors.textLight} />
               </View>
             }
           />
           {isOutOfStock && (
             <View style={styles.outOfStockOverlay}>
-              <Text style={styles.outOfStockText}>Omborda yo'q</Text>
+              <Text style={[styles.outOfStockText, { color: colors.surface }]}>Omborda yo'q</Text>
             </View>
           )}
           {isInCompare && (
-            <View style={styles.compareBadge}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+            <View style={[styles.compareBadge, { backgroundColor: colors.surface }]}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
             </View>
           )}
           {/* Favorite Button */}
           {onFavorite && (
             <TouchableOpacity
-              style={styles.favoriteButton}
+              style={[styles.favoriteButton, { backgroundColor: favoriteBg, borderColor: colors.border }]}
               onPress={() => {
                 onFavorite(product);
               }}
@@ -69,36 +73,39 @@ export default function ProductCard({
               <Ionicons
                 name={isFavorite ? 'heart' : 'heart-outline'}
                 size={24}
-                color={isFavorite ? '#ff3b30' : Colors.surface}
+                color={isFavorite ? colors.danger : colors.textLight}
               />
             </TouchableOpacity>
           )}
           {/* Quantity Badge */}
           {quantity > 0 && (
-            <View style={styles.quantityBadge}>
-              <Text style={styles.quantityBadgeText}>{quantity}</Text>
+            <View style={[styles.quantityBadge, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.quantityBadgeText, { color: colors.surface }]}>{quantity}</Text>
             </View>
           )}
         </View>
 
         {/* Product Info */}
         <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={2}>
+          <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
             {product.name}
           </Text>
           
           {product.category && (
-            <Text style={styles.category} numberOfLines={1}>
+            <Text style={[styles.category, { color: colors.textLight }]} numberOfLines={1}>
               {product.category}
             </Text>
           )}
 
-          <Text style={styles.price}>
+          <Text style={[styles.price, { color: colors.primary }]}>
             {price.toLocaleString('uz-UZ')} so'm
           </Text>
 
           {product.total_pieces !== undefined && product.total_pieces !== null && (
-            <Text style={[styles.stock, isOutOfStock && styles.stockOut]}>
+            <Text style={[
+              styles.stock,
+              { color: isOutOfStock ? colors.danger : colors.success }
+            ]}>
               {isOutOfStock ? 'Omborda yo\'q' : `Omborda: ${product.total_pieces} dona`}
             </Text>
           )}
@@ -108,7 +115,11 @@ export default function ProductCard({
             {quantity > 0 ? (
               <View style={styles.cartControlsContainer}>
                 <TouchableOpacity
-                  style={[styles.quantityControlButton, (isOutOfStock || quantity <= 1) && styles.quantityControlButtonDisabled]}
+                  style={[
+                    styles.quantityControlButton,
+                    { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
+                    (isOutOfStock || quantity <= 1) && styles.quantityControlButtonDisabled
+                  ]}
                   onPress={() => {
                     if (onAddToCart && quantity > 1) {
                       onAddToCart(product, -1);
@@ -116,7 +127,11 @@ export default function ProductCard({
                   }}
                   disabled={isOutOfStock || quantity <= 1}
                 >
-                  <Text style={[styles.quantityControlText, (isOutOfStock || quantity <= 1) && styles.quantityControlTextDisabled]}>-</Text>
+                  <Text style={[
+                    styles.quantityControlText,
+                    { color: colors.primary },
+                    (isOutOfStock || quantity <= 1) && styles.quantityControlTextDisabled
+                  ]}>-</Text>
                 </TouchableOpacity>
                 <AnimatedButton
                   onPress={() => {
@@ -127,19 +142,24 @@ export default function ProductCard({
                     styles.addButton,
                     styles.addButtonWithControls,
                     isOutOfStock && styles.addButtonDisabled,
+                    { backgroundColor: isOutOfStock ? colors.border : colors.primary }
                   ]}
                 >
                   <Text
                     style={[
                       styles.addButtonText,
-                      isOutOfStock && styles.addButtonTextDisabled,
+                      { color: isOutOfStock ? colors.textLight : colors.surface }
                     ]}
                   >
                     {quantity}
                   </Text>
                 </AnimatedButton>
                 <TouchableOpacity
-                  style={[styles.quantityControlButton, isOutOfStock && styles.quantityControlButtonDisabled]}
+                  style={[
+                    styles.quantityControlButton,
+                    { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
+                    isOutOfStock && styles.quantityControlButtonDisabled
+                  ]}
                   onPress={() => {
                     if (onAddToCart) {
                       onAddToCart(product, 1);
@@ -147,7 +167,11 @@ export default function ProductCard({
                   }}
                   disabled={isOutOfStock}
                 >
-                  <Text style={[styles.quantityControlText, isOutOfStock && styles.quantityControlTextDisabled]}>+</Text>
+                  <Text style={[
+                    styles.quantityControlText,
+                    { color: colors.primary },
+                    isOutOfStock && styles.quantityControlTextDisabled
+                  ]}>+</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -160,19 +184,19 @@ export default function ProductCard({
                 disabled={isOutOfStock}
                 style={[
                   styles.addButton,
-                  isOutOfStock && styles.addButtonDisabled,
+                  { backgroundColor: isOutOfStock ? colors.border : colors.primary },
                 ]}
                 haptic={true}
               >
                 <Ionicons
                   name={isOutOfStock ? 'close-circle' : 'cart'}
                   size={18}
-                  color={isOutOfStock ? Colors.textLight : Colors.surface}
+                  color={isOutOfStock ? colors.textLight : colors.surface}
                 />
                 <Text
                   style={[
                     styles.addButtonText,
-                    isOutOfStock && styles.addButtonTextDisabled,
+                    { color: isOutOfStock ? colors.textLight : colors.surface },
                   ]}
                 >
                   {isOutOfStock ? 'Yo\'q' : 'Savatchaga'}
@@ -185,14 +209,15 @@ export default function ProductCard({
                 onPress={() => onCompare(product)}
                 style={[
                   styles.compareButton,
-                  isInCompare && styles.compareButtonActive,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                  isInCompare && { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
                 ]}
                 haptic={true}
               >
                 <Ionicons
                   name={isInCompare ? 'checkmark-circle' : 'git-compare-outline'}
                   size={18}
-                  color={isInCompare ? Colors.primary : Colors.text}
+                  color={isInCompare ? colors.primary : colors.text}
                 />
               </AnimatedButton>
             )}
@@ -205,14 +230,12 @@ export default function ProductCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 12,
+    marginBottom: responsive.getSpacing(12),
   },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: responsive.getSpacing(12),
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -221,9 +244,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 180,
     position: 'relative',
-    backgroundColor: Colors.background,
   },
   image: {
     width: '100%',
@@ -234,7 +255,6 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
   },
   outOfStockOverlay: {
     position: 'absolute',
@@ -247,50 +267,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   outOfStockText: {
-    color: Colors.surface,
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: 'bold',
   },
   compareBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 4,
   },
   info: {
-    padding: 12,
+    padding: responsive.getSpacing(12),
   },
   name: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-    minHeight: 40,
+    marginBottom: responsive.getSpacing(4),
+    minHeight: responsive.getFontSize(16) * 2.4,
   },
   category: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginBottom: 8,
+    fontSize: responsive.getFontSize(12),
+    marginBottom: responsive.getSpacing(8),
   },
   price: {
-    fontSize: 18,
+    fontSize: responsive.getFontSize(18),
     fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 8,
+    marginBottom: responsive.getSpacing(8),
   },
   stock: {
-    fontSize: 12,
-    color: Colors.success,
-    marginBottom: 12,
-  },
-  stockOut: {
-    color: Colors.danger,
+    fontSize: responsive.getFontSize(12),
+    marginBottom: responsive.getSpacing(12),
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: responsive.getSpacing(8),
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
@@ -300,49 +311,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    gap: 6,
-    minHeight: 44,
-  },
-  addButtonDisabled: {
-    backgroundColor: Colors.border,
+    paddingVertical: responsive.getSpacing(12),
+    paddingHorizontal: responsive.getSpacing(16),
+    borderRadius: responsive.getSpacing(10),
+    gap: responsive.getSpacing(6),
+    minHeight: responsive.getSpacing(44),
   },
   addButtonText: {
-    color: Colors.surface,
-    fontSize: 15,
+    fontSize: responsive.getFontSize(15),
     fontWeight: '700',
     textAlign: 'center',
-  },
-  addButtonTextDisabled: {
-    color: Colors.textLight,
   },
   compareButton: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 8,
+    borderRadius: responsive.getSpacing(8),
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  compareButtonActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
   },
   favoriteButton: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 20,
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -353,7 +350,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: Colors.primary,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -362,18 +358,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   quantityBadgeText: {
-    color: Colors.surface,
-    fontSize: 12,
+    fontSize: responsive.getFontSize(12),
     fontWeight: 'bold',
   },
   addButtonWithQuantity: {
-    backgroundColor: Colors.success || '#4CAF50',
+    backgroundColor: '#4CAF50',
   },
   cartControlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: responsive.getSpacing(8),
     flex: 1,
     width: '100%',
   },
@@ -381,24 +376,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.primary,
   },
   quantityControlButtonDisabled: {
-    backgroundColor: Colors.border,
+    backgroundColor: 'transparent',
     opacity: 0.5,
   },
   quantityControlText: {
-    fontSize: 22,
+    fontSize: responsive.getFontSize(22),
     fontWeight: 'bold',
-    color: Colors.primary,
     lineHeight: 22,
   },
   quantityControlTextDisabled: {
-    color: Colors.textLight,
+    color: '#94a3b8',
   },
   addButtonWithControls: {
     flex: 1,
