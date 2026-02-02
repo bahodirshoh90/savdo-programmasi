@@ -18,10 +18,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { login as authLogin, signup } from '../services/auth';
+import { login as authLogin, signup, storeAuthSession } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
-import Footer from '../components/Footer';
 import { API_ENDPOINTS } from '../config/api';
 
 export default function LoginScreen() {
@@ -29,6 +28,7 @@ export default function LoginScreen() {
   const [loginMethod, setLoginMethod] = useState('password'); // 'password', 'otp', 'social'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -75,7 +75,7 @@ export default function LoginScreen() {
     try {
       const result = await authLogin(username.trim(), password);
       if (result.success) {
-        await login(result.user, result.token);
+        await login(result.user);
       } else {
         Alert.alert('Xatolik', result.error || 'Kirishda xatolik yuz berdi');
       }
@@ -139,7 +139,12 @@ export default function LoginScreen() {
 
       if (response.success && response.token && response.user) {
         // OTP verification successful and token received
-        await login(response.user, response.token);
+        const normalizedUser = await storeAuthSession({
+          token: response.token,
+          user: response.user,
+          customer_id: response.user?.customer_id || response.user?.id,
+        });
+        await login(normalizedUser);
         setShowOtpModal(false);
         setOtpCode('');
         setOtpSent(false);
@@ -173,9 +178,12 @@ export default function LoginScreen() {
       });
 
       if (response.token && response.user) {
-        // Store token and user data
-        const { token, user } = response;
-        await login(user, token);
+        const normalizedUser = await storeAuthSession({
+          token: response.token,
+          user: response.user,
+          customer_id: response.user?.customer_id || response.user?.id,
+        });
+        await login(normalizedUser);
         Alert.alert('Muvaffaqiyatli', `${provider === 'google' ? 'Google' : 'Facebook'} orqali kirildi`);
       } else {
         Alert.alert('Xatolik', 'Ijtimoiy tarmoq orqali kirishda xatolik');
@@ -426,9 +434,20 @@ export default function LoginScreen() {
                   placeholder="Parol"
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword((prev) => !prev)}
+                accessibilityLabel={showPassword ? 'Parolni yashirish' : 'Parolni ko\'rsatish'}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={20}
+                  color={Colors.textLight}
+                />
+              </TouchableOpacity>
               </View>
 
               <TouchableOpacity
@@ -970,6 +989,9 @@ const styles = StyleSheet.create({
     height: 50,
     fontSize: 16,
     color: Colors.textDark,
+  },
+  eyeButton: {
+    padding: 6,
   },
   button: {
     backgroundColor: Colors.primary,
