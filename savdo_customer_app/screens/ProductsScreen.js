@@ -22,6 +22,7 @@ import ProductCard from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { useAuth } from '../context/AuthContext';
 import responsive from '../utils/responsive';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
@@ -31,9 +32,11 @@ import AnimatedView from '../components/AnimatedView';
 import { useToast } from '../context/ToastContext';
 import Footer, { FooterAwareView } from '../components/Footer';
 import websocketService from '../services/websocket';
+import api from '../services/api';
 
 export default function ProductsScreen({ navigation, route }) {
   const { addToCart, cartItems, removeFromCart, updateQuantity } = useCart();
+  const { user } = useAuth();
   const { isOnline, loadWithCache } = useOffline();
   const { showToast } = useToast();
   const { colors } = useTheme();
@@ -295,7 +298,7 @@ export default function ProductsScreen({ navigation, route }) {
     
     return () => {
       if (unsubscribe) {
-        websocketService.off('customer_type_changed', unsubscribe);
+        unsubscribe();
       }
     };
   }, []);
@@ -386,27 +389,12 @@ export default function ProductsScreen({ navigation, route }) {
       if (!isFavoritesEnabled) {
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/favorites`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
+      const data = await api.get('/favorites');
+      const statusMap = {};
+      (data.favorites || []).forEach(product => {
+        statusMap[product.id] = true;
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const statusMap = {};
-        (data.favorites || []).forEach(product => {
-          statusMap[product.id] = true;
-        });
-        setFavoriteStatus(statusMap);
-      }
+      setFavoriteStatus(statusMap);
     } catch (error) {
       console.error('Error loading favorite status:', error);
     }
@@ -418,52 +406,19 @@ export default function ProductsScreen({ navigation, route }) {
         showToast('Sevimlilar funksiyasi o\'chirilgan', 'error');
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
 
       const isFavorite = favoriteStatus[product.id] || false;
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
 
       if (isFavorite) {
         // Remove from favorites
-        const response = await fetch(
-          `${baseUrl}/favorites/${product.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'X-Customer-ID': customerId,
-            },
-          }
-        );
-
-        if (response.ok) {
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
-          showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatidan olib tashlandi', 'success');
-        } else {
-          throw new Error('Sevimlilar ro\'yxatidan olib tashlashda xatolik');
-        }
+        await api.delete(`/favorites/${product.id}`);
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
+        showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatidan olib tashlandi', 'success');
       } else {
         // Add to favorites
-        const response = await fetch(`${baseUrl}/favorites`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Customer-ID': customerId,
-          },
-          body: JSON.stringify({ product_id: product.id }),
-        });
-
-        if (response.ok) {
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
-          showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
-        } else {
-          throw new Error('Sevimlilar ro\'yxatiga qo\'shishda xatolik');
-        }
+        await api.post('/favorites', { product_id: product.id });
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
+        showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -486,6 +441,7 @@ export default function ProductsScreen({ navigation, route }) {
         isFavorite={isFavoritesEnabled ? (favoriteStatus[item.id] || false) : false}
         onCompare={compareMode ? () => handleProductPress(item) : null}
         isInCompare={compareMode && selectedForCompare.includes(item.id)}
+        customerType={user?.customer_type}
       />
     </View>
   );

@@ -4,6 +4,7 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 const CartContext = createContext();
 
@@ -17,7 +18,7 @@ export const useCart = () => {
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const lastCustomerIdRef = useRef(null);
 
   useEffect(() => {
@@ -76,12 +77,18 @@ export const CartProvider = ({ children }) => {
       
       let newItems;
       if (existingItem) {
-        newItems = prevItems.map(item =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
+        newItems = prevItems
+          .map(item => {
+            if (item.product.id !== product.id) {
+              return item;
+            }
+            return { ...item, quantity: item.quantity + quantity };
+          })
+          .filter(item => item.quantity > 0);
       } else {
+        if (quantity <= 0) {
+          return prevItems;
+        }
         newItems = [...prevItems, { product, quantity }];
       }
 
@@ -131,7 +138,7 @@ export const CartProvider = ({ children }) => {
 
   const getTotalAmount = () => {
     return cartItems.reduce((sum, item) => {
-      const price = item.product.retail_price || item.product.regular_price || 0;
+      const price = getProductPrice(item.product, user?.customer_type);
       return sum + (price * item.quantity);
     }, 0);
   };

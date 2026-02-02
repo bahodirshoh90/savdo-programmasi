@@ -2,7 +2,9 @@
  * Authentication Context for Customer App
  */
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isLoggedIn, getCurrentUser, logout as authLogout, verifyToken } from '../services/auth';
+import websocketService from '../services/websocket';
 
 const AuthContext = createContext();
 
@@ -22,6 +24,38 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      websocketService.disconnect();
+      return;
+    }
+
+    websocketService.connect();
+    const unsubscribe = websocketService.on('customer_type_changed', async (message) => {
+      const newType = message?.new_type?.value || message?.new_type;
+      if (!newType) {
+        return;
+      }
+
+      setUser((prevUser) => {
+        if (!prevUser) {
+          return prevUser;
+        }
+        const updatedUser = { ...prevUser, customer_type: newType };
+        AsyncStorage.setItem('customer_data', JSON.stringify(updatedUser)).catch((error) => {
+          console.warn('[AUTH CONTEXT] Failed to update cached customer data:', error);
+        });
+        return updatedUser;
+      });
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [isAuthenticated]);
 
   const checkAuth = async () => {
     try {

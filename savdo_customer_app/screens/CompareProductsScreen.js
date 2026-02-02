@@ -14,14 +14,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import StarRating from '../components/StarRating';
 import Footer, { FooterAwareView } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
+import { getProductPrice } from '../utils/pricing';
 
 export default function CompareProductsScreen({ route, navigation }) {
   const { productIds } = route.params || { productIds: [] };
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -142,7 +144,7 @@ export default function CompareProductsScreen({ route, navigation }) {
       <View style={styles.productsContainer}>
         {products.map((product, index) => {
           const imageUrl = getImageUrl(product.image_url);
-          const price = product.retail_price || product.regular_price || 0;
+          const price = getProductPrice(product, user?.customer_type);
           
           return (
             <View key={product.id} style={styles.productColumn}>
@@ -173,8 +175,8 @@ export default function CompareProductsScreen({ route, navigation }) {
                 let value = product[field.key];
                 let displayValue = '-';
 
-                if (field.type === 'price' && value) {
-                  displayValue = formatPrice(value);
+                if (field.type === 'price') {
+                  displayValue = formatPrice(price);
                 } else if (field.type === 'stock' && value !== undefined) {
                   displayValue = `${value} dona`;
                 } else if (field.type === 'text' && value) {

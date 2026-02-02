@@ -16,6 +16,7 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,12 +29,15 @@ import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '../context/ToastContext';
 import Footer, { FooterAwareView } from '../components/Footer';
+import { getProductPrice } from '../utils/pricing';
+import api from '../services/api';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
   const { addToCart, cartItems } = useCart();
   const { showToast } = useToast();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { settings } = useAppSettings();
   const [product, setProduct] = useState(routeProduct || null);
   const [quantity, setQuantity] = useState(1);
@@ -129,32 +133,12 @@ export default function ProductDetailScreen({ route, navigation }) {
     }
     
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(
-        `${baseUrl}/favorites/check/${currentProduct.id}`,
-        {
-          headers: {
-            'X-Customer-ID': customerId,
-          },
-        }
-      );
-      
-      // If 404, just return false (endpoint might not exist)
-      if (response.status === 404) {
+      const data = await api.get(`/favorites/check/${currentProduct.id}`);
+      setIsFavorite(data.is_favorite || false);
+    } catch (error) {
+      if (error.response?.status === 404) {
         return;
       }
-
-      if (response.ok) {
-        const data = await response.json();
-        setIsFavorite(data.is_favorite || false);
-      }
-    } catch (error) {
       console.error('Error checking favorite status:', error);
     }
   };
@@ -172,60 +156,22 @@ export default function ProductDetailScreen({ route, navigation }) {
     }
 
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi. Iltimos, qayta kirib tering.');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-
       if (isFavorite) {
         // Remove from favorites
-        const response = await fetch(
-          `${baseUrl}/favorites/${currentProduct.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'X-Customer-ID': customerId,
-            },
+        try {
+          await api.delete(`/favorites/${currentProduct.id}`);
+        } catch (removeError) {
+          if (removeError.response?.status !== 404) {
+            throw removeError;
           }
-        );
-
-        if (response.ok) {
-          setIsFavorite(false);
-          showToast('Sevimlilar ro\'yxatidan olib tashlandi', 'success');
-        } else if (response.status === 404) {
-          // If not found, just update local state
-          setIsFavorite(false);
-          showToast('Sevimlilar ro\'yxatidan olib tashlandi', 'success');
-        } else {
-          const errorData = await response.json().catch(() => ({ detail: 'Xatolik yuz berdi' }));
-          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatidan olib tashlashda xatolik');
         }
+        setIsFavorite(false);
+        showToast('Sevimlilar ro\'yxatidan olib tashlandi', 'success');
       } else {
         // Add to favorites
-        const response = await fetch(`${baseUrl}/favorites`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Customer-ID': customerId,
-          },
-          body: JSON.stringify({ product_id: currentProduct.id }),
-        });
-
-        if (response.ok) {
-          const responseData = await response.json().catch(() => ({}));
-          setIsFavorite(true);
-          showToast(responseData.message || 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
-        } else {
-          const errorData = await response.json().catch(() => ({ detail: 'Xatolik yuz berdi' }));
-          const errorMessage = errorData.detail || errorData.message || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik';
-          showToast(errorMessage, 'error');
-          console.error('Error adding to favorites:', errorData);
-        }
+        const responseData = await api.post('/favorites', { product_id: currentProduct.id });
+        setIsFavorite(true);
+        showToast(responseData?.message || 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -491,7 +437,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   }
 
   const imageUrl = getImageUrl();
-  const price = product.retail_price || product.regular_price || 0;
+  const price = getProductPrice(product, user?.customer_type);
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   // Get all images (product.image_url + productImages)

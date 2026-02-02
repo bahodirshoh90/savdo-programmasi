@@ -20,6 +20,7 @@ import Colors from '../constants/colors';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { useAuth } from '../context/AuthContext';
 import CartItem from '../components/CartItem';
 import { createOrder } from '../services/orders';
 import API_CONFIG from '../config/api';
@@ -30,6 +31,7 @@ import Footer, { FooterAwareView } from '../components/Footer';
 export default function CartScreen({ navigation }) {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getTotalAmount } = useCart();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { settings } = useAppSettings();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState('cash'); // 'cash', 'card', 'debt'
@@ -251,6 +253,7 @@ export default function CartScreen({ navigation }) {
             onUpdateQuantity={updateQuantity}
             onRemove={removeFromCart}
             getImageUrl={getImageUrl}
+            customerType={user?.customer_type}
           />
         ))}
       </ScrollView>

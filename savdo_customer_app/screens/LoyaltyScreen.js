@@ -13,14 +13,13 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
 import Footer, { FooterAwareView } from '../components/Footer';
+import api from '../services/api';
 
 export default function LoyaltyScreen({ navigation }) {
   const { colors } = useTheme();
@@ -52,39 +51,14 @@ export default function LoyaltyScreen({ navigation }) {
         return;
       }
       setIsLoading(true);
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
       
       // Get loyalty points
-      const pointsResponse = await fetch(`${baseUrl}/loyalty/points`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (pointsResponse.ok) {
-        const pointsData = await pointsResponse.json();
-        setLoyalty(pointsData);
-      }
+      const pointsData = await api.get('/loyalty/points');
+      setLoyalty(pointsData);
 
       // Get transactions
-      const transactionsResponse = await fetch(`${baseUrl}/loyalty/transactions?limit=50`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (transactionsResponse.ok) {
-        const transactionsData = await transactionsResponse.json();
-        setTransactions(transactionsData || []);
-      }
+      const transactionsData = await api.get('/loyalty/transactions?limit=50');
+      setTransactions(transactionsData || []);
     } catch (error) {
       console.error('Error loading loyalty data:', error);
       showToast('Ma\'lumotlarni yuklashda xatolik', 'error');

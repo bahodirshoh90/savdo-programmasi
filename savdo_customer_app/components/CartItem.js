@@ -5,10 +5,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { getProductPrice } from '../utils/pricing';
 
-export default function CartItem({ item, onUpdateQuantity, onRemove, getImageUrl }) {
+export default function CartItem({ item, onUpdateQuantity, onRemove, getImageUrl, customerType }) {
   const product = item.product;
-  const price = product.retail_price || product.regular_price || 0;
+  const price = getProductPrice(product, customerType);
   const subtotal = price * item.quantity;
 
   return (
