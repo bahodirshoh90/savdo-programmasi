@@ -329,6 +329,9 @@ function showPage(pageName) {
         case 'conversations':
             loadConversations();
             break;
+        case 'push-notifications':
+            resetPushNotificationForm();
+            break;
         case 'audit-logs':
             loadAuditLogs();
             break;
@@ -5562,6 +5565,87 @@ async function updateConversationStatus() {
 function closeConversationModal() {
     currentConversationId = null;
     closeModal('conversation-modal');
+}
+
+function resetPushNotificationForm() {
+    const form = document.getElementById('push-notification-form');
+    if (form) {
+        form.reset();
+    }
+}
+
+async function sendPushNotification(event) {
+    if (event && event.preventDefault) {
+        event.preventDefault();
+    }
+
+    try {
+        const title = document.getElementById('push-title')?.value?.trim();
+        const body = document.getElementById('push-body')?.value?.trim();
+        const customerIdsRaw = document.getElementById('push-customer-ids')?.value || '';
+        const dataRaw = document.getElementById('push-data')?.value?.trim();
+
+        if (!title || !body) {
+            alert('Sarlavha va xabar matnini to\'ldiring');
+            return;
+        }
+
+        let customerIds = null;
+        if (customerIdsRaw.trim()) {
+            customerIds = customerIdsRaw
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id) && id > 0);
+
+            if (!customerIds.length) {
+                alert('Mijoz IDlarini to\'g\'ri kiriting');
+                return;
+            }
+        }
+
+        let dataPayload = null;
+        if (dataRaw) {
+            try {
+                dataPayload = JSON.parse(dataRaw);
+            } catch (e) {
+                alert('Data JSON formati noto\'g\'ri');
+                return;
+            }
+        }
+
+        const payload = {
+            title,
+            body
+        };
+
+        if (customerIds) {
+            payload.customer_ids = customerIds;
+        }
+        if (dataPayload) {
+            payload.data = dataPayload;
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Push yuborishda xatolik');
+        }
+
+        const result = await response.json();
+        showToast(result.message || 'Push yuborildi', 'success');
+        resetPushNotificationForm();
+    } catch (error) {
+        console.error('Error sending push notification:', error);
+        alert('Xatolik: ' + error.message);
+    }
 }
 
 // Audit Logs
