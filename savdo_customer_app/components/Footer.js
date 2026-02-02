@@ -21,7 +21,10 @@ export default function Footer({ currentScreen = 'home' }) {
   }
 
   // Calculate total cart quantity
-  const totalCartQuantity = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const totalCartQuantity = cartItems.reduce(
+    (sum, item) => sum + (Number(item.quantity) || 0),
+    0
+  );
 
   const navItems = [
     { id: 'home', icon: 'home-outline', activeIcon: 'home', label: 'Bosh sahifa', screen: 'Home' },

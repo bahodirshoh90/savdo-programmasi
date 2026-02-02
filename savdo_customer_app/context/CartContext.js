@@ -71,18 +71,32 @@ export const CartProvider = ({ children }) => {
   };
 
   const addToCart = (product, quantity = 1) => {
+    const changeAmount = Number(quantity) || 0;
+    if (!product || !product.id || changeAmount === 0) {
+      return;
+    }
+
     setCartItems((prevItems) => {
       const existingItem = prevItems.find(item => item.product.id === product.id);
       
       let newItems;
       if (existingItem) {
-        newItems = prevItems.map(item =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
+        const newQuantity = (Number(existingItem.quantity) || 0) + changeAmount;
+        if (newQuantity <= 0) {
+          newItems = prevItems.filter(item => item.product.id !== product.id);
+        } else {
+          newItems = prevItems.map(item =>
+            item.product.id === product.id
+              ? { ...item, quantity: newQuantity }
+              : item
+          );
+        }
       } else {
-        newItems = [...prevItems, { product, quantity }];
+        if (changeAmount > 0) {
+          newItems = [...prevItems, { product, quantity: changeAmount }];
+        } else {
+          newItems = prevItems;
+        }
       }
 
       saveCart(newItems);
@@ -99,7 +113,8 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
+    const nextQuantity = Number(quantity) || 0;
+    if (nextQuantity <= 0) {
       removeFromCart(productId);
       return;
     }
@@ -107,7 +122,7 @@ export const CartProvider = ({ children }) => {
     setCartItems((prevItems) => {
       const newItems = prevItems.map(item =>
         item.product.id === productId
-          ? { ...item, quantity }
+          ? { ...item, quantity: nextQuantity }
           : item
       );
       saveCart(newItems);
@@ -126,7 +141,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const getTotalItems = () => {
-    return cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    return cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   };
 
   const getTotalAmount = () => {

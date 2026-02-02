@@ -326,6 +326,9 @@ function showPage(pageName) {
         case 'help-requests':
             loadHelpRequests();
             break;
+        case 'conversations':
+            loadConversations();
+            break;
         case 'audit-logs':
             loadAuditLogs();
             break;
@@ -4556,6 +4559,18 @@ function setupWebSocket() {
                 : `❌ Sotuv #${data.sale_id} rad etildi`;
             showToast(message);
         }
+        // New conversation created
+        if (data.type === 'new_conversation') {
+            const conversationData = data.data || {};
+            const customerName = conversationData.customer_name || 'Noma\'lum mijoz';
+            const subject = conversationData.subject || 'Yordam';
+            showToast(`💬 Yangi suhbat: ${customerName} - ${subject}`, 'info', 8000);
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'conversations' && typeof loadConversations === 'function') {
+                loadConversations();
+            }
+        }
+
         // Chat message from customer
         if (data.type === 'new_chat_message' || data.type === 'chat_message') {
             const messageData = data.message || data.data || {};
@@ -4575,6 +4590,10 @@ function setupWebSocket() {
                 if (typeof loadConversations === 'function') {
                     loadConversations();
                 }
+            }
+
+            if (typeof loadConversationMessages === 'function' && currentConversationId && conversationId === currentConversationId) {
+                loadConversationMessages(currentConversationId);
             }
         }
         
@@ -5326,6 +5345,223 @@ ${req.notes ? `Admin izohi:\n${req.notes}` : ''}`;
         console.error('Error viewing help request:', error);
         alert('Xatolik: ' + error.message);
     }
+}
+
+// Conversations / Chat
+let currentConversationId = null;
+
+async function loadConversations() {
+    try {
+        const statusFilter = document.getElementById('conversation-status-filter')?.value || '';
+        const searchQuery = (document.getElementById('conversation-search')?.value || '').toLowerCase();
+        let url = `${API_BASE}/conversations?limit=100`;
+        if (statusFilter) {
+            url += `&status=${encodeURIComponent(statusFilter)}`;
+        }
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Suhbatlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        let conversations = data.conversations || [];
+
+        if (searchQuery) {
+            conversations = conversations.filter(conv => {
+                const combined = `${conv.customer_name || ''} ${conv.subject || ''}`.toLowerCase();
+                return combined.includes(searchQuery);
+            });
+        }
+
+        const tbody = document.getElementById('conversations-tbody');
+        if (!tbody) return;
+
+        if (conversations.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Suhbatlar topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            open: 'Ochiq',
+            closed: 'Yopilgan',
+            pending: 'Kutilmoqda'
+        };
+
+        tbody.innerHTML = conversations.map(conv => {
+            const lastMessage = conv.last_message?.message || '';
+            const unreadCount = conv.unread_count || 0;
+            const lastMessageTime = conv.last_message?.created_at || conv.last_message_at || conv.updated_at || conv.created_at;
+
+            return `
+                <tr>
+                    <td>${conv.id}</td>
+                    <td>${escapeHtml(conv.customer_name || 'Noma\'lum')}</td>
+                    <td>${escapeHtml(conv.subject || 'Yordam')}</td>
+                    <td>
+                        <span class="badge badge-info">${statusLabels[conv.status] || conv.status || '-'}</span>
+                    </td>
+                    <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(lastMessage)}">
+                        ${escapeHtml(lastMessage || '-')}
+                    </td>
+                    <td>${unreadCount > 0 ? `<span class="badge badge-danger">${unreadCount}</span>` : '-'}</td>
+                    <td>${formatDate(lastMessageTime)}</td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <i class="fas fa-comments"></i> Ko'rish
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        const tbody = document.getElementById('conversations-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+async function openConversation(conversationId) {
+    currentConversationId = conversationId;
+    const input = document.getElementById('conversation-message-input');
+    if (input) {
+        input.value = '';
+    }
+    await loadConversationMessages(conversationId);
+    const modal = document.getElementById('conversation-modal');
+    if (modal) {
+        modal.style.display = 'block';
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Suhbat xabarlarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const conversation = data.conversation || {};
+        const messages = data.messages || [];
+
+        const title = document.getElementById('conversation-modal-title');
+        if (title) {
+            title.textContent = `Suhbat #${conversation.id || conversationId}`;
+        }
+
+        const meta = document.getElementById('conversation-modal-meta');
+        if (meta) {
+            meta.innerHTML = `
+                <div><strong>Mijoz:</strong> ${escapeHtml(conversation.customer_name || 'Noma\'lum')}</div>
+                <div><strong>Mavzu:</strong> ${escapeHtml(conversation.subject || 'Yordam')}</div>
+                <div><strong>Holat:</strong> ${escapeHtml(conversation.status || '-')}</div>
+            `;
+        }
+
+        const statusSelect = document.getElementById('conversation-status-select');
+        if (statusSelect && conversation.status) {
+            statusSelect.value = conversation.status;
+        }
+
+        const container = document.getElementById('conversation-messages');
+        if (!container) return;
+
+        if (messages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #64748b;">Xabarlar yo\'q</div>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => {
+            const isAdmin = msg.sender_type === 'admin';
+            return `
+                <div class="chat-message ${isAdmin ? 'admin' : 'customer'}">
+                    <div class="chat-bubble">
+                        ${!isAdmin ? `<div><strong>${escapeHtml(msg.sender_name || 'Mijoz')}</strong></div>` : ''}
+                        <div>${escapeHtml(msg.message || '')}</div>
+                        <div class="chat-meta">${formatDate(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.scrollTop = container.scrollHeight;
+    } catch (error) {
+        console.error('Error loading conversation messages:', error);
+        const container = document.getElementById('conversation-messages');
+        if (container) {
+            container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
+        }
+    }
+}
+
+async function sendConversationMessage() {
+    try {
+        if (!currentConversationId) return;
+        const input = document.getElementById('conversation-message-input');
+        const message = input?.value?.trim();
+        if (!message) return;
+
+        const response = await fetch(`${API_BASE}/conversations/${currentConversationId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ message })
+        });
+
+        if (!response.ok) {
+            throw new Error('Xabar yuborishda xatolik');
+        }
+
+        if (input) {
+            input.value = '';
+        }
+
+        await loadConversationMessages(currentConversationId);
+        loadConversations();
+    } catch (error) {
+        console.error('Error sending conversation message:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function updateConversationStatus() {
+    try {
+        if (!currentConversationId) return;
+        const statusSelect = document.getElementById('conversation-status-select');
+        const newStatus = statusSelect?.value;
+        if (!newStatus) return;
+
+        const response = await fetch(`${API_BASE}/conversations/${currentConversationId}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+
+        if (!response.ok) {
+            throw new Error('Suhbat holatini yangilashda xatolik');
+        }
+
+        showToast('Suhbat holati yangilandi', 'success');
+        loadConversations();
+    } catch (error) {
+        console.error('Error updating conversation status:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+function closeConversationModal() {
+    currentConversationId = null;
+    closeModal('conversation-modal');
 }
 
 // Audit Logs
