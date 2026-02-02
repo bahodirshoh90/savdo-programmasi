@@ -2850,21 +2850,79 @@ def send_notification(
     seller: Seller = Depends(require_permission("notifications.send"))
 ):
     """Send push notification to customers (admin only)"""
+    from models import CustomerDeviceToken
+    
     if request.customer_ids:
         # Send to specific customers
         results = []
+        total_tokens = 0
+        customers_with_tokens = 0
         for customer_id in request.customer_ids:
+            tokens = NotificationService.get_customer_tokens(db, customer_id)
+            if tokens:
+                customers_with_tokens += 1
+                total_tokens += len(tokens)
             result = NotificationService.send_to_customer(
                 db, customer_id, request.title, request.body, request.data
             )
             results.append({"customer_id": customer_id, **result})
-        return {"success": True, "results": results}
+        return {
+            "success": True,
+            "results": results,
+            "sent_tokens": total_tokens,
+            "customers_with_tokens": customers_with_tokens
+        }
     else:
         # Send to all customers
+        total_tokens = db.query(CustomerDeviceToken).filter(
+            CustomerDeviceToken.is_active == True
+        ).count()
+        customers_with_tokens = db.query(CustomerDeviceToken.customer_id).filter(
+            CustomerDeviceToken.is_active == True
+        ).distinct().count()
         result = NotificationService.send_to_all_customers(
             db, request.title, request.body, request.data
         )
-        return result
+        return {
+            **result,
+            "sent_tokens": total_tokens,
+            "customers_with_tokens": customers_with_tokens
+        }
+
+
+@app.get("/api/notifications/stats")
+def get_notification_stats(
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("notifications.send"))
+):
+    """Get push notification token statistics (admin only)"""
+    from models import CustomerDeviceToken
+    from sqlalchemy import func
+    
+    total_tokens = db.query(CustomerDeviceToken).count()
+    active_tokens = db.query(CustomerDeviceToken).filter(CustomerDeviceToken.is_active == True).count()
+    inactive_tokens = total_tokens - active_tokens
+    
+    active_customers = db.query(CustomerDeviceToken.customer_id).filter(
+        CustomerDeviceToken.is_active == True
+    ).distinct().count()
+    
+    platform_counts = dict(
+        db.query(
+            CustomerDeviceToken.platform,
+            func.count(CustomerDeviceToken.id)
+        ).filter(CustomerDeviceToken.is_active == True)
+        .group_by(CustomerDeviceToken.platform)
+        .all()
+    )
+    
+    return {
+        "total_tokens": total_tokens,
+        "active_tokens": active_tokens,
+        "inactive_tokens": inactive_tokens,
+        "active_customers": active_customers,
+        "platforms": platform_counts
+    }
 
 
 @app.post("/api/auth/social-login")
@@ -5743,6 +5801,335 @@ def spend_loyalty_points(
         "success": True,
         "remaining_points": loyalty.points,
         "spent_points": points
+    }
+
+
+# ==================== ADMIN CUSTOMER APP FEATURES ====================
+
+@app.get("/api/admin/referals")
+def admin_get_referals(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all referals with customer info"""
+    from sqlalchemy.orm import aliased, joinedload
+    from sqlalchemy import or_
+    from models import Referal, Customer
+    
+    referrer = aliased(Customer)
+    referred = aliased(Customer)
+    
+    query = db.query(Referal).join(referrer, Referal.referrer).outerjoin(referred, Referal.referred)
+    query = query.options(joinedload(Referal.referrer), joinedload(Referal.referred))
+    
+    if status:
+        if status == "active":
+            query = query.filter(Referal.status.in_(["pending", "registered"]))
+        else:
+            query = query.filter(Referal.status == status)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                referrer.name.ilike(like),
+                referrer.phone.ilike(like),
+                referred.name.ilike(like),
+                referred.phone.ilike(like),
+                Referal.referal_code.ilike(like),
+                Referal.phone.ilike(like)
+            )
+        )
+    
+    referals = query.order_by(Referal.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(referals),
+        "items": [
+            {
+                "id": r.id,
+                "referrer_name": r.referrer.name if r.referrer else None,
+                "referrer_phone": r.referrer.phone if r.referrer else None,
+                "referred_name": r.referred.name if r.referred else None,
+                "referred_phone": r.referred.phone if r.referred else (r.phone or None),
+                "referal_code": r.referal_code,
+                "status": r.status,
+                "bonus_amount": r.bonus_amount or 0,
+                "created_at": r.created_at,
+                "completed_at": r.completed_at
+            }
+            for r in referals
+        ]
+    }
+
+
+@app.get("/api/admin/loyalty")
+def admin_get_loyalty(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get loyalty points for all customers"""
+    from sqlalchemy import or_
+    from models import LoyaltyPoint, Customer
+    
+    query = db.query(LoyaltyPoint).join(Customer, LoyaltyPoint.customer_id == Customer.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Customer.name.ilike(like), Customer.phone.ilike(like)))
+    
+    loyalty_rows = query.order_by(LoyaltyPoint.points.desc()).limit(500).all()
+    
+    return {
+        "total": len(loyalty_rows),
+        "items": [
+            {
+                "id": row.id,
+                "customer_id": row.customer_id,
+                "customer_name": row.customer.name if row.customer else None,
+                "customer_phone": row.customer.phone if row.customer else None,
+                "points": row.points,
+                "total_earned": row.total_earned,
+                "total_spent": row.total_spent,
+                "vip_level": row.vip_level,
+                "updated_at": row.updated_at
+            }
+            for row in loyalty_rows
+        ]
+    }
+
+
+@app.get("/api/admin/price-alerts")
+def admin_get_price_alerts(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all price alerts"""
+    from sqlalchemy import or_
+    from models import PriceAlert, Customer, Product
+    
+    query = db.query(PriceAlert).join(Customer, PriceAlert.customer_id == Customer.id).join(Product, PriceAlert.product_id == Product.id)
+    
+    if status == "active":
+        query = query.filter(PriceAlert.is_active == True)
+    elif status == "notified":
+        query = query.filter(PriceAlert.notified == True)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    alerts = query.order_by(PriceAlert.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(alerts),
+        "items": [
+            {
+                "id": alert.id,
+                "customer_name": alert.customer.name if alert.customer else None,
+                "customer_phone": alert.customer.phone if alert.customer else None,
+                "product_name": alert.product.name if alert.product else None,
+                "current_price": (
+                    alert.product.retail_price
+                    if alert.product and alert.product.retail_price is not None
+                    else (alert.product.regular_price if alert.product else None)
+                ),
+                "target_price": alert.target_price,
+                "is_active": alert.is_active,
+                "notified": alert.notified,
+                "created_at": alert.created_at
+            }
+            for alert in alerts
+        ]
+    }
+
+
+@app.get("/api/admin/favorites")
+def admin_get_favorites(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all favorites"""
+    from sqlalchemy import or_
+    from models import Favorite, Customer, Product
+    
+    query = db.query(Favorite).join(Customer, Favorite.customer_id == Customer.id).join(Product, Favorite.product_id == Product.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    favorites = query.order_by(Favorite.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(favorites),
+        "items": [
+            {
+                "id": fav.id,
+                "customer_name": fav.customer.name if fav.customer else None,
+                "customer_phone": fav.customer.phone if fav.customer else None,
+                "product_name": fav.product.name if fav.product else None,
+                "price": (
+                    fav.product.retail_price
+                    if fav.product and fav.product.retail_price is not None
+                    else (fav.product.regular_price if fav.product else None)
+                ),
+                "created_at": fav.created_at
+            }
+            for fav in favorites
+        ]
+    }
+
+
+@app.get("/api/admin/tags")
+def admin_get_tags(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all customer product tags"""
+    from sqlalchemy import or_
+    from models import CustomerProductTag, Customer, Product
+    
+    query = db.query(CustomerProductTag).join(Customer, CustomerProductTag.customer_id == Customer.id).join(Product, CustomerProductTag.product_id == Product.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like),
+                CustomerProductTag.tag.ilike(like)
+            )
+        )
+    
+    tags = query.order_by(CustomerProductTag.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(tags),
+        "items": [
+            {
+                "id": tag.id,
+                "customer_name": tag.customer.name if tag.customer else None,
+                "customer_phone": tag.customer.phone if tag.customer else None,
+                "product_name": tag.product.name if tag.product else None,
+                "tag": tag.tag,
+                "created_at": tag.created_at
+            }
+            for tag in tags
+        ]
+    }
+
+
+@app.get("/api/admin/reviews")
+def admin_get_reviews(
+    search: Optional[str] = None,
+    rating: Optional[int] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all product reviews"""
+    from sqlalchemy import or_
+    from models import ProductReview, Product, Customer
+    
+    query = db.query(ProductReview).join(Product, ProductReview.product_id == Product.id).outerjoin(
+        Customer, ProductReview.customer_id == Customer.id
+    )
+    
+    if rating:
+        query = query.filter(ProductReview.rating == rating)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                ProductReview.customer_name.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    reviews = query.order_by(ProductReview.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(reviews),
+        "items": [
+            {
+                "id": review.id,
+                "customer_name": review.customer_name,
+                "product_name": review.product.name if review.product else None,
+                "rating": review.rating,
+                "comment": review.comment,
+                "created_at": review.created_at
+            }
+            for review in reviews
+        ]
+    }
+
+
+@app.get("/api/admin/payments")
+def admin_get_payments(
+    search: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get order payments for customer app"""
+    from datetime import datetime
+    from sqlalchemy import or_
+    from models import Order, Customer
+    
+    query = db.query(Order).outerjoin(Customer, Order.customer_id == Customer.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Customer.name.ilike(like), Customer.phone.ilike(like)))
+    
+    if date_from:
+        try:
+            start = datetime.fromisoformat(date_from)
+            query = query.filter(Order.created_at >= start)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            end = datetime.fromisoformat(date_to)
+            query = query.filter(Order.created_at <= end)
+        except ValueError:
+            pass
+    
+    orders = query.order_by(Order.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(orders),
+        "items": [
+            {
+                "id": order.id,
+                "customer_name": order.customer.name if order.customer else None,
+                "customer_phone": order.customer.phone if order.customer else None,
+                "amount": order.total_amount,
+                "payment_method": order.payment_method.value if order.payment_method else None,
+                "created_at": order.created_at
+            }
+            for order in orders
+        ]
     }
 
 

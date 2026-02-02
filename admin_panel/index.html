@@ -778,6 +778,40 @@
                 </div>
                 <div class="settings-container">
                     <div class="settings-section">
+                        <h2>Statistika</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-key"></i></div>
+                                <div class="stat-info">
+                                    <h3 id="push-total-tokens">0</h3>
+                                    <p>Jami tokenlar</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-signal"></i></div>
+                                <div class="stat-info">
+                                    <h3 id="push-active-tokens">0</h3>
+                                    <p>Faol tokenlar</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                                <div class="stat-info">
+                                    <h3 id="push-active-customers">0</h3>
+                                    <p>Faol mijozlar</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-paper-plane"></i></div>
+                                <div class="stat-info">
+                                    <h3 id="push-last-sent">-</h3>
+                                    <p>Oxirgi yuborish</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="push-platform-stats" style="margin-top: 1rem; color: var(--text-light); font-size: 0.9rem;"></div>
+                    </div>
+                    <div class="settings-section">
                         <h2>Bildirishnoma yuborish</h2>
                         <form id="push-notification-form" onsubmit="sendPushNotification(event)">
                             <div class="form-group">
