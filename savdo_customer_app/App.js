@@ -23,12 +23,14 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
+import BannersScreen from './screens/BannersScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import NewChatScreen from './screens/NewChatScreen';
 import PriceAlertsScreen from './screens/PriceAlertsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import PaymentHistoryScreen from './screens/PaymentHistoryScreen';
+import ProductTagsScreen from './screens/ProductTagsScreen';
 import ReferalScreen from './screens/ReferalScreen';
 import LoyaltyScreen from './screens/LoyaltyScreen';
 
@@ -277,6 +279,16 @@ function AppNavigator() {
               name="Dashboard"
               component={DashboardScreen}
               options={{ title: 'Statistika' }}
+            />
+            <Stack.Screen
+              name="Banners"
+              component={BannersScreen}
+              options={{ title: 'Bannerlar' }}
+            />
+            <Stack.Screen
+              name="ProductTags"
+              component={ProductTagsScreen}
+              options={{ title: 'Mahsulot teglar' }}
             />
           </>
         )}
