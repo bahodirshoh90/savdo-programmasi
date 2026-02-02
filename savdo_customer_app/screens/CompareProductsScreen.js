@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../config/api';
 import API_CONFIG from '../config/api';
 import StarRating from '../components/StarRating';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function CompareProductsScreen({ route, navigation }) {
   const { productIds } = route.params || { productIds: [] };
@@ -86,28 +86,34 @@ export default function CompareProductsScreen({ route, navigation }) {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Yuklanmoqda...</Text>
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
   if (products.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="git-compare-outline" size={80} color={Colors.textLight} />
-        <Text style={styles.emptyTitle}>Taqqoslash uchun mahsulotlar yo'q</Text>
-        <Text style={styles.emptyText}>
-          Mahsulotlar sahifasidan taqqoslash uchun mahsulotlarni tanlang
-        </Text>
-        <TouchableOpacity
-          style={styles.browseButton}
-          onPress={() => navigation.navigate('Products')}
-        >
-          <Text style={styles.browseButtonText}>Mahsulotlarni ko'rish</Text>
-        </TouchableOpacity>
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="git-compare-outline" size={80} color={Colors.textLight} />
+          <Text style={styles.emptyTitle}>Taqqoslash uchun mahsulotlar yo'q</Text>
+          <Text style={styles.emptyText}>
+            Mahsulotlar sahifasidan taqqoslash uchun mahsulotlarni tanlang
+          </Text>
+          <TouchableOpacity
+            style={styles.browseButton}
+            onPress={() => navigation.navigate('Products')}
+          >
+            <Text style={styles.browseButtonText}>Mahsulotlarni ko'rish</Text>
+          </TouchableOpacity>
+        </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
@@ -122,7 +128,7 @@ export default function CompareProductsScreen({ route, navigation }) {
   ];
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -207,7 +213,7 @@ export default function CompareProductsScreen({ route, navigation }) {
       )}
       </ScrollView>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 

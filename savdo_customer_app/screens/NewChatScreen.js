@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import api from '../services/api';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function NewChatScreen() {
   const navigation = useNavigation();
@@ -58,7 +58,7 @@ export default function NewChatScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -149,7 +149,7 @@ export default function NewChatScreen() {
         </View>
       </ScrollView>
       <Footer currentScreen="chat" />
-    </View>
+    </FooterAwareView>
   );
 }
 

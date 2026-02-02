@@ -147,6 +147,21 @@ export default function ProductsScreen({ navigation, route }) {
     loadSearchHistory();
   }, []);
 
+  useEffect(() => {
+    if (route?.params?.compareMode) {
+      setCompareMode(true);
+      if (Array.isArray(route.params.selectedIds)) {
+        setSelectedForCompare(route.params.selectedIds);
+      }
+      setSelectForPriceAlert(false);
+    }
+    if (route?.params?.selectForPriceAlert) {
+      setSelectForPriceAlert(true);
+      setCompareMode(false);
+      setSelectedForCompare([]);
+    }
+  }, [route?.params?.compareMode, route?.params?.selectedIds, route?.params?.selectForPriceAlert]);
+
   const loadSearchHistory = async () => {
     try {
       const customerId = await AsyncStorage.getItem('customer_id');
@@ -324,6 +339,8 @@ export default function ProductsScreen({ navigation, route }) {
       }
       // Navigate to price alert creation
       navigation.navigate('PriceAlertCreate', { product });
+      setSelectForPriceAlert(false);
+      navigation.setParams({ selectForPriceAlert: false });
     } else {
       // Navigate within ProductsStack - pass both productId and product object
       navigation.navigate('ProductDetail', { 
@@ -496,9 +513,26 @@ export default function ProductsScreen({ navigation, route }) {
             onPress={() => {
               setCompareMode(false);
               setSelectedForCompare([]);
+              navigation.setParams({ compareMode: false, selectedIds: [] });
             }}
           >
             <Text style={styles.cancelCompareText}>Bekor qilish</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {selectForPriceAlert && (
+        <View style={styles.priceAlertBanner}>
+          <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+          <Text style={styles.priceAlertText}>Narx eslatmasi uchun mahsulot tanlang</Text>
+          <TouchableOpacity
+            style={styles.priceAlertCancel}
+            onPress={() => {
+              setSelectForPriceAlert(false);
+              navigation.setParams({ selectForPriceAlert: false });
+            }}
+          >
+            <Text style={styles.priceAlertCancelText}>Bekor qilish</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1013,5 +1047,34 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontSize: 14,
     fontWeight: '600',
+  },
+  priceAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.primary + '15',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 8,
+  },
+  priceAlertText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  priceAlertCancel: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  priceAlertCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
   },
 });

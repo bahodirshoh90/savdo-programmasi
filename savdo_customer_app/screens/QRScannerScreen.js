@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import api from '../services/api';
+import Footer from '../components/Footer';
 
 export default function QRScannerScreen() {
   const navigation = useNavigation();
@@ -43,7 +44,7 @@ export default function QRScannerScreen() {
       console.log('Scanned code:', type, data);
 
       // Call backend API to find product by scanned code
-      const response = await api.post('/api/products/scan', { code: data });
+      const response = await api.post('/products/scan', { code: data });
 
       if (response.success && response.product) {
         // Navigate to product detail screen

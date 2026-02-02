@@ -16,13 +16,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import { getOrders, syncOfflineOrders } from '../services/orders';
+import { useCart } from '../context/CartContext';
+import { getOrder, getOrders, syncOfflineOrders } from '../services/orders';
+import { getProduct } from '../services/products';
 import OrderCard from '../components/OrderCard';
 import websocketService from '../services/websocket';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function OrdersScreen({ navigation }) {
   const { colors } = useTheme();
+  const { addToCart } = useCart();
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -173,8 +176,70 @@ export default function OrdersScreen({ navigation }) {
     navigation.navigate('OrderDetail', { orderId: order.id });
   };
 
+  const handleReorder = (order) => {
+    Alert.alert(
+      'Qayta buyurtma',
+      'Buyurtmadagi mahsulotlar savatchaga qo\'shilsinmi?',
+      [
+        { text: 'Bekor qilish', style: 'cancel' },
+        {
+          text: 'Qo\'shish',
+          onPress: async () => {
+            try {
+              let items = order?.items || [];
+              if (!items.length && order?.id) {
+                const orderDetail = await getOrder(order.id);
+                items = orderDetail?.items || [];
+              }
+
+              if (!items.length) {
+                Alert.alert('Xatolik', 'Buyurtmadagi mahsulotlar topilmadi');
+                return;
+              }
+
+              const results = await Promise.all(
+                items.map(async (item) => {
+                  if (!item?.product_id) return null;
+                  try {
+                    const product = await getProduct(item.product_id);
+                    const quantity =
+                      Number(item.requested_quantity) ||
+                      Number(item.pieces_sold) ||
+                      Number(item.packages_sold) ||
+                      1;
+                    if (!product) return null;
+                    return { product, quantity };
+                  } catch (error) {
+                    console.warn('Reorder product load failed:', error?.message || error);
+                    return null;
+                  }
+                })
+              );
+
+              const validItems = results.filter(Boolean);
+              validItems.forEach(({ product, quantity }) => addToCart(product, quantity));
+
+              const failedCount = items.length - validItems.length;
+              const message = failedCount > 0
+                ? `${validItems.length} ta mahsulot qo'shildi, ${failedCount} tasi topilmadi.`
+                : `${validItems.length} ta mahsulot savatchaga qo'shildi.`;
+
+              Alert.alert('Muvaffaqiyatli', message, [
+                { text: 'Savatcha', onPress: () => navigation.navigate('Cart') },
+                { text: 'OK' },
+              ]);
+            } catch (error) {
+              console.error('Error reordering:', error);
+              Alert.alert('Xatolik', 'Qayta buyurtmada xatolik yuz berdi');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: 70 }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Status Filter - Modern Design */}
       <View style={styles.filterContainer}>
         <View style={styles.filterCard}>
@@ -249,7 +314,7 @@ export default function OrdersScreen({ navigation }) {
         />
       )}
       <Footer currentScreen="orders" />
-    </View>
+    </FooterAwareView>
   );
 }
 

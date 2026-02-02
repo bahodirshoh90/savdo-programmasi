@@ -88,6 +88,14 @@ export default function DashboardScreen({ navigation }) {
     }).format(amount || 0);
   };
 
+  const ordersByStatus = statistics?.orders_by_status || {
+    pending: statistics?.pending_orders || 0,
+    processing: statistics?.processing_orders || 0,
+    completed: statistics?.completed_orders || 0,
+    cancelled: statistics?.cancelled_orders || 0,
+  };
+  const totalOrdersAmount = statistics?.total_orders_amount ?? statistics?.total_sales_amount ?? 0;
+
   if (isLoading && !statistics) {
     return (
       <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -155,17 +163,17 @@ export default function DashboardScreen({ navigation }) {
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="cash-outline" size={32} color={Colors.success} />
               <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {formatMoney(statistics.total_orders_amount || 0)}
+                {formatMoney(totalOrdersAmount)}
               </Text>
               <Text style={[styles.summaryLabel, { color: colors.textLight }]}>Jami Summa</Text>
             </View>
           </View>
 
           {/* Orders by Status */}
-          {statistics.orders_by_status && Object.keys(statistics.orders_by_status).length > 0 && (
+          {ordersByStatus && Object.keys(ordersByStatus).length > 0 && (
             <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Buyurtmalar Holati</Text>
-              {Object.entries(statistics.orders_by_status).map(([status, count]) => (
+              {Object.entries(ordersByStatus).map(([status, count]) => (
                 <View key={status} style={styles.statusRow}>
                   <Text style={[styles.statusLabel, { color: colors.text }]}>
                     {status === 'pending' ? 'Kutilmoqda' :
