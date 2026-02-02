@@ -329,6 +329,9 @@ function showPage(pageName) {
         case 'conversations':
             loadConversations();
             break;
+        case 'push-notifications':
+            resetPushNotificationForm();
+            break;
         case 'audit-logs':
             loadAuditLogs();
             break;
@@ -340,6 +343,9 @@ function showPage(pageName) {
             break;
         case 'categories':
             loadCategoriesPage();
+            break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
             break;
     }
 }
@@ -5564,6 +5570,87 @@ function closeConversationModal() {
     closeModal('conversation-modal');
 }
 
+function resetPushNotificationForm() {
+    const form = document.getElementById('push-notification-form');
+    if (form) {
+        form.reset();
+    }
+}
+
+async function sendPushNotification(event) {
+    if (event && event.preventDefault) {
+        event.preventDefault();
+    }
+
+    try {
+        const title = document.getElementById('push-title')?.value?.trim();
+        const body = document.getElementById('push-body')?.value?.trim();
+        const customerIdsRaw = document.getElementById('push-customer-ids')?.value || '';
+        const dataRaw = document.getElementById('push-data')?.value?.trim();
+
+        if (!title || !body) {
+            alert('Sarlavha va xabar matnini to\'ldiring');
+            return;
+        }
+
+        let customerIds = null;
+        if (customerIdsRaw.trim()) {
+            customerIds = customerIdsRaw
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id) && id > 0);
+
+            if (!customerIds.length) {
+                alert('Mijoz IDlarini to\'g\'ri kiriting');
+                return;
+            }
+        }
+
+        let dataPayload = null;
+        if (dataRaw) {
+            try {
+                dataPayload = JSON.parse(dataRaw);
+            } catch (e) {
+                alert('Data JSON formati noto\'g\'ri');
+                return;
+            }
+        }
+
+        const payload = {
+            title,
+            body
+        };
+
+        if (customerIds) {
+            payload.customer_ids = customerIds;
+        }
+        if (dataPayload) {
+            payload.data = dataPayload;
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Push yuborishda xatolik');
+        }
+
+        const result = await response.json();
+        showToast(result.message || 'Push yuborildi', 'success');
+        resetPushNotificationForm();
+    } catch (error) {
+        console.error('Error sending push notification:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
 // Audit Logs
 let currentAuditPage = 1;
 let auditLogsPerPage = 50;
@@ -5906,6 +5993,108 @@ async function saveSettings(additionalData = {}) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = '<i class="fas fa-save"></i> Sozlamalarni Saqlash';
         }
+    }
+}
+
+// ==================== CUSTOMER APP SETTINGS ====================
+
+async function loadCustomerAppSettings() {
+    try {
+        const response = await fetch('/api/settings', {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error('Sozlamalarni yuklashda xatolik');
+        const settings = await response.json();
+
+        const setCheckbox = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.checked = value !== false;
+            }
+        };
+
+        const setValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined && value !== null) {
+                el.value = value;
+            }
+        };
+
+        setCheckbox('enable-referals', settings.enable_referals);
+        setCheckbox('enable-loyalty', settings.enable_loyalty);
+        setCheckbox('enable-price-alerts', settings.enable_price_alerts);
+        setCheckbox('enable-favorites', settings.enable_favorites);
+        setCheckbox('enable-tags', settings.enable_tags);
+        setCheckbox('enable-reviews', settings.enable_reviews);
+        setCheckbox('enable-location-selection', settings.enable_location_selection);
+        setCheckbox('enable-offline-orders', settings.enable_offline_orders);
+
+        setValue('referal-bonus-points', settings.referal_bonus_points);
+        setValue('referal-bonus-percent', settings.referal_bonus_percent);
+        setValue('loyalty-points-per-sum', settings.loyalty_points_per_sum);
+        setValue('loyalty-point-value', settings.loyalty_point_value);
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        alert('Mijoz ilovasi sozlamalarini yuklashda xatolik yuz berdi');
+    }
+}
+
+async function saveCustomerAppSettings() {
+    try {
+        const toNumber = (value) => {
+            const parsed = parseFloat(value);
+            return Number.isNaN(parsed) ? null : parsed;
+        };
+
+        const payload = {
+            enable_referals: document.getElementById('enable-referals')?.checked || false,
+            enable_loyalty: document.getElementById('enable-loyalty')?.checked || false,
+            enable_price_alerts: document.getElementById('enable-price-alerts')?.checked || false,
+            enable_favorites: document.getElementById('enable-favorites')?.checked || false,
+            enable_tags: document.getElementById('enable-tags')?.checked || false,
+            enable_reviews: document.getElementById('enable-reviews')?.checked || false,
+            enable_location_selection: document.getElementById('enable-location-selection')?.checked || false,
+            enable_offline_orders: document.getElementById('enable-offline-orders')?.checked || false,
+        };
+
+        const referalBonusPoints = parseInt(document.getElementById('referal-bonus-points')?.value, 10);
+        if (!Number.isNaN(referalBonusPoints)) {
+            payload.referal_bonus_points = referalBonusPoints;
+        }
+
+        const referalBonusPercent = toNumber(document.getElementById('referal-bonus-percent')?.value);
+        if (referalBonusPercent !== null) {
+            payload.referal_bonus_percent = referalBonusPercent;
+        }
+
+        const loyaltyPointsPerSum = toNumber(document.getElementById('loyalty-points-per-sum')?.value);
+        if (loyaltyPointsPerSum !== null) {
+            payload.loyalty_points_per_sum = loyaltyPointsPerSum;
+        }
+
+        const loyaltyPointValue = toNumber(document.getElementById('loyalty-point-value')?.value);
+        if (loyaltyPointValue !== null) {
+            payload.loyalty_point_value = loyaltyPointValue;
+        }
+
+        const response = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+        }
+
+        showToast('Mijoz ilovasi sozlamalari saqlandi', 'success');
+    } catch (error) {
+        console.error('Error saving customer app settings:', error);
+        alert('Xatolik: ' + error.message);
     }
 }
 
