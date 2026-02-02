@@ -23,7 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ReferalScreen({ navigation }) {
   const { colors } = useTheme();
@@ -177,35 +177,41 @@ export default function ReferalScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="referal" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Referal o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="people-outline"
         />
         <Footer currentScreen="referal" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="referal" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -301,7 +307,7 @@ export default function ReferalScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

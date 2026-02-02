@@ -6,8 +6,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initializeNotifications, removeNotificationListeners } from './services/notifications';
 import { useAuth } from './context/AuthContext';
 
@@ -22,7 +23,6 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
-import QRScannerScreen from './screens/QRScannerScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import NewChatScreen from './screens/NewChatScreen';
@@ -239,11 +239,6 @@ function AppNavigator() {
               options={{ title: 'Buyurtma detallari' }}
             />
             <Stack.Screen
-              name="QRScanner"
-              component={QRScannerScreen}
-              options={{ title: 'QR Kod Skaner', headerShown: false }}
-            />
-            <Stack.Screen
               name="ChatList"
               component={ChatListScreen}
               options={{ title: t('support') || 'Yordam', headerShown: false }}
@@ -292,20 +287,22 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <AppSettingsProvider>
-              <CartProvider>
-                <AppNavigator />
-                <StatusBar style="auto" />
-              </CartProvider>
-            </AppSettingsProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    <SafeAreaProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <AppSettingsProvider>
+                <CartProvider>
+                  <AppNavigator />
+                  <StatusBar style="auto" />
+                </CartProvider>
+              </AppSettingsProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
 

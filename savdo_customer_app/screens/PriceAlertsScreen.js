@@ -23,7 +23,7 @@ import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function PriceAlertsScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -305,35 +305,41 @@ export default function PriceAlertsScreen({ navigation, route }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="price-alerts" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <FeatureUnavailable
           title="Narx eslatmalari o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="notifications-off-outline"
         />
         <Footer currentScreen="price-alerts" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="price-alerts" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Narx Eslatmalari</Text>
         <TouchableOpacity
@@ -483,7 +489,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
       </Modal>
 
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

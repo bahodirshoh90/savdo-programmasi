@@ -20,7 +20,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function LoyaltyScreen({ navigation }) {
   const { colors } = useTheme();
@@ -124,35 +124,41 @@ export default function LoyaltyScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="loyalty" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Bonus tizimi o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="trophy-outline"
         />
         <Footer currentScreen="loyalty" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="loyalty" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -267,7 +273,7 @@ export default function LoyaltyScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

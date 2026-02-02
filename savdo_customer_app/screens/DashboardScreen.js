@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
@@ -35,18 +35,40 @@ export default function DashboardScreen({ navigation }) {
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
+      const customerId = await AsyncStorage.getItem('customer_id');
+      if (!customerId) {
+        setStatistics(null);
+        return;
+      }
       const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
         ? API_ENDPOINTS.BASE_URL 
         : `${API_ENDPOINTS.BASE_URL}/api`;
       
-      const response = await fetch(`${baseUrl}/statistics?period=${period}`);
+      const response = await fetch(
+        `${baseUrl}/customers/${customerId}/stats?period=${period}`,
+        {
+          headers: {
+            'X-Customer-ID': customerId,
+          },
+        }
+      );
       
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
+      } else {
+        // Fallback to legacy statistics endpoint if needed
+        const fallbackResponse = await fetch(`${baseUrl}/statistics?period=${period}`);
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          setStatistics(fallbackData);
+        } else {
+          setStatistics(null);
+        }
       }
     } catch (error) {
       console.error('Error loading statistics:', error);
+      setStatistics(null);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -68,14 +90,17 @@ export default function DashboardScreen({ navigation }) {
 
   if (isLoading && !statistics) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="reports" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -192,8 +217,8 @@ export default function DashboardScreen({ navigation }) {
         </View>
         )}
       </ScrollView>
-      <Footer currentScreen="profile" />
-    </View>
+      <Footer currentScreen="reports" />
+    </FooterAwareView>
   );
 }
 

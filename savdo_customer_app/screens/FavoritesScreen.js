@@ -19,7 +19,7 @@ import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function FavoritesScreen({ navigation }) {
   const { settings, isLoading: settingsLoading } = useAppSettings();
@@ -226,41 +226,44 @@ export default function FavoritesScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Yuklanmoqda...</Text>
         </View>
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Sevimlilar o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="heart-dislike-outline"
         />
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Yuklanmoqda...</Text>
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="favorites" />
+      </FooterAwareView>
     );
   }
 
   if (favorites.length === 0) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <View style={styles.emptyContainer}>
           <Ionicons name="heart-outline" size={80} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>Sevimli mahsulotlar yo'q</Text>
@@ -275,12 +278,12 @@ export default function FavoritesScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sevimli Mahsulotlar</Text>
         <Text style={styles.headerSubtitle}>
@@ -307,7 +310,7 @@ export default function FavoritesScreen({ navigation }) {
         }
       />
       <Footer currentScreen="favorites" />
-    </View>
+    </FooterAwareView>
   );
 }
 

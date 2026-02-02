@@ -8,13 +8,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useCart } from '../context/CartContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/colors';
+
+export const FOOTER_BASE_HEIGHT = 56;
+
+export const useFooterHeight = () => {
+  const insets = useSafeAreaInsets();
+  return FOOTER_BASE_HEIGHT + Math.max(insets.bottom, 8);
+};
+
+export const FooterAwareView = ({ children, style }) => {
+  const footerHeight = useFooterHeight();
+  return (
+    <View style={[styles.footerAwareContainer, { paddingBottom: footerHeight }, style]}>
+      {children}
+    </View>
+  );
+};
 
 export default function Footer({ currentScreen = 'home' }) {
   const navigation = useNavigation();
   const { isAuthenticated } = useAuth();
   const { colors } = useTheme();
   const { cartItems } = useCart();
+  const insets = useSafeAreaInsets();
+  const footerHeight = useFooterHeight();
 
   if (!isAuthenticated) {
     return null;
@@ -72,7 +91,18 @@ export default function Footer({ currentScreen = 'home' }) {
   };
 
   return (
-    <View style={[styles.footer, { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }]}>
+    <View
+      style={[
+        styles.footer,
+        {
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          paddingBottom: Math.max(insets.bottom, 8),
+          height: footerHeight,
+        },
+      ]}
+    >
       {navItems.map((item) => {
         const isActive = currentScreen.toLowerCase() === item.id;
         const badgeCount = Number(item.badge) || 0;
@@ -113,13 +143,16 @@ export default function Footer({ currentScreen = 'home' }) {
 }
 
 const styles = StyleSheet.create({
+  footerAwareContainer: {
+    flex: 1,
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingTop: 8,
     paddingHorizontal: 4,
     justifyContent: 'space-around',
     alignItems: 'center',
