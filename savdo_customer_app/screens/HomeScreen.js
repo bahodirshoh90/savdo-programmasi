@@ -143,14 +143,6 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('QRScanner')}
-          >
-            <Ionicons name="qr-code-outline" size={32} color={colors.primary} />
-            <Text style={[styles.actionText, { color: colors.text }]}>QR Kod</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Cart')}
           >
             <Ionicons name="cart-outline" size={32} color={colors.primary} />

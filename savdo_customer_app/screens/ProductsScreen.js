@@ -529,12 +529,6 @@ export default function ProductsScreen({ navigation, route }) {
             )}
           </View>
           <TouchableOpacity
-            style={styles.scanButton}
-            onPress={() => navigation.navigate('QRScanner')}
-          >
-            <Ionicons name="qr-code-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilters(true)}
           >
@@ -854,14 +848,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.surface,
     fontWeight: '600',
-  },
-  scanButton: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.borderLight,
-    marginRight: 8,
   },
   filterButton: {
     padding: 8,
