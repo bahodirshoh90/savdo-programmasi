@@ -96,6 +96,9 @@
                     <i class="fas fa-life-ring"></i> Yordam So'rovlari
                     <span id="help-requests-badge" class="badge" style="display: none; margin-left: auto; background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">0</span>
                 </a>
+                <a href="#" class="nav-item" data-page="conversations">
+                    <i class="fas fa-comments"></i> Mijozlar Chat
+                </a>
                 <a href="#" class="nav-item" data-page="banners">
                     <i class="fas fa-image"></i> Bannerlar
                 </a>
@@ -719,6 +722,46 @@
                             </tr>
                         </thead>
                         <tbody id="help-requests-tbody">
+                            <tr><td colspan="8" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Conversations Page -->
+            <div id="conversations" class="page">
+                <div class="page-header">
+                    <h1><i class="fas fa-comments"></i> Mijozlar Chat</h1>
+                    <div class="page-actions">
+                        <select id="conversation-status-filter" onchange="loadConversations()" style="padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #d1d5db;">
+                            <option value="">Barcha holatlar</option>
+                            <option value="open">Ochiq</option>
+                            <option value="closed">Yopilgan</option>
+                            <option value="pending">Kutilmoqda</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadConversations()">
+                            <i class="fas fa-sync"></i> Yangilash
+                        </button>
+                    </div>
+                </div>
+                <div class="filters">
+                    <input type="text" id="conversation-search" placeholder="Mijoz yoki mavzu bo'yicha qidirish" class="search-input" onkeyup="loadConversations()">
+                </div>
+                <div class="table-container">
+                    <table id="conversations-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Mijoz</th>
+                                <th>Mavzu</th>
+                                <th>Holat</th>
+                                <th>So'nggi xabar</th>
+                                <th>Yangi</th>
+                                <th>Sana</th>
+                                <th>Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversations-tbody">
                             <tr><td colspan="8" style="text-align: center; padding: 2rem;">Yuklanmoqda...</td></tr>
                         </tbody>
                     </table>
@@ -1728,6 +1771,29 @@
                     <button type="submit" class="btn btn-primary">Saqlash</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Conversation Modal -->
+    <div id="conversation-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="closeConversationModal()">&times;</span>
+            <h2 id="conversation-modal-title">Suhbat</h2>
+            <div id="conversation-modal-meta" class="conversation-meta"></div>
+            <div id="conversation-messages" class="chat-messages"></div>
+            <div class="chat-input">
+                <textarea id="conversation-message-input" rows="3" placeholder="Xabar yozing..."></textarea>
+                <div class="chat-actions">
+                    <select id="conversation-status-select" onchange="updateConversationStatus()">
+                        <option value="open">Ochiq</option>
+                        <option value="closed">Yopilgan</option>
+                        <option value="pending">Kutilmoqda</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="sendConversationMessage()">
+                        <i class="fas fa-paper-plane"></i> Yuborish
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
