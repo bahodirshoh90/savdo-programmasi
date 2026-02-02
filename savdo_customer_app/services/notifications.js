@@ -3,6 +3,7 @@
  */
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -59,8 +60,12 @@ export async function getExpoPushToken() {
       return null;
     }
     
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId
+      || Constants?.easConfig?.projectId
+      || 'ea4b267c-a627-404a-a062-2ed13042ef22';
+
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'ea4b267c-a627-404a-a062-2ed13042ef22', // From app.json
+      projectId,
     });
     
     return tokenData.data;
@@ -83,11 +88,19 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
     
     const platformName = platform || Platform.OS;
     
-    await api.post('/notifications/register-token', {
-      token,
-      device_id: deviceId,
-      platform: platformName,
-    });
+    await api.post(
+      '/notifications/register-token',
+      {
+        token,
+        device_id: deviceId,
+        platform: platformName,
+      },
+      {
+        headers: {
+          'X-Customer-ID': customerId,
+        },
+      }
+    );
     
     // Save token locally
     await AsyncStorage.setItem('expo_push_token', token);
@@ -105,8 +118,10 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
  */
 export async function unregisterDeviceToken(token) {
   try {
+    const customerId = await AsyncStorage.getItem('customer_id');
     await api.delete('/notifications/unregister-token', {
       params: { token },
+      headers: customerId ? { 'X-Customer-ID': customerId } : undefined,
     });
     
     await AsyncStorage.removeItem('expo_push_token');
