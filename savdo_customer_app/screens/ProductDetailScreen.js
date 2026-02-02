@@ -444,6 +444,7 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   const imageUrl = getImageUrl();
   const price = product.retail_price || product.regular_price || 0;
+  const currentProductForActions = product || routeProduct;
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   // Get all images (product.image_url + productImages)
@@ -560,6 +561,22 @@ export default function ProductDetailScreen({ route, navigation }) {
             {isOutOfStock ? 'Omborda yo\'q' : `Omborda: ${product.total_pieces} dona`}
           </Text>
         )}
+
+        <View style={styles.secondaryActions}>
+          <TouchableOpacity
+            style={styles.alertButton}
+            onPress={() => {
+              if (!currentProductForActions) {
+                Alert.alert('Xatolik', 'Mahsulot topilmadi');
+                return;
+              }
+              navigation.navigate('PriceAlertCreate', { product: currentProductForActions });
+            }}
+          >
+            <Ionicons name="notifications-outline" size={18} color={Colors.surface} />
+            <Text style={styles.alertButtonText}>Narx eslatmasi</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Add to Cart Button with Quantity Controls */}
         {cartQuantity > 0 ? (
@@ -881,6 +898,26 @@ const styles = StyleSheet.create({
   cartQuantityText: {
     color: Colors.primary,
     fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  alertButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  alertButtonText: {
+    color: Colors.surface,
+    fontSize: 14,
     fontWeight: '600',
   },
   reviewsSection: {

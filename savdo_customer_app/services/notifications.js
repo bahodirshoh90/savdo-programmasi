@@ -20,6 +20,15 @@ Notifications.setNotificationHandler({
  */
 export async function requestNotificationPermissions() {
   try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#4f46e5',
+      });
+    }
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
@@ -74,7 +83,7 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
     
     const platformName = platform || Platform.OS;
     
-    await api.post('/api/notifications/register-token', {
+    await api.post('/notifications/register-token', {
       token,
       device_id: deviceId,
       platform: platformName,
@@ -96,7 +105,7 @@ export async function registerDeviceToken(token, deviceId = null, platform = nul
  */
 export async function unregisterDeviceToken(token) {
   try {
-    await api.delete('/api/notifications/unregister-token', {
+    await api.delete('/notifications/unregister-token', {
       params: { token },
     });
     
