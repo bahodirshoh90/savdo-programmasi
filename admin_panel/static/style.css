@@ -975,12 +975,33 @@ tbody tr:hover {
     margin-bottom: 1.5rem;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
 }
 
 .settings-section h2 {
     margin-bottom: 1.5rem;
     color: var(--primary-color);
     font-size: 1.25rem;
+}
+
+/* Reusable card style (customer app settings) */
+.card {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+}
+
+.card h2 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+}
+
+.card .form-group label input[type="checkbox"] {
+    margin-right: 0.5rem;
 }
 
 .settings-form .form-group {
