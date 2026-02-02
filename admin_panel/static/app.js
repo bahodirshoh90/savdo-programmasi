@@ -331,6 +331,7 @@ function showPage(pageName) {
             break;
         case 'push-notifications':
             resetPushNotificationForm();
+            loadPushNotificationStats();
             break;
         case 'audit-logs':
             loadAuditLogs();
@@ -346,6 +347,27 @@ function showPage(pageName) {
             break;
         case 'customer-app-settings':
             loadCustomerAppSettings();
+            break;
+        case 'customer-referals':
+            loadCustomerReferals();
+            break;
+        case 'customer-loyalty':
+            loadCustomerLoyalty();
+            break;
+        case 'customer-price-alerts':
+            loadCustomerPriceAlerts();
+            break;
+        case 'customer-favorites':
+            loadCustomerFavorites();
+            break;
+        case 'customer-tags':
+            loadCustomerTags();
+            break;
+        case 'product-reviews':
+            loadProductReviews();
+            break;
+        case 'customer-payments':
+            loadCustomerPayments();
             break;
     }
 }
@@ -5577,6 +5599,36 @@ function resetPushNotificationForm() {
     }
 }
 
+async function loadPushNotificationStats() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/stats`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Statistikani yuklashda xatolik');
+        }
+
+        const stats = await response.json();
+        const totalEl = document.getElementById('push-total-tokens');
+        const activeEl = document.getElementById('push-active-tokens');
+        const customersEl = document.getElementById('push-active-customers');
+        const platformsEl = document.getElementById('push-platform-stats');
+
+        if (totalEl) totalEl.textContent = stats.total_tokens ?? 0;
+        if (activeEl) activeEl.textContent = stats.active_tokens ?? 0;
+        if (customersEl) customersEl.textContent = stats.active_customers ?? 0;
+
+        if (platformsEl) {
+            const platforms = stats.platforms || {};
+            const parts = Object.entries(platforms).map(([platform, count]) => `${platform || 'unknown'}: ${count}`);
+            platformsEl.textContent = parts.length ? `Platformalar: ${parts.join(', ')}` : '';
+        }
+    } catch (error) {
+        console.error('Error loading push stats:', error);
+    }
+}
+
 async function sendPushNotification(event) {
     if (event && event.preventDefault) {
         event.preventDefault();
@@ -5643,8 +5695,15 @@ async function sendPushNotification(event) {
         }
 
         const result = await response.json();
+        const sentTokens = result.sent_tokens ?? 0;
+        const sentCustomers = result.customers_with_tokens ?? 0;
+        const lastSentEl = document.getElementById('push-last-sent');
+        if (lastSentEl) {
+            lastSentEl.textContent = `${sentCustomers} mijoz / ${sentTokens} token`;
+        }
         showToast(result.message || 'Push yuborildi', 'success');
         resetPushNotificationForm();
+        loadPushNotificationStats();
     } catch (error) {
         console.error('Error sending push notification:', error);
         alert('Xatolik: ' + error.message);
@@ -6095,6 +6154,369 @@ async function saveCustomerAppSettings() {
     } catch (error) {
         console.error('Error saving customer app settings:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+// ==================== CUSTOMER APP DATA PAGES ====================
+
+async function loadCustomerReferals() {
+    const tbody = document.getElementById('referals-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('referal-search')?.value?.trim();
+    const status = document.getElementById('referal-status-filter')?.value;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/referals?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Referallarni yuklashda xatolik');
+        }
+        const data = await response.json();
+        const items = data.items || [];
+
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            pending: 'Kutilmoqda',
+            registered: 'Roʻyxatdan o‘tgan',
+            completed: 'Tugallangan'
+        };
+        const statusClass = {
+            pending: 'warning',
+            registered: 'info',
+            completed: 'success'
+        };
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const referrer = `${escapeHtml(item.referrer_name || '-')}${item.referrer_phone ? ` (${escapeHtml(item.referrer_phone)})` : ''}`;
+            const referred = `${escapeHtml(item.referred_name || '-')}${item.referred_phone ? ` (${escapeHtml(item.referred_phone)})` : ''}`;
+            const statusKey = item.status || 'pending';
+            const badgeClass = statusClass[statusKey] || 'info';
+            const statusText = statusLabels[statusKey] || statusKey;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${referrer}</td>
+                <td>${referred}</td>
+                <td>${escapeHtml(item.referal_code || '-')}</td>
+                <td>${formatMoney(item.bonus_amount || 0)}</td>
+                <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading referals:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerLoyalty() {
+    const tbody = document.getElementById('loyalty-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('loyalty-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/loyalty?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Loyalty maʼlumotlarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.customer_phone || '-')}</td>
+                <td>${item.points ?? 0}</td>
+                <td>${item.total_spent ?? 0}</td>
+                <td>${item.total_earned ?? 0}</td>
+                <td>${formatDate(item.updated_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading loyalty:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerPriceAlerts() {
+    const tbody = document.getElementById('price-alerts-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('price-alert-search')?.value?.trim();
+    const status = document.getElementById('price-alert-status-filter')?.value;
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/price-alerts?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Narx eslatmalarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            let statusLabel = 'Nofaol';
+            let badgeClass = 'danger';
+            if (item.notified) {
+                statusLabel = 'Xabar berilgan';
+                badgeClass = 'info';
+            } else if (item.is_active) {
+                statusLabel = 'Faol';
+                badgeClass = 'success';
+            }
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${item.current_price !== null && item.current_price !== undefined ? formatMoney(item.current_price) : '-'}</td>
+                <td>${formatMoney(item.target_price || 0)}</td>
+                <td><span class="badge badge-${badgeClass}">${statusLabel}</span></td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading price alerts:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerFavorites() {
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('favorites-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/favorites?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sevimlilarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${item.price !== null && item.price !== undefined ? formatMoney(item.price) : '-'}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerTags() {
+    const tbody = document.getElementById('tags-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('tags-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/tags?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Teglarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${escapeHtml(item.tag || '-')}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadProductReviews() {
+    const tbody = document.getElementById('reviews-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('reviews-search')?.value?.trim();
+    const rating = document.getElementById('reviews-rating-filter')?.value;
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (rating) params.append('rating', rating);
+
+        const response = await fetch(`${API_BASE}/admin/reviews?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sharhlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const ratingStars = `${item.rating || 0} ⭐`;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${ratingStars}</td>
+                <td>${escapeHtml(item.comment || '-')}</td>
+                <td>${formatDate(item.created_at)}</td>
+                <td>-</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerPayments() {
+    const tbody = document.getElementById('payments-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('payments-search')?.value?.trim();
+    const dateFrom = document.getElementById('payments-date-from')?.value;
+    const dateTo = document.getElementById('payments-date-to')?.value;
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (dateFrom) params.append('date_from', dateFrom);
+        if (dateTo) params.append('date_to', dateTo);
+
+        const response = await fetch(`${API_BASE}/admin/payments?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Toʻlov tarixini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        const paymentMethodMap = {
+            cash: 'Naqd',
+            card: 'Karta',
+            bank_transfer: 'Hisob raqam'
+        };
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const paymentMethod = paymentMethodMap[item.payment_method] || item.payment_method || '-';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${formatMoney(item.amount || 0)}</td>
+                <td><span class="badge badge-info">${escapeHtml(paymentMethod)}</span></td>
+                <td>${item.id}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading payments:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
     }
 }
 
