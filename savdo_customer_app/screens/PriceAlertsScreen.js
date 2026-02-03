@@ -313,7 +313,10 @@ export default function PriceAlertsScreen({ navigation, route }) {
               // Navigate to Products tab first, then to product selection
               navigation.navigate('MainTabs', { 
                 screen: 'Products',
-                params: { selectForPriceAlert: true }
+                params: { 
+                  screen: 'ProductsList',
+                  params: { selectForPriceAlert: true }
+                }
               });
             }
           }}
@@ -335,7 +338,10 @@ export default function PriceAlertsScreen({ navigation, route }) {
               // Navigate to Products tab first, then to product selection
               navigation.navigate('MainTabs', { 
                 screen: 'Products',
-                params: { selectForPriceAlert: true }
+                params: { 
+                  screen: 'ProductsList',
+                  params: { selectForPriceAlert: true }
+                }
               });
             }}
           >
@@ -436,7 +442,10 @@ export default function PriceAlertsScreen({ navigation, route }) {
                     setShowAddModal(false);
                     navigation.navigate('MainTabs', { 
                       screen: 'Products',
-                      params: { selectForPriceAlert: true }
+                      params: { 
+                        screen: 'ProductsList',
+                        params: { selectForPriceAlert: true }
+                      }
                     });
                   }}
                 >

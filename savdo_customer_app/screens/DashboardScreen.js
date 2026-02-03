@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer, { FooterAwareView } from '../components/Footer';
+import Footer from '../components/Footer';
 
 export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
@@ -35,41 +35,18 @@ export default function DashboardScreen({ navigation }) {
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        setStatistics(null);
-        return;
-      }
-
       const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
         ? API_ENDPOINTS.BASE_URL 
         : `${API_ENDPOINTS.BASE_URL}/api`;
       
-      const response = await fetch(
-        `${baseUrl}/customers/${customerId}/stats?period=${period}`,
-        {
-          headers: {
-            'X-Customer-ID': customerId,
-          },
-        }
-      );
+      const response = await fetch(`${baseUrl}/statistics?period=${period}`);
       
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
-      } else {
-        // Fallback to legacy statistics endpoint if needed
-        const fallbackResponse = await fetch(`${baseUrl}/statistics?period=${period}`);
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json();
-          setStatistics(fallbackData);
-        } else {
-          setStatistics(null);
-        }
       }
     } catch (error) {
       console.error('Error loading statistics:', error);
-      setStatistics(null);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -89,13 +66,10 @@ export default function DashboardScreen({ navigation }) {
     }).format(amount || 0);
   };
 
-  const totalOrders = statistics?.total_orders ?? statistics?.orders?.total_orders ?? 0;
-  const totalOrdersAmount =
-    statistics?.total_orders_amount ??
-    statistics?.orders?.total_orders_amount ??
-    statistics?.total_sales_amount ??
-    0;
-  const ordersByStatus = statistics?.orders_by_status ?? statistics?.orders?.orders_by_status ?? {};
+  const orderStats = statistics?.orders || {};
+  const totalOrders = orderStats.total_orders || 0;
+  const totalOrdersAmount = orderStats.total_orders_amount || 0;
+  const ordersByStatus = orderStats.orders_by_status || {};
 
   if (isLoading && !statistics) {
     return (
@@ -106,7 +80,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   return (
-    <FooterAwareView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -168,7 +142,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
 
           {/* Orders by Status */}
-          {ordersByStatus && Object.keys(ordersByStatus).length > 0 && (
+          {Object.keys(ordersByStatus).length > 0 && (
             <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Buyurtmalar Holati</Text>
               {Object.entries(ordersByStatus).map(([status, count]) => (
@@ -224,7 +198,7 @@ export default function DashboardScreen({ navigation }) {
         )}
       </ScrollView>
       <Footer currentScreen="reports" />
-    </FooterAwareView>
+    </View>
   );
 }
 

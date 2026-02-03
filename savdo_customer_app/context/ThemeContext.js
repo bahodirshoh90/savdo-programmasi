@@ -26,6 +26,7 @@ const lightColors = {
 
 // Dark theme colors
 const darkColors = {
+  ...Colors,
   primary: '#6366f1', // Keep primary color
   secondary: '#64748b',
   background: '#0f172a', // Dark background
@@ -39,7 +40,6 @@ const darkColors = {
   warning: '#f59e0b',
   danger: '#ef4444',
   cardBg: '#1e293b',
-  // Add any other colors
 };
 
 export const ThemeProvider = ({ children }) => {

@@ -59,10 +59,9 @@ class NotificationService:
                 "Content-Type": "application/json"
             }
             
-            payload = messages[0] if len(messages) == 1 else messages
             response = requests.post(
                 NotificationService.EXPO_PUSH_URL,
-                json=payload,
+                json=messages,
                 headers=headers,
                 timeout=10
             )
@@ -72,10 +71,7 @@ class NotificationService:
                 # Check for errors in individual messages
                 errors = []
                 if "data" in result:
-                    data_items = result["data"]
-                    if isinstance(data_items, dict):
-                        data_items = [data_items]
-                    for item in data_items:
+                    for item in result["data"]:
                         if "status" in item and item["status"] == "error":
                             errors.append(item.get("message", "Unknown error"))
                 

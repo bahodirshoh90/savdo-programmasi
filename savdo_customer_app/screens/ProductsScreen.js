@@ -142,6 +142,12 @@ export default function ProductsScreen({ navigation, route }) {
     loadSearchHistory();
   }, []);
 
+  useEffect(() => {
+    if (route?.params?.selectForPriceAlert) {
+      setSelectForPriceAlert(true);
+    }
+  }, [route?.params?.selectForPriceAlert]);
+
   const loadSearchHistory = async () => {
     try {
       const customerId = await AsyncStorage.getItem('customer_id');
@@ -311,12 +317,23 @@ export default function ProductsScreen({ navigation, route }) {
     } else if (selectForPriceAlert) {
       // Navigate to price alert creation
       navigation.navigate('PriceAlertCreate', { product });
+      setSelectForPriceAlert(false);
+      if (navigation.setParams) {
+        navigation.setParams({ selectForPriceAlert: false });
+      }
     } else {
       // Navigate within ProductsStack - pass both productId and product object
       navigation.navigate('ProductDetail', { 
         productId: product.id,
         product: product // Pass product object to avoid loading issues
       });
+    }
+  };
+
+  const exitPriceAlertMode = () => {
+    setSelectForPriceAlert(false);
+    if (navigation.setParams) {
+      navigation.setParams({ selectForPriceAlert: false });
     }
   };
 
@@ -547,6 +564,20 @@ export default function ProductsScreen({ navigation, route }) {
           </View>
         )}
       </View>
+
+      {selectForPriceAlert && (
+        <View style={styles.priceAlertBanner}>
+          <View style={styles.priceAlertInfo}>
+            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+            <Text style={styles.priceAlertText}>
+              Narx eslatmasi uchun mahsulot tanlang
+            </Text>
+          </View>
+          <TouchableOpacity onPress={exitPriceAlertMode} style={styles.priceAlertCancel}>
+            <Text style={styles.priceAlertCancelText}>Bekor qilish</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {isLoading && products.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -992,6 +1023,37 @@ const styles = StyleSheet.create({
   cancelCompareText: {
     color: Colors.danger,
     fontSize: 14,
+    fontWeight: '600',
+  },
+  priceAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: 10,
+    backgroundColor: Colors.primary + '10',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  priceAlertInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  priceAlertText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  priceAlertCancel: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  priceAlertCancelText: {
+    color: Colors.danger,
+    fontSize: 13,
     fontWeight: '600',
   },
 });

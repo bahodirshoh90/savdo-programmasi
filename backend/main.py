@@ -89,43 +89,53 @@ try:
             conn.execute(text("ALTER TABLE settings ADD COLUMN work_days VARCHAR(20)"))
             conn.execute(text("UPDATE settings SET work_days = '1,2,3,4,5,6,7' WHERE work_days IS NULL"))
 
-        # Customer app settings fields
         if 'enable_referals' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_referals BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_referals = 0 WHERE enable_referals IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_referals = 1 WHERE enable_referals IS NULL"))
+
         if 'enable_loyalty' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_loyalty BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_loyalty = 0 WHERE enable_loyalty IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_loyalty = 1 WHERE enable_loyalty IS NULL"))
+
         if 'enable_price_alerts' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_price_alerts BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_price_alerts = 0 WHERE enable_price_alerts IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_price_alerts = 1 WHERE enable_price_alerts IS NULL"))
+
         if 'enable_favorites' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_favorites BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_favorites = 0 WHERE enable_favorites IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_favorites = 1 WHERE enable_favorites IS NULL"))
+
         if 'enable_tags' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_tags BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_tags = 0 WHERE enable_tags IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_tags = 1 WHERE enable_tags IS NULL"))
+
         if 'enable_reviews' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN enable_reviews BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_reviews = 0 WHERE enable_reviews IS NULL"))
-        if 'enable_location_selection' not in columns:
-            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_location_selection = 0 WHERE enable_location_selection IS NULL"))
-        if 'enable_offline_orders' not in columns:
-            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN"))
-            conn.execute(text("UPDATE settings SET enable_offline_orders = 0 WHERE enable_offline_orders IS NULL"))
+            conn.execute(text("UPDATE settings SET enable_reviews = 1 WHERE enable_reviews IS NULL"))
+
         if 'referal_bonus_points' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_points INTEGER"))
             conn.execute(text("UPDATE settings SET referal_bonus_points = 100 WHERE referal_bonus_points IS NULL"))
+
         if 'referal_bonus_percent' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN referal_bonus_percent REAL"))
             conn.execute(text("UPDATE settings SET referal_bonus_percent = 5 WHERE referal_bonus_percent IS NULL"))
+
         if 'loyalty_points_per_sum' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_points_per_sum REAL"))
             conn.execute(text("UPDATE settings SET loyalty_points_per_sum = 0.01 WHERE loyalty_points_per_sum IS NULL"))
+
         if 'loyalty_point_value' not in columns:
             conn.execute(text("ALTER TABLE settings ADD COLUMN loyalty_point_value REAL"))
             conn.execute(text("UPDATE settings SET loyalty_point_value = 1 WHERE loyalty_point_value IS NULL"))
+
+        if 'enable_location_selection' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_location_selection BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_location_selection = 1 WHERE enable_location_selection IS NULL"))
+
+        if 'enable_offline_orders' not in columns:
+            conn.execute(text("ALTER TABLE settings ADD COLUMN enable_offline_orders BOOLEAN"))
+            conn.execute(text("UPDATE settings SET enable_offline_orders = 1 WHERE enable_offline_orders IS NULL"))
         
         # Migrate sellers table to add image_url column if it doesn't exist
         try:
@@ -986,7 +996,6 @@ def get_products(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
-    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -999,8 +1008,7 @@ def get_products(
     """Get all products with optional search, filtering, and sorting"""
     products = ProductService.get_products(db, skip=skip, limit=limit, search=search, 
                                       low_stock_only=low_stock_only, min_stock=min_stock,
-                                      brand=brand, category=category, category_id=category_id,
-                                      supplier=supplier, location=location,
+                                      brand=brand, category=category, supplier=supplier, location=location,
                                       sort_by=sort_by, sort_order=sort_order)
     # Convert to response with computed properties
     result = []
@@ -1062,7 +1070,6 @@ def get_products_count(
     min_stock: int = 0,
     brand: Optional[str] = None,
     category: Optional[str] = None,
-    category_id: Optional[int] = None,
     supplier: Optional[str] = None,
     location: Optional[str] = None,
     min_price: Optional[float] = None,
@@ -1077,7 +1084,6 @@ def get_products_count(
         min_stock=min_stock,
         brand=brand,
         category=category,
-        category_id=category_id,
         supplier=supplier,
         location=location
     )
@@ -1875,96 +1881,6 @@ def get_product_rating_summary(
     }
 
 
-# ==================== ADMIN PRODUCT REVIEWS ====================
-
-@app.get("/api/admin/reviews")
-def admin_get_product_reviews(
-    search: Optional[str] = None,
-    rating: Optional[int] = None,
-    status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    seller: Optional[Seller] = Depends(get_seller_from_header)
-):
-    """Get product reviews for admin panel"""
-    if not seller:
-        raise HTTPException(status_code=401, detail="Seller authentication required")
-
-    from sqlalchemy.orm import joinedload
-
-    query = db.query(ProductReview).options(joinedload(ProductReview.product)).filter(
-        ProductReview.is_deleted == False
-    )
-
-    if rating:
-        query = query.filter(ProductReview.rating == rating)
-
-    if status == "approved":
-        query = query.filter(ProductReview.is_approved == True)
-    elif status == "pending":
-        query = query.filter(ProductReview.is_approved == False)
-
-    if search:
-        search_term = f"%{search.strip()}%"
-        query = query.join(Product).filter(
-            (Product.name.ilike(search_term)) |
-            (ProductReview.customer_name.ilike(search_term)) |
-            (ProductReview.comment.ilike(search_term))
-        )
-
-    total = query.count()
-    reviews = query.order_by(ProductReview.created_at.desc()).offset(skip).limit(limit).all()
-
-    results = []
-    for review in reviews:
-        product = review.product
-        results.append({
-            "id": review.id,
-            "product_id": review.product_id,
-            "product_name": product.name if product else None,
-            "customer_id": review.customer_id,
-            "customer_name": review.customer_name,
-            "rating": review.rating,
-            "comment": review.comment,
-            "is_approved": review.is_approved,
-            "created_at": to_uzbekistan_time(review.created_at).isoformat() if review.created_at else None
-        })
-
-    return {"total": total, "reviews": results}
-
-
-@app.put("/api/admin/reviews/{review_id}")
-def admin_update_product_review(
-    review_id: int,
-    payload: dict = Body(...),
-    db: Session = Depends(get_db),
-    seller: Optional[Seller] = Depends(get_seller_from_header)
-):
-    """Approve/unapprove or delete a review (admin)"""
-    if not seller:
-        raise HTTPException(status_code=401, detail="Seller authentication required")
-
-    review = db.query(ProductReview).filter(ProductReview.id == review_id).first()
-    if not review:
-        raise HTTPException(status_code=404, detail="Baholash topilmadi")
-
-    if "is_approved" in payload:
-        review.is_approved = bool(payload["is_approved"])
-    if "is_deleted" in payload:
-        review.is_deleted = bool(payload["is_deleted"])
-
-    db.commit()
-    db.refresh(review)
-
-    return {
-        "success": True,
-        "review_id": review.id,
-        "is_approved": review.is_approved,
-        "is_deleted": review.is_deleted
-    }
-
-
 # ==================== SEARCH HISTORY ====================
 
 @app.post("/api/search-history", response_model=SearchHistoryResponse)
@@ -2192,55 +2108,14 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/customers/{customer_id}/stats", response_model=CustomerStatsResponse)
-def get_customer_stats(
-    customer_id: int,
-    period: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
+def get_customer_stats(customer_id: int, db: Session = Depends(get_db)):
     """Get statistics for a specific customer (orders & sales)"""
     # Ensure customer exists
     customer = CustomerService.get_customer(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    # Auto-set date range based on period if not provided
-    if not start_date or not end_date:
-        now = get_uzbekistan_now()
-        if period == "daily":
-            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now.isoformat()
-            start_date = start_of_day.isoformat()
-        elif period == "monthly":
-            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_date = now.isoformat()
-            start_date = start_of_month.isoformat()
-        elif period == "yearly":
-            start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_date = now.isoformat()
-            start_date = start_of_year.isoformat()
-
-    def parse_date(value: Optional[str]) -> Optional[datetime]:
-        if not value:
-            return None
-        try:
-            date_str = value.replace('Z', '+00:00') if 'Z' in value else value
-            if '+' not in date_str and 'Z' not in date_str and date_str[-1] != 'Z':
-                parsed = datetime.fromisoformat(date_str)
-                if parsed.tzinfo is None:
-                    from utils import UZBEKISTAN_TZ
-                    parsed = parsed.replace(tzinfo=UZBEKISTAN_TZ)
-            else:
-                parsed = datetime.fromisoformat(date_str)
-            return parsed
-        except (ValueError, AttributeError):
-            return None
-
-    start_dt = parse_date(start_date)
-    end_dt = parse_date(end_date)
-
-    stats = CustomerService.get_customer_stats(db, customer_id, start_dt, end_dt)
+    stats = CustomerService.get_customer_stats(db, customer_id)
     return stats
 
 
@@ -2258,15 +2133,13 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
     # If customer type changed, notify customer app via WebSocket
     if old_customer_type and customer.customer_type and old_customer_type != customer.customer_type:
         try:
-            old_type_value = old_customer_type.value if hasattr(old_customer_type, 'value') else str(old_customer_type)
-            new_type_value = customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type)
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_type_value,
-                "new_type": new_type_value
+                "old_type": old_customer_type,
+                "new_type": customer.customer_type
             })
-            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_type_value} -> {new_type_value}")
+            print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     
@@ -2557,10 +2430,6 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["enable_tags"] = settings.enable_tags
         if hasattr(settings, 'enable_reviews'):
             response_data["enable_reviews"] = settings.enable_reviews
-        if hasattr(settings, 'enable_location_selection'):
-            response_data["enable_location_selection"] = settings.enable_location_selection
-        if hasattr(settings, 'enable_offline_orders'):
-            response_data["enable_offline_orders"] = settings.enable_offline_orders
         if hasattr(settings, 'referal_bonus_points'):
             response_data["referal_bonus_points"] = settings.referal_bonus_points
         if hasattr(settings, 'referal_bonus_percent'):
@@ -2569,6 +2438,10 @@ def get_settings(db: Session = Depends(get_db)):
             response_data["loyalty_points_per_sum"] = settings.loyalty_points_per_sum
         if hasattr(settings, 'loyalty_point_value'):
             response_data["loyalty_point_value"] = settings.loyalty_point_value
+        if hasattr(settings, 'enable_location_selection'):
+            response_data["enable_location_selection"] = settings.enable_location_selection
+        if hasattr(settings, 'enable_offline_orders'):
+            response_data["enable_offline_orders"] = settings.enable_offline_orders
         
         return SettingsResponse(**response_data)
     except Exception as e:
@@ -2882,7 +2755,6 @@ def verify_otp(request: VerifyOtpRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
-        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -2978,21 +2850,79 @@ def send_notification(
     seller: Seller = Depends(require_permission("notifications.send"))
 ):
     """Send push notification to customers (admin only)"""
+    from models import CustomerDeviceToken
+    
     if request.customer_ids:
         # Send to specific customers
         results = []
+        total_tokens = 0
+        customers_with_tokens = 0
         for customer_id in request.customer_ids:
+            tokens = NotificationService.get_customer_tokens(db, customer_id)
+            if tokens:
+                customers_with_tokens += 1
+                total_tokens += len(tokens)
             result = NotificationService.send_to_customer(
                 db, customer_id, request.title, request.body, request.data
             )
             results.append({"customer_id": customer_id, **result})
-        return {"success": True, "results": results}
+        return {
+            "success": True,
+            "results": results,
+            "sent_tokens": total_tokens,
+            "customers_with_tokens": customers_with_tokens
+        }
     else:
         # Send to all customers
+        total_tokens = db.query(CustomerDeviceToken).filter(
+            CustomerDeviceToken.is_active == True
+        ).count()
+        customers_with_tokens = db.query(CustomerDeviceToken.customer_id).filter(
+            CustomerDeviceToken.is_active == True
+        ).distinct().count()
         result = NotificationService.send_to_all_customers(
             db, request.title, request.body, request.data
         )
-        return result
+        return {
+            **result,
+            "sent_tokens": total_tokens,
+            "customers_with_tokens": customers_with_tokens
+        }
+
+
+@app.get("/api/notifications/stats")
+def get_notification_stats(
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("notifications.send"))
+):
+    """Get push notification token statistics (admin only)"""
+    from models import CustomerDeviceToken
+    from sqlalchemy import func
+    
+    total_tokens = db.query(CustomerDeviceToken).count()
+    active_tokens = db.query(CustomerDeviceToken).filter(CustomerDeviceToken.is_active == True).count()
+    inactive_tokens = total_tokens - active_tokens
+    
+    active_customers = db.query(CustomerDeviceToken.customer_id).filter(
+        CustomerDeviceToken.is_active == True
+    ).distinct().count()
+    
+    platform_counts = dict(
+        db.query(
+            CustomerDeviceToken.platform,
+            func.count(CustomerDeviceToken.id)
+        ).filter(CustomerDeviceToken.is_active == True)
+        .group_by(CustomerDeviceToken.platform)
+        .all()
+    )
+    
+    return {
+        "total_tokens": total_tokens,
+        "active_tokens": active_tokens,
+        "inactive_tokens": inactive_tokens,
+        "active_customers": active_customers,
+        "platforms": platform_counts
+    }
 
 
 @app.post("/api/auth/social-login")
@@ -3045,7 +2975,6 @@ def social_login(request: SocialLoginRequest, db: Session = Depends(get_db)):
         "customer_id": customer.id,
         "name": customer.name,
         "phone": customer.phone,
-        "customer_type": customer.customer_type.value if customer.customer_type else None,
     }
 
     return JSONResponse(
@@ -4672,10 +4601,6 @@ def get_statistics(
                 "total_orders_amount": total_orders_amount,
                 "online_orders_amount": online_orders_amount
             }
-            # Backward-compatible top-level fields for customer app
-            stats["total_orders"] = total_orders
-            stats["total_orders_amount"] = total_orders_amount
-            stats["orders_by_status"] = orders_by_status
         except Exception as e:
             print(f"Error getting order statistics: {e}")
             import traceback
@@ -4689,9 +4614,6 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             }
-            stats["total_orders"] = 0
-            stats["total_orders_amount"] = 0
-            stats["orders_by_status"] = {}
         
         try:
             # Add inventory statistics
@@ -4732,9 +4654,6 @@ def get_statistics(
                 "total_orders_amount": 0,
                 "online_orders_amount": 0
             },
-            "total_orders": 0,
-            "total_orders_amount": 0,
-            "orders_by_status": {},
             "inventory": {"total_value": 0, "total_packages": 0, "total_pieces": 0},
             "total_debt": 0
         }
@@ -4967,56 +4886,6 @@ def check_favorite(
     ).first()
     
     return {"is_favorite": favorite is not None}
-
-
-# ==================== ADMIN FAVORITES ====================
-
-@app.get("/api/admin/favorites")
-def admin_get_favorites(
-    search: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    seller: Optional[Seller] = Depends(get_seller_from_header)
-):
-    """Get all favorites for admin panel"""
-    if not seller:
-        raise HTTPException(status_code=401, detail="Seller authentication required")
-
-    from sqlalchemy.orm import joinedload
-
-    query = db.query(Favorite).options(
-        joinedload(Favorite.customer),
-        joinedload(Favorite.product)
-    )
-
-    if search:
-        search_term = f"%{search.strip()}%"
-        query = query.join(Customer).join(Product).filter(
-            (Customer.name.ilike(search_term)) |
-            (Customer.phone.ilike(search_term)) |
-            (Product.name.ilike(search_term))
-        )
-
-    total = query.count()
-    favorites = query.order_by(Favorite.created_at.desc()).offset(skip).limit(limit).all()
-
-    results = []
-    for fav in favorites:
-        product = fav.product
-        customer = fav.customer
-        results.append({
-            "id": fav.id,
-            "customer_id": fav.customer_id,
-            "customer_name": customer.name if customer else None,
-            "customer_phone": customer.phone if customer else None,
-            "product_id": fav.product_id,
-            "product_name": product.name if product else None,
-            "product_price": product.retail_price if product else 0,
-            "created_at": to_uzbekistan_time(fav.created_at).isoformat() if fav.created_at else None
-        })
-
-    return {"total": total, "favorites": results}
 
 
 # ==================== PERSONAL PRODUCT TAGS ====================
@@ -5932,6 +5801,335 @@ def spend_loyalty_points(
         "success": True,
         "remaining_points": loyalty.points,
         "spent_points": points
+    }
+
+
+# ==================== ADMIN CUSTOMER APP FEATURES ====================
+
+@app.get("/api/admin/referals")
+def admin_get_referals(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all referals with customer info"""
+    from sqlalchemy.orm import aliased, joinedload
+    from sqlalchemy import or_
+    from models import Referal, Customer
+    
+    referrer = aliased(Customer)
+    referred = aliased(Customer)
+    
+    query = db.query(Referal).join(referrer, Referal.referrer).outerjoin(referred, Referal.referred)
+    query = query.options(joinedload(Referal.referrer), joinedload(Referal.referred))
+    
+    if status:
+        if status == "active":
+            query = query.filter(Referal.status.in_(["pending", "registered"]))
+        else:
+            query = query.filter(Referal.status == status)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                referrer.name.ilike(like),
+                referrer.phone.ilike(like),
+                referred.name.ilike(like),
+                referred.phone.ilike(like),
+                Referal.referal_code.ilike(like),
+                Referal.phone.ilike(like)
+            )
+        )
+    
+    referals = query.order_by(Referal.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(referals),
+        "items": [
+            {
+                "id": r.id,
+                "referrer_name": r.referrer.name if r.referrer else None,
+                "referrer_phone": r.referrer.phone if r.referrer else None,
+                "referred_name": r.referred.name if r.referred else None,
+                "referred_phone": r.referred.phone if r.referred else (r.phone or None),
+                "referal_code": r.referal_code,
+                "status": r.status,
+                "bonus_amount": r.bonus_amount or 0,
+                "created_at": r.created_at,
+                "completed_at": r.completed_at
+            }
+            for r in referals
+        ]
+    }
+
+
+@app.get("/api/admin/loyalty")
+def admin_get_loyalty(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get loyalty points for all customers"""
+    from sqlalchemy import or_
+    from models import LoyaltyPoint, Customer
+    
+    query = db.query(LoyaltyPoint).join(Customer, LoyaltyPoint.customer_id == Customer.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Customer.name.ilike(like), Customer.phone.ilike(like)))
+    
+    loyalty_rows = query.order_by(LoyaltyPoint.points.desc()).limit(500).all()
+    
+    return {
+        "total": len(loyalty_rows),
+        "items": [
+            {
+                "id": row.id,
+                "customer_id": row.customer_id,
+                "customer_name": row.customer.name if row.customer else None,
+                "customer_phone": row.customer.phone if row.customer else None,
+                "points": row.points,
+                "total_earned": row.total_earned,
+                "total_spent": row.total_spent,
+                "vip_level": row.vip_level,
+                "updated_at": row.updated_at
+            }
+            for row in loyalty_rows
+        ]
+    }
+
+
+@app.get("/api/admin/price-alerts")
+def admin_get_price_alerts(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all price alerts"""
+    from sqlalchemy import or_
+    from models import PriceAlert, Customer, Product
+    
+    query = db.query(PriceAlert).join(Customer, PriceAlert.customer_id == Customer.id).join(Product, PriceAlert.product_id == Product.id)
+    
+    if status == "active":
+        query = query.filter(PriceAlert.is_active == True)
+    elif status == "notified":
+        query = query.filter(PriceAlert.notified == True)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    alerts = query.order_by(PriceAlert.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(alerts),
+        "items": [
+            {
+                "id": alert.id,
+                "customer_name": alert.customer.name if alert.customer else None,
+                "customer_phone": alert.customer.phone if alert.customer else None,
+                "product_name": alert.product.name if alert.product else None,
+                "current_price": (
+                    alert.product.retail_price
+                    if alert.product and alert.product.retail_price is not None
+                    else (alert.product.regular_price if alert.product else None)
+                ),
+                "target_price": alert.target_price,
+                "is_active": alert.is_active,
+                "notified": alert.notified,
+                "created_at": alert.created_at
+            }
+            for alert in alerts
+        ]
+    }
+
+
+@app.get("/api/admin/favorites")
+def admin_get_favorites(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all favorites"""
+    from sqlalchemy import or_
+    from models import Favorite, Customer, Product
+    
+    query = db.query(Favorite).join(Customer, Favorite.customer_id == Customer.id).join(Product, Favorite.product_id == Product.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    favorites = query.order_by(Favorite.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(favorites),
+        "items": [
+            {
+                "id": fav.id,
+                "customer_name": fav.customer.name if fav.customer else None,
+                "customer_phone": fav.customer.phone if fav.customer else None,
+                "product_name": fav.product.name if fav.product else None,
+                "price": (
+                    fav.product.retail_price
+                    if fav.product and fav.product.retail_price is not None
+                    else (fav.product.regular_price if fav.product else None)
+                ),
+                "created_at": fav.created_at
+            }
+            for fav in favorites
+        ]
+    }
+
+
+@app.get("/api/admin/tags")
+def admin_get_tags(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all customer product tags"""
+    from sqlalchemy import or_
+    from models import CustomerProductTag, Customer, Product
+    
+    query = db.query(CustomerProductTag).join(Customer, CustomerProductTag.customer_id == Customer.id).join(Product, CustomerProductTag.product_id == Product.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+                Product.name.ilike(like),
+                CustomerProductTag.tag.ilike(like)
+            )
+        )
+    
+    tags = query.order_by(CustomerProductTag.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(tags),
+        "items": [
+            {
+                "id": tag.id,
+                "customer_name": tag.customer.name if tag.customer else None,
+                "customer_phone": tag.customer.phone if tag.customer else None,
+                "product_name": tag.product.name if tag.product else None,
+                "tag": tag.tag,
+                "created_at": tag.created_at
+            }
+            for tag in tags
+        ]
+    }
+
+
+@app.get("/api/admin/reviews")
+def admin_get_reviews(
+    search: Optional[str] = None,
+    rating: Optional[int] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get all product reviews"""
+    from sqlalchemy import or_
+    from models import ProductReview, Product, Customer
+    
+    query = db.query(ProductReview).join(Product, ProductReview.product_id == Product.id).outerjoin(
+        Customer, ProductReview.customer_id == Customer.id
+    )
+    
+    if rating:
+        query = query.filter(ProductReview.rating == rating)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                ProductReview.customer_name.ilike(like),
+                Product.name.ilike(like)
+            )
+        )
+    
+    reviews = query.order_by(ProductReview.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(reviews),
+        "items": [
+            {
+                "id": review.id,
+                "customer_name": review.customer_name,
+                "product_name": review.product.name if review.product else None,
+                "rating": review.rating,
+                "comment": review.comment,
+                "created_at": review.created_at
+            }
+            for review in reviews
+        ]
+    }
+
+
+@app.get("/api/admin/payments")
+def admin_get_payments(
+    search: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+    seller: Seller = Depends(require_permission("admin.settings"))
+):
+    """Admin: Get order payments for customer app"""
+    from datetime import datetime
+    from sqlalchemy import or_
+    from models import Order, Customer
+    
+    query = db.query(Order).outerjoin(Customer, Order.customer_id == Customer.id)
+    
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Customer.name.ilike(like), Customer.phone.ilike(like)))
+    
+    if date_from:
+        try:
+            start = datetime.fromisoformat(date_from)
+            query = query.filter(Order.created_at >= start)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            end = datetime.fromisoformat(date_to)
+            query = query.filter(Order.created_at <= end)
+        except ValueError:
+            pass
+    
+    orders = query.order_by(Order.created_at.desc()).limit(500).all()
+    
+    return {
+        "total": len(orders),
+        "items": [
+            {
+                "id": order.id,
+                "customer_name": order.customer.name if order.customer else None,
+                "customer_phone": order.customer.phone if order.customer else None,
+                "amount": order.total_amount,
+                "payment_method": order.payment_method.value if order.payment_method else None,
+                "created_at": order.created_at
+            }
+            for order in orders
+        ]
     }
 
 

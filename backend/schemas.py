@@ -55,8 +55,6 @@ class ProductUpdate(BaseModel):
     item_number: Optional[str] = Field(None, max_length=100, description="Mahsulot kodi/nomeri")
     barcode: Optional[str] = Field(None, max_length=100)
     brand: Optional[str] = Field(None, max_length=100)
-    category: Optional[str] = Field(None, max_length=100, description="Kategoriya (legacy)")
-    category_id: Optional[int] = Field(None, description="Kategoriya ID")
     supplier: Optional[str] = Field(None, max_length=200)
     received_date: Optional[datetime] = None
     image_url: Optional[str] = Field(None, max_length=500)  # Ixtiyoriy rasm
@@ -201,11 +199,9 @@ class CustomerStatsResponse(BaseModel):
     """Customer statistics for dashboard (orders & sales)"""
     customer_id: int
     total_orders: int
-    total_orders_amount: float = 0.0
     completed_orders: int
     cancelled_orders: int
     pending_orders: int
-    orders_by_status: Dict[str, int] = Field(default_factory=dict)
     total_sales_amount: float
     total_paid_amount: float
     total_debt_amount: float
@@ -735,18 +731,18 @@ class SettingsBase(BaseModel):
     notify_low_stock: bool = True  # Kam qolgan mahsulotlar
     notify_debt_limit: bool = True  # Qarz limiti oshganlar
     notify_daily_report: bool = True  # Kunlik hisobotlar
-    enable_referals: Optional[bool] = None
-    enable_loyalty: Optional[bool] = None
-    enable_price_alerts: Optional[bool] = None
-    enable_favorites: Optional[bool] = None
-    enable_tags: Optional[bool] = None
-    enable_reviews: Optional[bool] = None
-    enable_location_selection: Optional[bool] = None
-    enable_offline_orders: Optional[bool] = None
-    referal_bonus_points: Optional[int] = None
-    referal_bonus_percent: Optional[float] = None
-    loyalty_points_per_sum: Optional[float] = None
-    loyalty_point_value: Optional[float] = None
+    enable_referals: bool = True
+    enable_loyalty: bool = True
+    enable_price_alerts: bool = True
+    enable_favorites: bool = True
+    enable_tags: bool = True
+    enable_reviews: bool = True
+    referal_bonus_points: int = 100
+    referal_bonus_percent: float = 5.0
+    loyalty_points_per_sum: float = 0.01
+    loyalty_point_value: float = 1.0
+    enable_location_selection: bool = True
+    enable_offline_orders: bool = True
 
 
 class SettingsUpdate(SettingsBase):

@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { login as authLogin, signup } from '../services/auth';
+import { login as authLogin, signup, storeAuthData } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
 import { API_ENDPOINTS } from '../config/api';
@@ -138,7 +138,13 @@ export default function LoginScreen() {
 
       if (response.success && response.token && response.user) {
         // OTP verification successful and token received
-        await login(response.user, response.token);
+        const storedUser = await storeAuthData({
+          token: response.token,
+          user: response.user,
+          customer_id: response.customer_id,
+          customer_name: response.customer_name,
+        });
+        await login(storedUser);
         setShowOtpModal(false);
         setOtpCode('');
         setOtpSent(false);
@@ -163,6 +169,11 @@ export default function LoginScreen() {
     }
 
     const cleanPhone = phone.trim().replace(/\s/g, '');
+    const phoneRegex = /^\+?[0-9]{9,15}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      Alert.alert('Xatolik', 'Noto\'g\'ri telefon raqam formati');
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await api.post('/auth/social-login', {
@@ -174,7 +185,13 @@ export default function LoginScreen() {
       if (response.token && response.user) {
         // Store token and user data
         const { token, user } = response;
-        await login(user, token);
+        const storedUser = await storeAuthData({
+          token,
+          user,
+          customer_id: response.customer_id,
+          customer_name: response.customer_name,
+        });
+        await login(storedUser);
         Alert.alert('Muvaffaqiyatli', `${provider === 'google' ? 'Google' : 'Facebook'} orqali kirildi`);
       } else {
         Alert.alert('Xatolik', 'Ijtimoiy tarmoq orqali kirishda xatolik');
@@ -600,7 +617,7 @@ export default function LoginScreen() {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary]}
+                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
                 onPress={() => {
                   setShowResetPasswordModal(false);
                   setResetPasswordData({
@@ -614,7 +631,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.button, isResettingPassword && styles.buttonDisabled]}
+                style={[styles.button, isResettingPassword && styles.buttonDisabled, styles.modalButton]}
                 onPress={handleResetPassword}
                 disabled={isResettingPassword}
               >
@@ -718,7 +735,7 @@ export default function LoginScreen() {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary]}
+                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
                 onPress={() => {
                   setShowRegisterModal(false);
                   setRegisterData({
@@ -735,7 +752,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.button, isRegistering && styles.buttonDisabled]}
+                style={[styles.button, isRegistering && styles.buttonDisabled, styles.modalButton]}
                 onPress={handleRegister}
                 disabled={isRegistering}
               >
@@ -795,7 +812,7 @@ export default function LoginScreen() {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary]}
+                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
                 onPress={() => {
                   setShowHelpModal(false);
                   setHelpData({
@@ -809,7 +826,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.button, isSendingHelp && styles.buttonDisabled]}
+                style={[styles.button, isSendingHelp && styles.buttonDisabled, styles.modalButton]}
                 onPress={handleSendHelpRequest}
                 disabled={isSendingHelp}
               >
@@ -859,7 +876,7 @@ export default function LoginScreen() {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary]}
+                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
                 onPress={() => {
                   setShowOtpModal(false);
                   setOtpCode('');
@@ -870,7 +887,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
+                style={[styles.button, isLoading && styles.buttonDisabled, styles.modalButton]}
                 onPress={handleVerifyOTP}
                 disabled={isLoading}
               >
@@ -1048,6 +1065,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+  },
+  modalButton: {
+    flex: 1,
   },
   helpLinks: {
     marginTop: 16,

@@ -16,7 +16,6 @@ import Colors from '../constants/colors';
 import { getProduct } from '../services/products';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
 import API_CONFIG from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,13 +26,11 @@ import { TextInput, Modal, Share as RNShare } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '../context/ToastContext';
-import Footer, { FooterAwareView } from '../components/Footer';
-import { getProductPrice } from '../utils/pricing';
+import Footer from '../components/Footer';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { productId, product: routeProduct } = route.params || {};
   const { addToCart, cartItems } = useCart();
-  const { user } = useAuth();
   const { showToast } = useToast();
   const { colors } = useTheme();
   const [product, setProduct] = useState(routeProduct || null);
@@ -421,16 +418,15 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   if (isLoading) {
     return (
-      <FooterAwareView style={styles.loadingContainer}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Footer currentScreen="products" />
-      </FooterAwareView>
+      </View>
     );
   }
 
   if (!product && !isLoading) {
     return (
-      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.text }]}>Mahsulot topilmadi</Text>
@@ -442,12 +438,13 @@ export default function ProductDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="products" />
-      </FooterAwareView>
+      </View>
     );
   }
 
   const imageUrl = getImageUrl();
-  const price = getProductPrice(product, user?.customer_type);
+  const price = product.retail_price || product.regular_price || 0;
+  const currentProductForActions = product || routeProduct;
   const isOutOfStock = product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces <= 0;
 
   // Get all images (product.image_url + productImages)
@@ -473,7 +470,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const currentImageUrl = currentImage?.image_url || imageUrl;
 
   return (
-    <FooterAwareView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       <View style={styles.imageContainer}>
         {currentImageUrl ? (
@@ -551,6 +548,9 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
         )}
 
+        {product.barcode && (
+          <Text style={styles.barcode}>Barcode: {product.barcode}</Text>
+        )}
 
         <Text style={styles.price}>
           {price.toLocaleString('uz-UZ')} so'm
@@ -561,6 +561,22 @@ export default function ProductDetailScreen({ route, navigation }) {
             {isOutOfStock ? 'Omborda yo\'q' : `Omborda: ${product.total_pieces} dona`}
           </Text>
         )}
+
+        <View style={styles.secondaryActions}>
+          <TouchableOpacity
+            style={styles.alertButton}
+            onPress={() => {
+              if (!currentProductForActions) {
+                Alert.alert('Xatolik', 'Mahsulot topilmadi');
+                return;
+              }
+              navigation.navigate('PriceAlertCreate', { product: currentProductForActions });
+            }}
+          >
+            <Ionicons name="notifications-outline" size={18} color={Colors.surface} />
+            <Text style={styles.alertButtonText}>Narx eslatmasi</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Add to Cart Button with Quantity Controls */}
         {cartQuantity > 0 ? (
@@ -700,7 +716,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="products" />
-    </FooterAwareView>
+    </View>
   );
 }
 
@@ -782,6 +798,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.textDark,
     marginBottom: 8,
+  },
+  barcode: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginBottom: 12,
   },
   price: {
     fontSize: 28,
@@ -877,6 +898,26 @@ const styles = StyleSheet.create({
   cartQuantityText: {
     color: Colors.primary,
     fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  alertButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  alertButtonText: {
+    color: Colors.surface,
+    fontSize: 14,
     fontWeight: '600',
   },
   reviewsSection: {

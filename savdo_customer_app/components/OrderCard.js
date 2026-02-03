@@ -3,21 +3,22 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import Colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import responsive from '../utils/responsive';
 
-const getStatusColor = (status) => {
+const getStatusColor = (status, colors) => {
   switch (status) {
     case 'completed':
-      return Colors.success;
+      return colors.success;
     case 'processing':
-      return Colors.primary;
+      return colors.primary;
     case 'pending':
-      return Colors.warning;
+      return colors.warning;
     case 'cancelled':
-      return Colors.danger;
+      return colors.danger;
     default:
-      return Colors.textLight;
+      return colors.textLight;
   }
 };
 
@@ -32,7 +33,8 @@ const getStatusLabel = (status) => {
 };
 
 export default function OrderCard({ order, onPress }) {
-  const statusColor = getStatusColor(order.status);
+  const { colors } = useTheme();
+  const statusColor = getStatusColor(order.status, colors);
   const statusLabel = getStatusLabel(order.status);
   const orderDate = order.created_at
     ? new Date(order.created_at).toLocaleDateString('uz-UZ', {
@@ -46,14 +48,14 @@ export default function OrderCard({ order, onPress }) {
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onPress={() => onPress && onPress(order)}
       activeOpacity={0.7}
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.orderId}>Buyurtma #{order.id}</Text>
-          <Text style={styles.orderDate}>{orderDate}</Text>
+          <Text style={[styles.orderId, { color: colors.text }]}>Buyurtma #{order.id}</Text>
+          <Text style={[styles.orderDate, { color: colors.textLight }]}>{orderDate}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
           <Text style={[styles.statusText, { color: statusColor }]}>
@@ -63,10 +65,10 @@ export default function OrderCard({ order, onPress }) {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.totalAmount}>
+        <Text style={[styles.totalAmount, { color: colors.primary }]}>
           Jami: {order.total_amount?.toLocaleString('uz-UZ') || '0'} so'm
         </Text>
-        <Text style={styles.itemsCount}>
+        <Text style={[styles.itemsCount, { color: colors.textLight }]}>
           {order.items?.length || 0} ta mahsulot
         </Text>
       </View>
@@ -74,7 +76,7 @@ export default function OrderCard({ order, onPress }) {
       <View style={styles.footer}>
         {order.status === 'completed' && (
           <TouchableOpacity
-            style={styles.reorderButton}
+            style={[styles.reorderButton, { borderColor: colors.primary }]}
             onPress={(e) => {
               e.stopPropagation();
               if (onPress) {
@@ -82,11 +84,11 @@ export default function OrderCard({ order, onPress }) {
               }
             }}
           >
-            <Ionicons name="repeat-outline" size={16} color={Colors.primary} />
-            <Text style={styles.reorderButtonText}>Qayta buyurtma</Text>
+            <Ionicons name="repeat-outline" size={16} color={colors.primary} />
+            <Text style={[styles.reorderButtonText, { color: colors.primary }]}>Qayta buyurtma</Text>
           </TouchableOpacity>
         )}
-        <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
+        <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
       </View>
     </TouchableOpacity>
   );
@@ -94,12 +96,10 @@ export default function OrderCard({ order, onPress }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: responsive.getSpacing(16),
+    marginBottom: responsive.getSpacing(12),
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -111,14 +111,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: 'bold',
-    color: Colors.textDark,
     marginBottom: 4,
   },
   orderDate: {
-    fontSize: 12,
-    color: Colors.textLight,
+    fontSize: responsive.getFontSize(12),
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -126,21 +124,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: responsive.getFontSize(12),
     fontWeight: '600',
   },
   content: {
     marginBottom: 12,
   },
   totalAmount: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: 'bold',
-    color: Colors.primary,
     marginBottom: 4,
   },
   itemsCount: {
-    fontSize: 14,
-    color: Colors.textLight,
+    fontSize: responsive.getFontSize(14),
   },
   footer: {
     flexDirection: 'row',
@@ -154,12 +150,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.primary,
     gap: 6,
   },
   reorderButtonText: {
-    fontSize: 12,
-    color: Colors.primary,
+    fontSize: responsive.getFontSize(12),
     fontWeight: '600',
   },
 });

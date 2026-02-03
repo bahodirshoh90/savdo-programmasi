@@ -273,6 +273,16 @@ function AppNavigator() {
               options={{ title: 'Sevimli Mahsulotlar' }}
             />
             <Stack.Screen
+              name="Referal"
+              component={ReferalScreen}
+              options={{ title: 'Do\'stni Taklif Qilish' }}
+            />
+            <Stack.Screen
+              name="Loyalty"
+              component={LoyaltyScreen}
+              options={{ title: 'Bonus Tizimi' }}
+            />
+            <Stack.Screen
               name="Dashboard"
               component={DashboardScreen}
               options={{ title: 'Statistika' }}

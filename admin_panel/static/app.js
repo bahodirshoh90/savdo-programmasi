@@ -326,6 +326,13 @@ function showPage(pageName) {
         case 'help-requests':
             loadHelpRequests();
             break;
+        case 'conversations':
+            loadConversations();
+            break;
+        case 'push-notifications':
+            resetPushNotificationForm();
+            loadPushNotificationStats();
+            break;
         case 'audit-logs':
             loadAuditLogs();
             break;
@@ -338,17 +345,29 @@ function showPage(pageName) {
         case 'categories':
             loadCategoriesPage();
             break;
+        case 'customer-app-settings':
+            loadCustomerAppSettings();
+            break;
+        case 'customer-referals':
+            loadCustomerReferals();
+            break;
+        case 'customer-loyalty':
+            loadCustomerLoyalty();
+            break;
+        case 'customer-price-alerts':
+            loadCustomerPriceAlerts();
+            break;
         case 'customer-favorites':
             loadCustomerFavorites();
+            break;
+        case 'customer-tags':
+            loadCustomerTags();
             break;
         case 'product-reviews':
             loadProductReviews();
             break;
-        case 'conversations':
-            loadConversations();
-            break;
-        case 'customer-app-settings':
-            loadCustomerAppSettings();
+        case 'customer-payments':
+            loadCustomerPayments();
             break;
     }
 }
@@ -1233,7 +1252,7 @@ async function editProduct(id) {
         await loadProductCategories();
         
         // Set category_id if available, otherwise use category name
-        const categorySelect = document.getElementById('product-category');
+        const categorySelect = document.getElementById('product-category-select');
         if (categorySelect) {
             if (product.category_id) {
                 categorySelect.value = product.category_id;
@@ -1245,6 +1264,12 @@ async function editProduct(id) {
                     categorySelect.value = category.id;
                 }
             }
+        }
+        
+        // Legacy category field (for backward compatibility)
+        const categoryInput = document.getElementById('product-category');
+        if (categoryInput) {
+            categoryInput.value = product.category || '';
         }
         
         document.getElementById('product-brand').value = product.brand || '';
@@ -1434,14 +1459,7 @@ async function saveProduct(e) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
-        const categorySelect = document.getElementById('product-category');
-        const categoryValue = categorySelect ? categorySelect.value : '';
-        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
-        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
-            ? categorySelect.selectedOptions[0].textContent.trim()
-            : null;
-        data.category_id = !isNaN(categoryId) ? categoryId : null;
-        data.category = categoryName;
+        data.category = document.getElementById('product-category').value.trim() || null;
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
@@ -1455,14 +1473,8 @@ async function saveProduct(e) {
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
-        const categorySelect = document.getElementById('product-category');
-        const categoryValue = categorySelect ? categorySelect.value : '';
-        const categoryId = categoryValue ? parseInt(categoryValue, 10) : null;
-        const categoryName = categoryValue && categorySelect?.selectedOptions?.[0]?.textContent
-            ? categorySelect.selectedOptions[0].textContent.trim()
-            : null;
-        if (!isNaN(categoryId) && categoryId) data.category_id = categoryId;
-        if (categoryName) data.category = categoryName;
+        const categoryValue = document.getElementById('product-category').value.trim();
+        if (categoryValue) data.category = categoryValue;
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -4575,6 +4587,18 @@ function setupWebSocket() {
                 : `❌ Sotuv #${data.sale_id} rad etildi`;
             showToast(message);
         }
+        // New conversation created
+        if (data.type === 'new_conversation') {
+            const conversationData = data.data || {};
+            const customerName = conversationData.customer_name || 'Noma\'lum mijoz';
+            const subject = conversationData.subject || 'Yordam';
+            showToast(`💬 Yangi suhbat: ${customerName} - ${subject}`, 'info', 8000);
+            const activePage = document.querySelector('.page.active')?.id;
+            if (activePage === 'conversations' && typeof loadConversations === 'function') {
+                loadConversations();
+            }
+        }
+
         // Chat message from customer
         if (data.type === 'new_chat_message' || data.type === 'chat_message') {
             const messageData = data.message || data.data || {};
@@ -4594,6 +4618,10 @@ function setupWebSocket() {
                 if (typeof loadConversations === 'function') {
                     loadConversations();
                 }
+            }
+
+            if (typeof loadConversationMessages === 'function' && currentConversationId && conversationId === currentConversationId) {
+                loadConversationMessages(currentConversationId);
             }
         }
         
@@ -5347,6 +5375,341 @@ ${req.notes ? `Admin izohi:\n${req.notes}` : ''}`;
     }
 }
 
+// Conversations / Chat
+let currentConversationId = null;
+
+async function loadConversations() {
+    try {
+        const statusFilter = document.getElementById('conversation-status-filter')?.value || '';
+        const searchQuery = (document.getElementById('conversation-search')?.value || '').toLowerCase();
+        let url = `${API_BASE}/conversations?limit=100`;
+        if (statusFilter) {
+            url += `&status=${encodeURIComponent(statusFilter)}`;
+        }
+
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) {
+            throw new Error('Suhbatlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        let conversations = data.conversations || [];
+
+        if (searchQuery) {
+            conversations = conversations.filter(conv => {
+                const combined = `${conv.customer_name || ''} ${conv.subject || ''}`.toLowerCase();
+                return combined.includes(searchQuery);
+            });
+        }
+
+        const tbody = document.getElementById('conversations-tbody');
+        if (!tbody) return;
+
+        if (conversations.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Suhbatlar topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            open: 'Ochiq',
+            closed: 'Yopilgan',
+            pending: 'Kutilmoqda'
+        };
+
+        tbody.innerHTML = conversations.map(conv => {
+            const lastMessage = conv.last_message?.message || '';
+            const unreadCount = conv.unread_count || 0;
+            const lastMessageTime = conv.last_message?.created_at || conv.last_message_at || conv.updated_at || conv.created_at;
+
+            return `
+                <tr>
+                    <td>${conv.id}</td>
+                    <td>${escapeHtml(conv.customer_name || 'Noma\'lum')}</td>
+                    <td>${escapeHtml(conv.subject || 'Yordam')}</td>
+                    <td>
+                        <span class="badge badge-info">${statusLabels[conv.status] || conv.status || '-'}</span>
+                    </td>
+                    <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(lastMessage)}">
+                        ${escapeHtml(lastMessage || '-')}
+                    </td>
+                    <td>${unreadCount > 0 ? `<span class="badge badge-danger">${unreadCount}</span>` : '-'}</td>
+                    <td>${formatDate(lastMessageTime)}</td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <i class="fas fa-comments"></i> Ko'rish
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        const tbody = document.getElementById('conversations-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+async function openConversation(conversationId) {
+    currentConversationId = conversationId;
+    const input = document.getElementById('conversation-message-input');
+    if (input) {
+        input.value = '';
+    }
+    await loadConversationMessages(conversationId);
+    const modal = document.getElementById('conversation-modal');
+    if (modal) {
+        modal.style.display = 'block';
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error('Suhbat xabarlarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const conversation = data.conversation || {};
+        const messages = data.messages || [];
+
+        const title = document.getElementById('conversation-modal-title');
+        if (title) {
+            title.textContent = `Suhbat #${conversation.id || conversationId}`;
+        }
+
+        const meta = document.getElementById('conversation-modal-meta');
+        if (meta) {
+            meta.innerHTML = `
+                <div><strong>Mijoz:</strong> ${escapeHtml(conversation.customer_name || 'Noma\'lum')}</div>
+                <div><strong>Mavzu:</strong> ${escapeHtml(conversation.subject || 'Yordam')}</div>
+                <div><strong>Holat:</strong> ${escapeHtml(conversation.status || '-')}</div>
+            `;
+        }
+
+        const statusSelect = document.getElementById('conversation-status-select');
+        if (statusSelect && conversation.status) {
+            statusSelect.value = conversation.status;
+        }
+
+        const container = document.getElementById('conversation-messages');
+        if (!container) return;
+
+        if (messages.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #64748b;">Xabarlar yo\'q</div>';
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => {
+            const isAdmin = msg.sender_type === 'admin';
+            return `
+                <div class="chat-message ${isAdmin ? 'admin' : 'customer'}">
+                    <div class="chat-bubble">
+                        ${!isAdmin ? `<div><strong>${escapeHtml(msg.sender_name || 'Mijoz')}</strong></div>` : ''}
+                        <div>${escapeHtml(msg.message || '')}</div>
+                        <div class="chat-meta">${formatDate(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.scrollTop = container.scrollHeight;
+    } catch (error) {
+        console.error('Error loading conversation messages:', error);
+        const container = document.getElementById('conversation-messages');
+        if (container) {
+            container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
+        }
+    }
+}
+
+async function sendConversationMessage() {
+    try {
+        if (!currentConversationId) return;
+        const input = document.getElementById('conversation-message-input');
+        const message = input?.value?.trim();
+        if (!message) return;
+
+        const response = await fetch(`${API_BASE}/conversations/${currentConversationId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ message })
+        });
+
+        if (!response.ok) {
+            throw new Error('Xabar yuborishda xatolik');
+        }
+
+        if (input) {
+            input.value = '';
+        }
+
+        await loadConversationMessages(currentConversationId);
+        loadConversations();
+    } catch (error) {
+        console.error('Error sending conversation message:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+async function updateConversationStatus() {
+    try {
+        if (!currentConversationId) return;
+        const statusSelect = document.getElementById('conversation-status-select');
+        const newStatus = statusSelect?.value;
+        if (!newStatus) return;
+
+        const response = await fetch(`${API_BASE}/conversations/${currentConversationId}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+
+        if (!response.ok) {
+            throw new Error('Suhbat holatini yangilashda xatolik');
+        }
+
+        showToast('Suhbat holati yangilandi', 'success');
+        loadConversations();
+    } catch (error) {
+        console.error('Error updating conversation status:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+function closeConversationModal() {
+    currentConversationId = null;
+    closeModal('conversation-modal');
+}
+
+function resetPushNotificationForm() {
+    const form = document.getElementById('push-notification-form');
+    if (form) {
+        form.reset();
+    }
+}
+
+async function loadPushNotificationStats() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/stats`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Statistikani yuklashda xatolik');
+        }
+
+        const stats = await response.json();
+        const totalEl = document.getElementById('push-total-tokens');
+        const activeEl = document.getElementById('push-active-tokens');
+        const customersEl = document.getElementById('push-active-customers');
+        const platformsEl = document.getElementById('push-platform-stats');
+
+        if (totalEl) totalEl.textContent = stats.total_tokens ?? 0;
+        if (activeEl) activeEl.textContent = stats.active_tokens ?? 0;
+        if (customersEl) customersEl.textContent = stats.active_customers ?? 0;
+
+        if (platformsEl) {
+            const platforms = stats.platforms || {};
+            const parts = Object.entries(platforms).map(([platform, count]) => `${platform || 'unknown'}: ${count}`);
+            platformsEl.textContent = parts.length ? `Platformalar: ${parts.join(', ')}` : '';
+        }
+    } catch (error) {
+        console.error('Error loading push stats:', error);
+    }
+}
+
+async function sendPushNotification(event) {
+    if (event && event.preventDefault) {
+        event.preventDefault();
+    }
+
+    try {
+        const title = document.getElementById('push-title')?.value?.trim();
+        const body = document.getElementById('push-body')?.value?.trim();
+        const customerIdsRaw = document.getElementById('push-customer-ids')?.value || '';
+        const dataRaw = document.getElementById('push-data')?.value?.trim();
+
+        if (!title || !body) {
+            alert('Sarlavha va xabar matnini to\'ldiring');
+            return;
+        }
+
+        let customerIds = null;
+        if (customerIdsRaw.trim()) {
+            customerIds = customerIdsRaw
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id) && id > 0);
+
+            if (!customerIds.length) {
+                alert('Mijoz IDlarini to\'g\'ri kiriting');
+                return;
+            }
+        }
+
+        let dataPayload = null;
+        if (dataRaw) {
+            try {
+                dataPayload = JSON.parse(dataRaw);
+            } catch (e) {
+                alert('Data JSON formati noto\'g\'ri');
+                return;
+            }
+        }
+
+        const payload = {
+            title,
+            body
+        };
+
+        if (customerIds) {
+            payload.customer_ids = customerIds;
+        }
+        if (dataPayload) {
+            payload.data = dataPayload;
+        }
+
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Push yuborishda xatolik');
+        }
+
+        const result = await response.json();
+        const sentTokens = result.sent_tokens ?? 0;
+        const sentCustomers = result.customers_with_tokens ?? 0;
+        const lastSentEl = document.getElementById('push-last-sent');
+        if (lastSentEl) {
+            lastSentEl.textContent = `${sentCustomers} mijoz / ${sentTokens} token`;
+        }
+        showToast(result.message || 'Push yuborildi', 'success');
+        resetPushNotificationForm();
+        loadPushNotificationStats();
+    } catch (error) {
+        console.error('Error sending push notification:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
 // Audit Logs
 let currentAuditPage = 1;
 let auditLogsPerPage = 50;
@@ -5543,115 +5906,6 @@ async function loadSettings() {
     }
 }
 
-async function loadCustomerAppSettings() {
-    const defaults = {
-        enable_referals: false,
-        enable_loyalty: false,
-        enable_price_alerts: false,
-        enable_favorites: false,
-        enable_tags: false,
-        enable_reviews: false,
-        enable_location_selection: false,
-        enable_offline_orders: false,
-        referal_bonus_points: 100,
-        referal_bonus_percent: 5,
-        loyalty_points_per_sum: 0.01,
-        loyalty_point_value: 1
-    };
-
-    try {
-        const response = await fetch(`${API_BASE}/settings`, {
-            headers: getAuthHeaders()
-        });
-        if (!response.ok) {
-            throw new Error('Mijoz ilovasi sozlamalarini yuklashda xatolik');
-        }
-        const settings = await response.json();
-        const resolved = { ...defaults, ...settings };
-
-        const setCheckbox = (id, value) => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.checked = Boolean(value);
-            }
-        };
-
-        const setNumber = (id, value) => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.value = value ?? '';
-            }
-        };
-
-        setCheckbox('enable-referals', resolved.enable_referals);
-        setCheckbox('enable-loyalty', resolved.enable_loyalty);
-        setCheckbox('enable-price-alerts', resolved.enable_price_alerts);
-        setCheckbox('enable-favorites', resolved.enable_favorites);
-        setCheckbox('enable-tags', resolved.enable_tags);
-        setCheckbox('enable-reviews', resolved.enable_reviews);
-        setCheckbox('enable-location-selection', resolved.enable_location_selection);
-        setCheckbox('enable-offline-orders', resolved.enable_offline_orders);
-
-        setNumber('referal-bonus-points', resolved.referal_bonus_points);
-        setNumber('referal-bonus-percent', resolved.referal_bonus_percent);
-        setNumber('loyalty-points-per-sum', resolved.loyalty_points_per_sum);
-        setNumber('loyalty-point-value', resolved.loyalty_point_value);
-    } catch (error) {
-        console.error('Error loading customer app settings:', error);
-        showToast(error.message || 'Sozlamalarni yuklashda xatolik', 'error');
-    }
-}
-
-async function saveCustomerAppSettings() {
-    try {
-        const getCheckbox = (id) => {
-            const input = document.getElementById(id);
-            return input ? input.checked : false;
-        };
-
-        const getNumber = (id, fallback = 0) => {
-            const input = document.getElementById(id);
-            if (!input) return fallback;
-            const parsed = parseFloat(input.value);
-            return Number.isNaN(parsed) ? fallback : parsed;
-        };
-
-        const payload = {
-            enable_referals: getCheckbox('enable-referals'),
-            enable_loyalty: getCheckbox('enable-loyalty'),
-            enable_price_alerts: getCheckbox('enable-price-alerts'),
-            enable_favorites: getCheckbox('enable-favorites'),
-            enable_tags: getCheckbox('enable-tags'),
-            enable_reviews: getCheckbox('enable-reviews'),
-            enable_location_selection: getCheckbox('enable-location-selection'),
-            enable_offline_orders: getCheckbox('enable-offline-orders'),
-            referal_bonus_points: Math.round(getNumber('referal-bonus-points', 100)),
-            referal_bonus_percent: getNumber('referal-bonus-percent', 5),
-            loyalty_points_per_sum: getNumber('loyalty-points-per-sum', 0.01),
-            loyalty_point_value: getNumber('loyalty-point-value', 1)
-        };
-
-        const response = await fetch(`${API_BASE}/settings`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                ...getAuthHeaders()
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
-        }
-
-        showToast('Sozlamalar saqlandi', 'success');
-    } catch (error) {
-        console.error('Error saving customer app settings:', error);
-        showToast(error.message || 'Sozlamalarni saqlashda xatolik', 'error');
-    }
-}
-
 function setupSettingsListeners() {
     // Logo file preview
     const logoFile = document.getElementById('logo-file');
@@ -5798,6 +6052,471 @@ async function saveSettings(additionalData = {}) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = '<i class="fas fa-save"></i> Sozlamalarni Saqlash';
         }
+    }
+}
+
+// ==================== CUSTOMER APP SETTINGS ====================
+
+async function loadCustomerAppSettings() {
+    try {
+        const response = await fetch('/api/settings', {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error('Sozlamalarni yuklashda xatolik');
+        const settings = await response.json();
+
+        const setCheckbox = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.checked = value !== false;
+            }
+        };
+
+        const setValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined && value !== null) {
+                el.value = value;
+            }
+        };
+
+        setCheckbox('enable-referals', settings.enable_referals);
+        setCheckbox('enable-loyalty', settings.enable_loyalty);
+        setCheckbox('enable-price-alerts', settings.enable_price_alerts);
+        setCheckbox('enable-favorites', settings.enable_favorites);
+        setCheckbox('enable-tags', settings.enable_tags);
+        setCheckbox('enable-reviews', settings.enable_reviews);
+        setCheckbox('enable-location-selection', settings.enable_location_selection);
+        setCheckbox('enable-offline-orders', settings.enable_offline_orders);
+
+        setValue('referal-bonus-points', settings.referal_bonus_points);
+        setValue('referal-bonus-percent', settings.referal_bonus_percent);
+        setValue('loyalty-points-per-sum', settings.loyalty_points_per_sum);
+        setValue('loyalty-point-value', settings.loyalty_point_value);
+    } catch (error) {
+        console.error('Error loading customer app settings:', error);
+        alert('Mijoz ilovasi sozlamalarini yuklashda xatolik yuz berdi');
+    }
+}
+
+async function saveCustomerAppSettings() {
+    try {
+        const toNumber = (value) => {
+            const parsed = parseFloat(value);
+            return Number.isNaN(parsed) ? null : parsed;
+        };
+
+        const payload = {
+            enable_referals: document.getElementById('enable-referals')?.checked || false,
+            enable_loyalty: document.getElementById('enable-loyalty')?.checked || false,
+            enable_price_alerts: document.getElementById('enable-price-alerts')?.checked || false,
+            enable_favorites: document.getElementById('enable-favorites')?.checked || false,
+            enable_tags: document.getElementById('enable-tags')?.checked || false,
+            enable_reviews: document.getElementById('enable-reviews')?.checked || false,
+            enable_location_selection: document.getElementById('enable-location-selection')?.checked || false,
+            enable_offline_orders: document.getElementById('enable-offline-orders')?.checked || false,
+        };
+
+        const referalBonusPoints = parseInt(document.getElementById('referal-bonus-points')?.value, 10);
+        if (!Number.isNaN(referalBonusPoints)) {
+            payload.referal_bonus_points = referalBonusPoints;
+        }
+
+        const referalBonusPercent = toNumber(document.getElementById('referal-bonus-percent')?.value);
+        if (referalBonusPercent !== null) {
+            payload.referal_bonus_percent = referalBonusPercent;
+        }
+
+        const loyaltyPointsPerSum = toNumber(document.getElementById('loyalty-points-per-sum')?.value);
+        if (loyaltyPointsPerSum !== null) {
+            payload.loyalty_points_per_sum = loyaltyPointsPerSum;
+        }
+
+        const loyaltyPointValue = toNumber(document.getElementById('loyalty-point-value')?.value);
+        if (loyaltyPointValue !== null) {
+            payload.loyalty_point_value = loyaltyPointValue;
+        }
+
+        const response = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sozlamalarni saqlashda xatolik');
+        }
+
+        showToast('Mijoz ilovasi sozlamalari saqlandi', 'success');
+    } catch (error) {
+        console.error('Error saving customer app settings:', error);
+        alert('Xatolik: ' + error.message);
+    }
+}
+
+// ==================== CUSTOMER APP DATA PAGES ====================
+
+async function loadCustomerReferals() {
+    const tbody = document.getElementById('referals-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('referal-search')?.value?.trim();
+    const status = document.getElementById('referal-status-filter')?.value;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/referals?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Referallarni yuklashda xatolik');
+        }
+        const data = await response.json();
+        const items = data.items || [];
+
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        const statusLabels = {
+            pending: 'Kutilmoqda',
+            registered: 'Roʻyxatdan o‘tgan',
+            completed: 'Tugallangan'
+        };
+        const statusClass = {
+            pending: 'warning',
+            registered: 'info',
+            completed: 'success'
+        };
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const referrer = `${escapeHtml(item.referrer_name || '-')}${item.referrer_phone ? ` (${escapeHtml(item.referrer_phone)})` : ''}`;
+            const referred = `${escapeHtml(item.referred_name || '-')}${item.referred_phone ? ` (${escapeHtml(item.referred_phone)})` : ''}`;
+            const statusKey = item.status || 'pending';
+            const badgeClass = statusClass[statusKey] || 'info';
+            const statusText = statusLabels[statusKey] || statusKey;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${referrer}</td>
+                <td>${referred}</td>
+                <td>${escapeHtml(item.referal_code || '-')}</td>
+                <td>${formatMoney(item.bonus_amount || 0)}</td>
+                <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading referals:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerLoyalty() {
+    const tbody = document.getElementById('loyalty-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('loyalty-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/loyalty?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Loyalty maʼlumotlarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.customer_phone || '-')}</td>
+                <td>${item.points ?? 0}</td>
+                <td>${item.total_spent ?? 0}</td>
+                <td>${item.total_earned ?? 0}</td>
+                <td>${formatDate(item.updated_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading loyalty:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerPriceAlerts() {
+    const tbody = document.getElementById('price-alerts-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('price-alert-search')?.value?.trim();
+    const status = document.getElementById('price-alert-status-filter')?.value;
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+
+        const response = await fetch(`${API_BASE}/admin/price-alerts?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Narx eslatmalarini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            let statusLabel = 'Nofaol';
+            let badgeClass = 'danger';
+            if (item.notified) {
+                statusLabel = 'Xabar berilgan';
+                badgeClass = 'info';
+            } else if (item.is_active) {
+                statusLabel = 'Faol';
+                badgeClass = 'success';
+            }
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${item.current_price !== null && item.current_price !== undefined ? formatMoney(item.current_price) : '-'}</td>
+                <td>${formatMoney(item.target_price || 0)}</td>
+                <td><span class="badge badge-${badgeClass}">${statusLabel}</span></td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading price alerts:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerFavorites() {
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('favorites-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/favorites?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sevimlilarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${item.price !== null && item.price !== undefined ? formatMoney(item.price) : '-'}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerTags() {
+    const tbody = document.getElementById('tags-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('tags-search')?.value?.trim();
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/admin/tags?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Teglarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${escapeHtml(item.tag || '-')}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadProductReviews() {
+    const tbody = document.getElementById('reviews-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('reviews-search')?.value?.trim();
+    const rating = document.getElementById('reviews-rating-filter')?.value;
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (rating) params.append('rating', rating);
+
+        const response = await fetch(`${API_BASE}/admin/reviews?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Sharhlarni yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const ratingStars = `${item.rating || 0} ⭐`;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${ratingStars}</td>
+                <td>${escapeHtml(item.comment || '-')}</td>
+                <td>${formatDate(item.created_at)}</td>
+                <td>-</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+    }
+}
+
+async function loadCustomerPayments() {
+    const tbody = document.getElementById('payments-tbody');
+    if (!tbody) return;
+
+    const search = document.getElementById('payments-search')?.value?.trim();
+    const dateFrom = document.getElementById('payments-date-from')?.value;
+    const dateTo = document.getElementById('payments-date-to')?.value;
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Yuklanmoqda...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (dateFrom) params.append('date_from', dateFrom);
+        if (dateTo) params.append('date_to', dateTo);
+
+        const response = await fetch(`${API_BASE}/admin/payments?${params.toString()}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Toʻlov tarixini yuklashda xatolik');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Maʼlumot topilmadi</td></tr>';
+            return;
+        }
+
+        const paymentMethodMap = {
+            cash: 'Naqd',
+            card: 'Karta',
+            bank_transfer: 'Hisob raqam'
+        };
+
+        tbody.innerHTML = '';
+        items.forEach(item => {
+            const paymentMethod = paymentMethodMap[item.payment_method] || item.payment_method || '-';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.customer_name || '-')}</td>
+                <td>${formatMoney(item.amount || 0)}</td>
+                <td><span class="badge badge-info">${escapeHtml(paymentMethod)}</span></td>
+                <td>${item.id}</td>
+                <td>${formatDate(item.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading payments:', error);
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
     }
 }
 
@@ -6325,7 +7044,7 @@ async function loadProductCategories() {
         const categories = await response.json();
         
         // Update product category select
-        const select = document.getElementById('product-category');
+        const select = document.getElementById('product-category-select');
         if (select) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Kategoriya tanlash...</option>';
@@ -6350,7 +7069,7 @@ async function loadProductCategories() {
             }
             categories.forEach(category => {
                 const option = document.createElement('option');
-                option.value = category.name;
+                option.value = category.id;
                 option.textContent = category.name;
                 filterSelect.appendChild(option);
             });
@@ -6360,358 +7079,5 @@ async function loadProductCategories() {
         }
     } catch (error) {
         console.error('Error loading categories from API:', error);
-    }
-}
-
-// ==================== CUSTOMER FAVORITES ====================
-async function loadCustomerFavorites() {
-    const tbody = document.getElementById('favorites-tbody');
-    if (!tbody) return;
-
-    try {
-        const search = document.getElementById('favorites-search')?.value || '';
-        const url = search
-            ? `${API_BASE}/admin/favorites?search=${encodeURIComponent(search)}`
-            : `${API_BASE}/admin/favorites`;
-
-        const response = await fetch(url, { headers: getAuthHeaders() });
-        if (!response.ok) {
-            throw new Error('Sevimli mahsulotlarni yuklashda xatolik');
-        }
-
-        const data = await response.json();
-        const favorites = data.favorites || [];
-
-        if (favorites.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Sevimli mahsulotlar topilmadi</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = favorites.map(fav => `
-            <tr>
-                <td>${fav.id}</td>
-                <td>
-                    ${escapeHtml(fav.customer_name || '-')}
-                    <div style="color: var(--text-light); font-size: 0.8rem;">${escapeHtml(fav.customer_phone || '')}</div>
-                </td>
-                <td>${escapeHtml(fav.product_name || '-')}</td>
-                <td>${formatMoney(fav.product_price || 0)}</td>
-                <td>${formatDate(fav.created_at)}</td>
-            </tr>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading favorites:', error);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
-    }
-}
-
-// ==================== PRODUCT REVIEWS ====================
-async function loadProductReviews() {
-    const tbody = document.getElementById('reviews-tbody');
-    if (!tbody) return;
-
-    try {
-        const search = document.getElementById('reviews-search')?.value || '';
-        const rating = document.getElementById('reviews-rating-filter')?.value || '';
-        const params = new URLSearchParams();
-        if (search) params.append('search', search);
-        if (rating) params.append('rating', rating);
-
-        const url = `${API_BASE}/admin/reviews${params.toString() ? `?${params.toString()}` : ''}`;
-        const response = await fetch(url, { headers: getAuthHeaders() });
-
-        if (!response.ok) {
-            throw new Error('Sharhlarni yuklashda xatolik');
-        }
-
-        const data = await response.json();
-        const reviews = data.reviews || [];
-
-        if (reviews.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Sharhlar topilmadi</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = reviews.map(review => `
-            <tr>
-                <td>${review.id}</td>
-                <td>${escapeHtml(review.customer_name || '-')}</td>
-                <td>${escapeHtml(review.product_name || '-')}</td>
-                <td>${'★'.repeat(review.rating)} (${review.rating})</td>
-                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(review.comment || '')}">
-                    ${escapeHtml(review.comment || '-')}
-                </td>
-                <td>${formatDate(review.created_at)}</td>
-                <td>
-                    <button class="btn btn-sm ${review.is_approved ? 'btn-secondary' : 'btn-success'}"
-                        onclick="setReviewApproval(${review.id}, ${review.is_approved ? 'false' : 'true'})"
-                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
-                        ${review.is_approved ? 'Bekor' : 'Tasdiqlash'}
-                    </button>
-                    <button class="btn btn-sm btn-danger"
-                        onclick="deleteReview(${review.id})"
-                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                        O'chirish
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading reviews:', error);
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
-    }
-}
-
-async function setReviewApproval(reviewId, isApproved) {
-    try {
-        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
-            method: 'PUT',
-            headers: {
-                ...getAuthHeaders(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ is_approved: isApproved })
-        });
-
-        if (!response.ok) {
-            throw new Error('Sharh holatini yangilashda xatolik');
-        }
-
-        showToast(isApproved ? 'Sharh tasdiqlandi' : 'Sharh bekor qilindi', 'success');
-        loadProductReviews();
-    } catch (error) {
-        console.error('Error updating review:', error);
-        alert('Xatolik: ' + error.message);
-    }
-}
-
-async function deleteReview(reviewId) {
-    if (!confirm('Sharhni o\'chirishni xohlaysizmi?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/admin/reviews/${reviewId}`, {
-            method: 'PUT',
-            headers: {
-                ...getAuthHeaders(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ is_deleted: true })
-        });
-
-        if (!response.ok) {
-            throw new Error('Sharhni o\'chirishda xatolik');
-        }
-
-        showToast('Sharh o\'chirildi', 'success');
-        loadProductReviews();
-    } catch (error) {
-        console.error('Error deleting review:', error);
-        alert('Xatolik: ' + error.message);
-    }
-}
-
-// ==================== CUSTOMER CONVERSATIONS ====================
-async function loadConversations() {
-    const tbody = document.getElementById('conversations-tbody');
-    if (!tbody) return;
-
-    try {
-        const search = document.getElementById('conversations-search')?.value || '';
-        const status = document.getElementById('conversation-status-filter')?.value || '';
-        const url = status ? `${API_BASE}/conversations?status=${encodeURIComponent(status)}` : `${API_BASE}/conversations`;
-
-        const response = await fetch(url, { headers: getAuthHeaders() });
-        if (!response.ok) {
-            throw new Error('Suhbatlarni yuklashda xatolik');
-        }
-
-        const data = await response.json();
-        let conversations = data.conversations || [];
-
-        if (search) {
-            const term = search.toLowerCase();
-            conversations = conversations.filter(conv => {
-                const customerName = (conv.customer_name || '').toLowerCase();
-                const subject = (conv.subject || '').toLowerCase();
-                const lastMessage = (conv.last_message?.message || '').toLowerCase();
-                return customerName.includes(term) || subject.includes(term) || lastMessage.includes(term);
-            });
-        }
-
-        if (conversations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Suhbatlar topilmadi</td></tr>';
-            return;
-        }
-
-        const statusLabels = {
-            open: 'Ochiq',
-            closed: 'Yopiq'
-        };
-
-        tbody.innerHTML = conversations.map(conv => {
-            const lastMessage = conv.last_message?.message
-                ? `${conv.last_message.sender_name || ''}: ${conv.last_message.message}`
-                : '-';
-            const unreadBadge = conv.unread_count > 0
-                ? `<span class="badge" style="background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">${conv.unread_count}</span>`
-                : '-';
-            return `
-                <tr>
-                    <td>${conv.id}</td>
-                    <td>${escapeHtml(conv.customer_name || '-')}</td>
-                    <td>${escapeHtml(conv.subject || '-')}</td>
-                    <td>${statusLabels[conv.status] || conv.status}</td>
-                    <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(lastMessage)}">
-                        ${escapeHtml(lastMessage)}
-                    </td>
-                    <td>${formatDate(conv.last_message_at || conv.updated_at)}</td>
-                    <td>${unreadBadge}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
-                            Ko'rish
-                        </button>
-                        <button class="btn btn-sm btn-secondary" onclick="updateConversationStatus(${conv.id}, '${conv.status === 'closed' ? 'open' : 'closed'}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                            ${conv.status === 'closed' ? 'Ochish' : 'Yopish'}
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    } catch (error) {
-        console.error('Error loading conversations:', error);
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
-    }
-}
-
-function openConversation(conversationId) {
-    const modal = document.getElementById('conversation-modal');
-    const input = document.getElementById('conversation-id');
-    if (input) {
-        input.value = conversationId;
-    }
-    if (modal) {
-        modal.style.display = 'block';
-    }
-    loadConversationMessages(conversationId);
-}
-
-function closeConversationModal() {
-    const modal = document.getElementById('conversation-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    const messageInput = document.getElementById('conversation-message-input');
-    if (messageInput) {
-        messageInput.value = '';
-    }
-}
-
-async function loadConversationMessages(conversationId) {
-    const container = document.getElementById('conversation-messages');
-    if (!container) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
-            headers: getAuthHeaders()
-        });
-        if (!response.ok) {
-            throw new Error('Xabarlarni yuklashda xatolik');
-        }
-
-        const data = await response.json();
-        const messages = data.messages || [];
-        const conversation = data.conversation || {};
-
-        const titleEl = document.getElementById('conversation-modal-title');
-        if (titleEl) {
-            titleEl.textContent = `Suhbat #${conversationId}`;
-        }
-
-        const metaEl = document.getElementById('conversation-meta');
-        if (metaEl) {
-            const statusLabel = conversation.status === 'closed' ? 'Yopiq' : 'Ochiq';
-            metaEl.textContent = `Mijoz: ${conversation.customer_name || '-'} • Holat: ${statusLabel}`;
-        }
-
-        if (messages.length === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--text-light);">Xabarlar yo\'q</div>';
-            return;
-        }
-
-        container.innerHTML = messages.map(msg => {
-            const messageClass = msg.sender_type === 'admin' ? 'admin' : 'customer';
-            return `
-                <div class="chat-message ${messageClass}">
-                    <div>
-                        <div class="chat-bubble ${messageClass}">${escapeHtml(msg.message || '')}</div>
-                        <div class="chat-meta">${escapeHtml(msg.sender_name || '')} • ${formatDate(msg.created_at)}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        container.scrollTop = container.scrollHeight;
-    } catch (error) {
-        console.error('Error loading conversation messages:', error);
-        container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
-    }
-}
-
-async function sendConversationMessage(event) {
-    event.preventDefault();
-    const conversationId = document.getElementById('conversation-id')?.value;
-    const messageInput = document.getElementById('conversation-message-input');
-    const message = messageInput?.value?.trim();
-
-    if (!conversationId || !message) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
-            method: 'POST',
-            headers: {
-                ...getAuthHeaders(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message })
-        });
-
-        if (!response.ok) {
-            throw new Error('Xabar yuborishda xatolik');
-        }
-
-        if (messageInput) {
-            messageInput.value = '';
-        }
-        await loadConversationMessages(conversationId);
-        loadConversations();
-    } catch (error) {
-        console.error('Error sending message:', error);
-        alert('Xatolik: ' + error.message);
-    }
-}
-
-async function updateConversationStatus(conversationId, status) {
-    try {
-        const response = await fetch(`${API_BASE}/conversations/${conversationId}/status`, {
-            method: 'PUT',
-            headers: {
-                ...getAuthHeaders(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status })
-        });
-
-        if (!response.ok) {
-            throw new Error('Holatni yangilashda xatolik');
-        }
-
-        loadConversations();
-    } catch (error) {
-        console.error('Error updating conversation status:', error);
-        alert('Xatolik: ' + error.message);
     }
 }
