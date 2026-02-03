@@ -49,23 +49,16 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   
   // Get current cart quantity for this product
+  const currentProductId = productId || (product?.id) || (routeProduct?.id);
+  
   const getCartQuantity = () => {
-    const currentProductId = productId || (product?.id) || (routeProduct?.id);
     if (!currentProductId) return 0;
     const item = cartItems.find(item => item.product.id === currentProductId);
     return item ? item.quantity : 0;
   };
   
-  const [cartQuantity, setCartQuantity] = useState(0);
-  
-  const currentProductId = productId || (product?.id) || (routeProduct?.id);
-  
-  // Update cart quantity when cartItems change
-  useFocusEffect(
-    React.useCallback(() => {
-      setCartQuantity(getCartQuantity());
-    }, [cartItems, currentProductId])
-  );
+  // Always get fresh cart quantity from context
+  const cartQuantity = getCartQuantity();
 
   useEffect(() => {
     if (currentProductId) {
@@ -393,10 +386,6 @@ export default function ProductDetailScreen({ route, navigation }) {
     try {
       addToCart(currentProduct, quantity);
       showToast(`${quantity} dona savatchaga qo'shildi`, 'success');
-      // Update cart quantity after adding
-      setTimeout(() => {
-        setCartQuantity(getCartQuantity());
-      }, 100);
     } catch (error) {
       console.error('Error adding to cart:', error);
       Alert.alert('Xatolik', 'Savatchaga qo\'shishda xatolik yuz berdi');
@@ -588,9 +577,6 @@ export default function ProductDetailScreen({ route, navigation }) {
                 const currentProduct = product || routeProduct;
                 if (currentProduct) {
                   addToCart(currentProduct, -1);
-                  setTimeout(() => {
-                    setCartQuantity(getCartQuantity());
-                  }, 100);
                 }
               }}
               disabled={cartQuantity <= 1}
@@ -616,9 +602,6 @@ export default function ProductDetailScreen({ route, navigation }) {
                     return;
                   }
                   addToCart(currentProduct, 1);
-                  setTimeout(() => {
-                    setCartQuantity(getCartQuantity());
-                  }, 100);
                 }
               }}
               disabled={isOutOfStock}
