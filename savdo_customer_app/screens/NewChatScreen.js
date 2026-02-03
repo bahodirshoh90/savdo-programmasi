@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import api from '../services/api';
 import Footer, { FooterAwareView } from '../components/Footer';
+import responsive from '../utils/responsive';
 
 export default function NewChatScreen() {
   const navigation = useNavigation();
@@ -161,66 +162,66 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 20,
+    paddingBottom: responsive.getSpacing(20),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(12),
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   backButton: {
-    padding: 4,
+    padding: responsive.getSpacing(4),
   },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: responsive.getFontSize(18),
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: responsive.getSpacing(8),
   },
   form: {
-    padding: 16,
+    padding: responsive.getSpacing(16),
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: responsive.getSpacing(24),
   },
   label: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: responsive.getSpacing(8),
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
+    borderRadius: responsive.getSpacing(8),
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(12),
+    fontSize: responsive.getFontSize(16),
   },
   textArea: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    minHeight: 150,
+    borderRadius: responsive.getSpacing(8),
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(12),
+    fontSize: responsive.getFontSize(16),
+    minHeight: responsive.getSpacing(150),
   },
   charCount: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: responsive.getFontSize(12),
+    marginTop: responsive.getSpacing(4),
     textAlign: 'right',
   },
   sendButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 8,
+    paddingVertical: responsive.getSpacing(14),
+    borderRadius: responsive.getSpacing(8),
+    gap: responsive.getSpacing(8),
   },
   sendButtonText: {
-    fontSize: 16,
+    fontSize: responsive.getFontSize(16),
     fontWeight: '600',
   },
 });
