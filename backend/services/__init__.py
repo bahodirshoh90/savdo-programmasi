@@ -193,7 +193,74 @@ class CustomerService:
 
 class ProductService:
     """Service for product operations"""
-    pass
+    
+    @staticmethod
+    def product_to_response(product: Product):
+        """Convert Product model to ProductResponse schema"""
+        from schemas import ProductResponse, ProductImageResponse
+        from datetime import datetime, timedelta
+        from utils import get_uzbekistan_now
+        
+        # Get product images
+        images = []
+        if hasattr(product, 'images') and product.images:
+            for img in product.images:
+                images.append(ProductImageResponse(
+                    id=img.id,
+                    product_id=img.product_id,
+                    image_url=img.image_url,
+                    display_order=img.display_order,
+                    is_primary=img.is_primary,
+                    created_at=img.created_at
+                ))
+        
+        # Calculate last sold date and slow moving status
+        last_sold_date = None
+        days_since_last_sale = None
+        is_slow_moving = False
+        
+        if hasattr(product, 'sale_items') and product.sale_items:
+            # Get most recent sale
+            sorted_sales = sorted(product.sale_items, key=lambda x: x.created_at, reverse=True)
+            if sorted_sales:
+                last_sold_date = sorted_sales[0].created_at
+                now = get_uzbekistan_now()
+                if last_sold_date:
+                    days_since_last_sale = (now - last_sold_date).days
+                    is_slow_moving = days_since_last_sale > 30
+        
+        # Build product response
+        return ProductResponse(
+            id=product.id,
+            name=product.name,
+            item_number=product.item_number,
+            barcode=product.barcode,
+            brand=product.brand,
+            category=product.category,
+            category_id=product.category_id,
+            supplier=product.supplier,
+            received_date=product.received_date,
+            image_url=product.image_url,
+            location=product.location,
+            pieces_per_package=product.pieces_per_package,
+            cost_price=product.cost_price,
+            wholesale_price=product.wholesale_price,
+            retail_price=product.retail_price,
+            regular_price=product.regular_price,
+            packages_in_stock=product.packages_in_stock,
+            pieces_in_stock=product.pieces_in_stock,
+            total_pieces=product.total_pieces,
+            total_value=product.total_value,
+            total_value_cost=product.total_value_cost if hasattr(product, 'total_value_cost') else None,
+            total_value_wholesale=product.total_value_wholesale if hasattr(product, 'total_value_wholesale') else None,
+            images=images,
+            last_sold_date=last_sold_date,
+            days_since_last_sale=days_since_last_sale,
+            is_slow_moving=is_slow_moving,
+            product_url=None,
+            created_at=product.created_at if hasattr(product, 'created_at') else None,
+            updated_at=product.updated_at if hasattr(product, 'updated_at') else None
+        )
 
 
 class SaleService:
