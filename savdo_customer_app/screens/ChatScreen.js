@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import websocketService from '../services/websocket';
 import Footer, { FooterAwareView } from '../components/Footer';
+import responsive from '../utils/responsive';
 
 export default function ChatScreen() {
   const navigation = useNavigation();
@@ -322,25 +323,25 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(12),
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   backButton: {
-    padding: 4,
+    padding: responsive.getSpacing(4),
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: responsive.getSpacing(8),
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: responsive.getFontSize(18),
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: responsive.getFontSize(12),
+    marginTop: responsive.getSpacing(2),
   },
   loadingContainer: {
     flex: 1,
@@ -348,11 +349,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messagesList: {
-    padding: 16,
-    paddingBottom: 8,
+    padding: responsive.getSpacing(16),
+    paddingBottom: responsive.getSpacing(8),
   },
   messageContainer: {
-    marginBottom: 12,
+    marginBottom: responsive.getSpacing(12),
   },
   ownMessage: {
     alignItems: 'flex-end',
@@ -361,56 +362,57 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   messageBubble: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 16,
+    maxWidth: responsive.isTablet() ? '60%' : '75%',
+    padding: responsive.getSpacing(12),
+    borderRadius: responsive.getSpacing(16),
     borderWidth: 1,
   },
   senderName: {
-    fontSize: 12,
+    fontSize: responsive.getFontSize(12),
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: responsive.getSpacing(4),
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: responsive.getFontSize(15),
+    lineHeight: responsive.getFontSize(20),
   },
   messageTime: {
-    fontSize: 11,
-    marginTop: 4,
+    fontSize: responsive.getFontSize(11),
+    marginTop: responsive.getSpacing(4),
     alignSelf: 'flex-end',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: responsive.getSpacing(60),
   },
   emptyText: {
-    fontSize: 16,
-    marginTop: 16,
+    fontSize: responsive.getFontSize(16),
+    marginTop: responsive.getSpacing(16),
     textAlign: 'center',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(12),
     borderTopWidth: 1,
   },
   input: {
     flex: 1,
-    maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    fontSize: 15,
-    marginRight: 8,
+    maxHeight: responsive.getSpacing(100),
+    minHeight: responsive.getSpacing(40),
+    paddingHorizontal: responsive.getSpacing(16),
+    paddingVertical: responsive.getSpacing(10),
+    borderRadius: responsive.getSpacing(20),
+    fontSize: responsive.getFontSize(15),
+    marginRight: responsive.getSpacing(8),
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: responsive.getSpacing(40),
+    height: responsive.getSpacing(40),
+    borderRadius: responsive.getSpacing(20),
     justifyContent: 'center',
     alignItems: 'center',
   },
