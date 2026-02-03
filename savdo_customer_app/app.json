@@ -2,10 +2,12 @@
   "expo": {
     "name": "Mijozlar Ilovasi",
     "slug": "savdo-customer-app",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#4f46e5"
     },
@@ -14,30 +16,34 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.savdo.customerapp"
+      "bundleIdentifier": "com.savdo.customerapp",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Mahsulot rasmlarini yuklash uchun rasm kutubxonasiga kirish kerak",
+        "NSCameraUsageDescription": "Mahsulot rasmlarini olish uchun kameraga kirish kerak"
+      }
     },
     "android": {
       "package": "com.savdo.customerapp",
-      "googleServicesFile": "android/app/google-services.json",
+      "versionCode": 5,
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
       },
       "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "com.android.alarm.permission.SET_ALARM",
-        "POST_NOTIFICATIONS"
-      ],
-      "notification": {
-        "icon": "./assets/notification-icon.png",
-        "color": "#4f46e5",
-        "sound": true,
-        "androidMode": "default",
-        "androidCollapsedTitle": "Yangi xabar"
-      }
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
@@ -45,16 +51,32 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#4f46e5",
-          "sounds": [],
+          "sounds": ["./assets/notification-sound.wav"],
           "mode": "production"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
       ]
-     ],
+    ],
     "scheme": "savdo",
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "3cd8a367-c38b-4e0c-ac1e-dac56c10d779"
       }
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
     }
   }
 }
