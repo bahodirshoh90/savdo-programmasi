@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Appbar, List, Snackbar, ActivityIndicator, Text } from 'react-native-paper';
 
-const API_BASE = 'http://localhost:8000/api'; // Change to your backend URL
+const API_BASE = 'http://uztoysavdo.uz/api'; // Change to your backend URL
 
 export default function AuditLogsScreen() {
   const [logs, setLogs] = useState([]);

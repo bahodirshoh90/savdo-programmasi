@@ -451,7 +451,7 @@ class RoleResponse(RoleBase):
 
 class LocationUpdate(BaseModel):
     latitude: float
-
+    longitude: float
 
 # ==================== REFERAL SCHEMAS ====================
 

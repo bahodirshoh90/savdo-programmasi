@@ -338,6 +338,8 @@ base_origins = [
         "http://localhost:8000",
         "http://localhost:8081",
         "http://localhost:19006",
+	"exp://192.168.*.*:8081",
+	"https://uztoysavdo.uz",
     "http://127.0.0.1:8081",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
@@ -379,6 +381,21 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Seller-ID", "Authorization", "Content-Type", "X-Customer-ID"],
 )
+# 🔥 Logout endpoint (main.py ga qo'shing)
+@app.post("/api/auth/logout")
+async def logout():
+    """
+    Logout endpoint - frontend uchun
+    JWT tokenlar frontend tomonda o'chiriladi,
+    shuning uchun bu endpoint faqat muvaffaqiyatli javob qaytaradi.
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Logged out successfully",
+            "success": True
+        }
+    )
 
 # WebSocket manager
 manager = ConnectionManager()
@@ -2136,15 +2153,28 @@ async def update_customer(customer_id: int, customer: CustomerUpdate, db: Sessio
             await manager.send_to_customer(customer_id, {
                 "type": "customer_type_changed",
                 "customer_id": customer_id,
-                "old_type": old_customer_type,
-                "new_type": customer.customer_type
+                "old_type": old_customer_type.value if hasattr(old_customer_type, 'value') else str(old_customer_type),
+                "new_type": customer.customer_type.value if hasattr(customer.customer_type, 'value') else str(customer.customer_type)
             })
             print(f"[WebSocket] Notified customer {customer_id} about type change: {old_customer_type} -> {customer.customer_type}")
         except Exception as e:
             print(f"[WebSocket] Error notifying customer {customer_id}: {e}")
     
-    return CustomerService.customer_to_response(updated)
-
+    # ? TO'G'RI: Return CustomerResponse directly from ORM object
+    return CustomerResponse(
+        id=updated.id,
+        name=updated.name,
+        phone=updated.phone,
+        address=updated.address,
+        customer_type=updated.customer_type.value if hasattr(updated.customer_type, 'value') else str(updated.customer_type),
+        notes=updated.notes,
+        username=updated.username,
+        debt_balance=updated.debt_balance if updated.debt_balance is not None else 0.0,
+        debt_limit=updated.debt_limit,
+        debt_due_date=updated.debt_due_date,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at
+    )
 
 @app.delete("/api/customers/{customer_id}")
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):

@@ -1,6 +1,7 @@
 /**
  * Login Screen for Customer App
  * Supports: Username/Password, OTP, and Social Login
+ * UPDATED: Added password visibility toggle with eye icon + responsive design
  */
 import React, { useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +24,9 @@ import { login as authLogin, signup, storeAuthData } from '../services/auth';
 import api from '../services/api';
 import Colors from '../constants/colors';
 import { API_ENDPOINTS } from '../config/api';
+
+const { width, height } = Dimensions.get('window');
+const isSmallDevice = width < 375;
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -33,6 +38,13 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  
+  // Password visibility states
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showResetNewPassword, setShowResetNewPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   
   // Reset Password Modal
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
@@ -63,6 +75,33 @@ export default function LoginScreen() {
     message: '',
   });
   const [isSendingHelp, setIsSendingHelp] = useState(false);
+
+  // Helper function to close reset password modal and reset states
+  const closeResetPasswordModal = () => {
+    setShowResetPasswordModal(false);
+    setResetPasswordData({
+      username_or_phone: '',
+      new_password: '',
+      confirm_password: '',
+    });
+    setShowResetNewPassword(false);
+    setShowResetConfirmPassword(false);
+  };
+
+  // Helper function to close registration modal and reset states
+  const closeRegisterModal = () => {
+    setShowRegisterModal(false);
+    setRegisterData({
+      name: '',
+      phone: '',
+      username: '',
+      password: '',
+      confirm_password: '',
+      address: '',
+    });
+    setShowRegPassword(false);
+    setShowRegConfirmPassword(false);
+  };
 
   const handlePasswordLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -137,7 +176,6 @@ export default function LoginScreen() {
       });
 
       if (response.success && response.token && response.user) {
-        // OTP verification successful and token received
         const storedUser = await storeAuthData({
           token: response.token,
           user: response.user,
@@ -162,7 +200,6 @@ export default function LoginScreen() {
   };
 
   const handleSocialLogin = async (provider) => {
-    // For social login, we need phone number
     if (!phone.trim()) {
       Alert.alert('Xatolik', 'Ijtimoiy tarmoq orqali kirish uchun telefon raqamni kiriting');
       return;
@@ -179,11 +216,10 @@ export default function LoginScreen() {
       const response = await api.post('/auth/social-login', {
         provider: provider,
         phone: cleanPhone,
-        name: `Social User ${cleanPhone}`, // Default name, can be updated from social profile
+        name: `Social User ${cleanPhone}`,
       });
 
       if (response.token && response.user) {
-        // Store token and user data
         const { token, user } = response;
         const storedUser = await storeAuthData({
           token,
@@ -205,7 +241,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Reset Password Handler
   const handleResetPassword = async () => {
     if (!resetPasswordData.username_or_phone.trim()) {
       Alert.alert('Xatolik', 'Login yoki telefon raqamni kiriting');
@@ -242,12 +277,7 @@ export default function LoginScreen() {
           {
             text: 'OK',
             onPress: () => {
-              setShowResetPasswordModal(false);
-              setResetPasswordData({
-                username_or_phone: '',
-                new_password: '',
-                confirm_password: '',
-              });
+              closeResetPasswordModal();
             },
           },
         ]);
@@ -263,7 +293,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Registration Handler
   const handleRegister = async () => {
     if (!registerData.name.trim()) {
       Alert.alert('Xatolik', 'Ismni kiriting');
@@ -301,15 +330,7 @@ export default function LoginScreen() {
           {
             text: 'OK',
             onPress: () => {
-              setShowRegisterModal(false);
-              setRegisterData({
-                name: '',
-                phone: '',
-                username: '',
-                password: '',
-                confirm_password: '',
-                address: '',
-              });
+              closeRegisterModal();
             },
           },
         ]);
@@ -324,7 +345,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Help Request Handler
   const handleSendHelpRequest = async () => {
     if (!helpData.phone.trim()) {
       Alert.alert('Xatolik', 'Telefon raqamni kiriting');
@@ -387,7 +407,7 @@ export default function LoginScreen() {
           style={styles.keyboardView}
         >
           <View style={styles.header}>
-            <Ionicons name="log-in" size={64} color={Colors.primary} />
+            <Ionicons name="log-in" size={isSmallDevice ? 48 : 64} color={Colors.primary} />
             <Text style={styles.title}>Kirish</Text>
             <Text style={styles.subtitle}>Hisobingizga kiring</Text>
           </View>
@@ -442,9 +462,19 @@ export default function LoginScreen() {
                   placeholder="Parol"
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                  secureTextEntry={!showLoginPassword}
                   autoCapitalize="none"
                 />
+                <TouchableOpacity
+                  onPress={() => setShowLoginPassword(!showLoginPassword)}
+                  style={styles.visibilityButton}
+                >
+                  <Ionicons 
+                    name={showLoginPassword ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color={Colors.textLight} 
+                  />
+                </TouchableOpacity>
               </View>
 
               <TouchableOpacity
@@ -459,7 +489,6 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Help Links */}
               <View style={styles.helpLinks}>
                 <TouchableOpacity onPress={() => setShowResetPasswordModal(true)}>
                   <Text style={styles.helpLinkText}>Parolni unutdingizmi?</Text>
@@ -468,7 +497,7 @@ export default function LoginScreen() {
                   <Text style={styles.helpLinkText}>Ro'yxatdan o'tmaganmisiz? Ro'yxatdan o'tish</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowHelpModal(true)}>
-                  <Text style={styles.helpLinkText}>Yordam kerakmi? Admin bilan bog'laning</Text>
+                  <Text style={styles.helpLinkText}>Yordam kerakmi? Admin bilan bog'lanish</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -501,13 +530,12 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Help Links */}
               <View style={styles.helpLinks}>
                 <TouchableOpacity onPress={() => setShowRegisterModal(true)}>
-                  <Text style={styles.helpLinkText}>Ro'yxatdan o'tmaganmisiz? Ro'yxatdan o'tish</Text>
+                  <Text style={styles.helpLinkText}>Ro'yxatdan o'tish</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowHelpModal(true)}>
-                  <Text style={styles.helpLinkText}>Yordam kerakmi? Admin bilan bog'laning</Text>
+                  <Text style={styles.helpLinkText}>Admin bilan bog'lanish</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -546,13 +574,12 @@ export default function LoginScreen() {
                 <Text style={styles.socialButtonText}>Facebook orqali kirish</Text>
               </TouchableOpacity>
 
-              {/* Help Links */}
               <View style={styles.helpLinks}>
                 <TouchableOpacity onPress={() => setShowRegisterModal(true)}>
-                  <Text style={styles.helpLinkText}>Ro'yxatdan o'tmaganmisiz? Ro'yxatdan o'tish</Text>
+                  <Text style={styles.helpLinkText}>Ro'yxatdan o'tish</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowHelpModal(true)}>
-                  <Text style={styles.helpLinkText}>Yordam kerakmi? Admin bilan bog'laning</Text>
+                  <Text style={styles.helpLinkText}>Admin bilan bog'lanish</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -565,84 +592,104 @@ export default function LoginScreen() {
         visible={showResetPasswordModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowResetPasswordModal(false)}
+        onRequestClose={closeResetPasswordModal}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Parolni Tiklash</Text>
-              <TouchableOpacity onPress={() => setShowResetPasswordModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textDark} />
-              </TouchableOpacity>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Parolni Tiklash</Text>
+                <TouchableOpacity onPress={closeResetPasswordModal}>
+                  <Ionicons name="close" size={24} color={Colors.textDark} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Login yoki telefon raqamingizni kiriting va yangi parol o'rnating
+              </Text>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Login yoki telefon raqam"
+                  value={resetPasswordData.username_or_phone}
+                  onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, username_or_phone: text })}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Yangi parol"
+                  value={resetPasswordData.new_password}
+                  onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, new_password: text })}
+                  secureTextEntry={!showResetNewPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowResetNewPassword(!showResetNewPassword)}
+                  style={styles.visibilityButton}
+                >
+                  <Ionicons 
+                    name={showResetNewPassword ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color={Colors.textLight} 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Parolni tasdiqlash"
+                  value={resetPasswordData.confirm_password}
+                  onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, confirm_password: text })}
+                  secureTextEntry={!showResetConfirmPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                  style={styles.visibilityButton}
+                >
+                  <Ionicons 
+                    name={showResetConfirmPassword ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color={Colors.textLight} 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonSecondary, styles.modalButton]}
+                  onPress={closeResetPasswordModal}
+                >
+                  <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, isResettingPassword && styles.buttonDisabled, styles.modalButton]}
+                  onPress={handleResetPassword}
+                  disabled={isResettingPassword}
+                >
+                  {isResettingPassword ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.buttonText}>O'zgartirish</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <Text style={styles.modalSubtitle}>
-              Login yoki telefon raqamingizni kiriting va yangi parol o'rnating
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="person" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Login yoki telefon raqam"
-                value={resetPasswordData.username_or_phone}
-                onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, username_or_phone: text })}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Yangi parol"
-                value={resetPasswordData.new_password}
-                onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, new_password: text })}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Parolni tasdiqlash"
-                value={resetPasswordData.confirm_password}
-                onChangeText={(text) => setResetPasswordData({ ...resetPasswordData, confirm_password: text })}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
-                onPress={() => {
-                  setShowResetPasswordModal(false);
-                  setResetPasswordData({
-                    username_or_phone: '',
-                    new_password: '',
-                    confirm_password: '',
-                  });
-                }}
-              >
-                <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, isResettingPassword && styles.buttonDisabled, styles.modalButton]}
-                onPress={handleResetPassword}
-                disabled={isResettingPassword}
-              >
-                {isResettingPassword ? (
-                  <ActivityIndicator color={Colors.surface} />
-                ) : (
-                  <Text style={styles.buttonText}>Parolni O'zgartirish</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -651,119 +698,136 @@ export default function LoginScreen() {
         visible={showRegisterModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowRegisterModal(false)}
+        onRequestClose={closeRegisterModal}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ro'yxatdan O'tish</Text>
-              <TouchableOpacity onPress={() => setShowRegisterModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textDark} />
-              </TouchableOpacity>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Ro'yxatdan O'tish</Text>
+                <TouchableOpacity onPress={closeRegisterModal}>
+                  <Ionicons name="close" size={24} color={Colors.textDark} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Yangi hisob yaratish uchun ma'lumotlarni kiriting
+              </Text>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ism"
+                  value={registerData.name}
+                  onChangeText={(text) => setRegisterData({ ...registerData, name: text })}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="call" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Telefon raqam"
+                  value={registerData.phone}
+                  onChangeText={(text) => setRegisterData({ ...registerData, phone: text })}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-circle" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Login"
+                  value={registerData.username}
+                  onChangeText={(text) => setRegisterData({ ...registerData, username: text })}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Parol"
+                  value={registerData.password}
+                  onChangeText={(text) => setRegisterData({ ...registerData, password: text })}
+                  secureTextEntry={!showRegPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowRegPassword(!showRegPassword)}
+                  style={styles.visibilityButton}
+                >
+                  <Ionicons 
+                    name={showRegPassword ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color={Colors.textLight} 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Parolni tasdiqlash"
+                  value={registerData.confirm_password}
+                  onChangeText={(text) => setRegisterData({ ...registerData, confirm_password: text })}
+                  secureTextEntry={!showRegConfirmPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                  style={styles.visibilityButton}
+                >
+                  <Ionicons 
+                    name={showRegConfirmPassword ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color={Colors.textLight} 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="location" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Manzil (ixtiyoriy)"
+                  value={registerData.address}
+                  onChangeText={(text) => setRegisterData({ ...registerData, address: text })}
+                  multiline
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonSecondary, styles.modalButton]}
+                  onPress={closeRegisterModal}
+                >
+                  <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, isRegistering && styles.buttonDisabled, styles.modalButton]}
+                  onPress={handleRegister}
+                  disabled={isRegistering}
+                >
+                  {isRegistering ? (
+                    <ActivityIndicator color={Colors.surface} />
+                  ) : (
+                    <Text style={styles.buttonText}>Ro'yxatdan o'tish</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <Text style={styles.modalSubtitle}>
-              Yangi hisob yaratish uchun ma'lumotlarni kiriting
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="person" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Ism"
-                value={registerData.name}
-                onChangeText={(text) => setRegisterData({ ...registerData, name: text })}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="call" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Telefon raqam"
-                value={registerData.phone}
-                onChangeText={(text) => setRegisterData({ ...registerData, phone: text })}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-circle" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Login"
-                value={registerData.username}
-                onChangeText={(text) => setRegisterData({ ...registerData, username: text })}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Parol"
-                value={registerData.password}
-                onChangeText={(text) => setRegisterData({ ...registerData, password: text })}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Parolni tasdiqlash"
-                value={registerData.confirm_password}
-                onChangeText={(text) => setRegisterData({ ...registerData, confirm_password: text })}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="location" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Manzil (ixtiyoriy)"
-                value={registerData.address}
-                onChangeText={(text) => setRegisterData({ ...registerData, address: text })}
-                multiline
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
-                onPress={() => {
-                  setShowRegisterModal(false);
-                  setRegisterData({
-                    name: '',
-                    phone: '',
-                    username: '',
-                    password: '',
-                    confirm_password: '',
-                    address: '',
-                  });
-                }}
-              >
-                <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, isRegistering && styles.buttonDisabled, styles.modalButton]}
-                onPress={handleRegister}
-                disabled={isRegistering}
-              >
-                {isRegistering ? (
-                  <ActivityIndicator color={Colors.surface} />
-                ) : (
-                  <Text style={styles.buttonText}>Ro'yxatdan O'tish</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -772,72 +836,93 @@ export default function LoginScreen() {
         visible={showHelpModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowHelpModal(false)}
+        onRequestClose={() => {
+          setShowHelpModal(false);
+          setHelpData({
+            phone: '',
+            issue_type: 'other',
+            message: '',
+          });
+        }}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Admin bilan Bog'lanish</Text>
-              <TouchableOpacity onPress={() => setShowHelpModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textDark} />
-              </TouchableOpacity>
-            </View>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Admin bilan Bog'lanish</Text>
+                  <TouchableOpacity onPress={() => {
+                    setShowHelpModal(false);
+                    setHelpData({
+                      phone: '',
+                      issue_type: 'other',
+                      message: '',
+                    });
+                  }}>
+                    <Ionicons name="close" size={24} color={Colors.textDark} />
+                  </TouchableOpacity>
+                </View>
 
-            <Text style={styles.modalSubtitle}>
-              Muammoingizni yozib qoldiring, admin siz bilan tez orada bog'lanadi
-            </Text>
+                <Text style={styles.modalSubtitle}>
+                  Muammoingizni yozib qoldiring, admin siz bilan tez orada bog'lanadi
+                </Text>
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="call" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Telefon raqam"
-                value={helpData.phone}
-                onChangeText={(text) => setHelpData({ ...helpData, phone: text })}
-                keyboardType="phone-pad"
-              />
-            </View>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="call" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Telefon raqam"
+                    value={helpData.phone}
+                    onChangeText={(text) => setHelpData({ ...helpData, phone: text })}
+                    keyboardType="phone-pad"
+                  />
+                </View>
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="help-circle" size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
-                placeholder="Muammoingizni batafsil yozing..."
-                value={helpData.message}
-                onChangeText={(text) => setHelpData({ ...helpData, message: text })}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="help-circle" size={20} color={Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Muammoingizni batafsil yozing..."
+                    value={helpData.message}
+                    onChangeText={(text) => setHelpData({ ...helpData, message: text })}
+                    multiline
+                    numberOfLines={4}
+                  />
+                </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary, styles.modalButton]}
-                onPress={() => {
-                  setShowHelpModal(false);
-                  setHelpData({
-                    phone: '',
-                    issue_type: 'other',
-                    message: '',
-                  });
-                }}
-              >
-                <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
-              </TouchableOpacity>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.buttonSecondary, styles.modalButton]}
+                    onPress={() => {
+                      setShowHelpModal(false);
+                      setHelpData({
+                        phone: '',
+                        issue_type: 'other',
+                        message: '',
+                      });
+                    }}
+                  >
+                    <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Bekor</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.button, isSendingHelp && styles.buttonDisabled, styles.modalButton]}
-                onPress={handleSendHelpRequest}
-                disabled={isSendingHelp}
-              >
-                {isSendingHelp ? (
-                  <ActivityIndicator color={Colors.surface} />
-                ) : (
-                  <Text style={styles.buttonText}>Yuborish</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+                  <TouchableOpacity
+                    style={[styles.button, isSendingHelp && styles.buttonDisabled, styles.modalButton]}
+                    onPress={handleSendHelpRequest}
+                    disabled={isSendingHelp}
+                  >
+                    {isSendingHelp ? (
+                      <ActivityIndicator color={Colors.surface} />
+                    ) : (
+                      <Text style={styles.buttonText}>Yuborish</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -846,13 +931,25 @@ export default function LoginScreen() {
         visible={showOtpModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowOtpModal(false)}
+        onRequestClose={() => {
+          setShowOtpModal(false);
+          setOtpCode('');
+          setOtpSent(false);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>OTP Kodni Kiriting</Text>
-              <TouchableOpacity onPress={() => setShowOtpModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowOtpModal(false);
+                setOtpCode('');
+                setOtpSent(false);
+              }}>
                 <Ionicons name="close" size={24} color={Colors.textDark} />
               </TouchableOpacity>
             </View>
@@ -907,6 +1004,7 @@ export default function LoginScreen() {
               <Text style={styles.resendButtonText}>Kodni qayta yuborish</Text>
             </TouchableOpacity>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -920,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    padding: isSmallDevice ? 16 : 20,
   },
   keyboardView: {
     flex: 1,
@@ -928,16 +1026,16 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: isSmallDevice ? 24 : 40,
   },
   title: {
-    fontSize: 32,
+    fontSize: isSmallDevice ? 24 : 32,
     fontWeight: 'bold',
     color: Colors.textDark,
     marginTop: 16,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isSmallDevice ? 14 : 16,
     color: Colors.textLight,
     marginTop: 8,
   },
@@ -950,7 +1048,7 @@ const styles = StyleSheet.create({
   },
   methodButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: isSmallDevice ? 10 : 12,
     alignItems: 'center',
     borderRadius: 8,
   },
@@ -958,7 +1056,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   methodButtonText: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
     fontWeight: '600',
     color: Colors.textLight,
   },
@@ -981,16 +1079,24 @@ const styles = StyleSheet.create({
   inputIcon: {
     marginRight: 12,
   },
+  visibilityButton: {
+    padding: 8,
+  },
   input: {
     flex: 1,
-    height: 50,
-    fontSize: 16,
+    height: isSmallDevice ? 45 : 50,
+    fontSize: isSmallDevice ? 14 : 16,
     color: Colors.textDark,
+  },
+  textArea: {
+    height: isSmallDevice ? 80 : 100,
+    textAlignVertical: 'top',
+    paddingTop: 12,
   },
   button: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: isSmallDevice ? 14 : 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
@@ -1005,7 +1111,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: Colors.surface,
-    fontSize: 16,
+    fontSize: isSmallDevice ? 14 : 16,
     fontWeight: '600',
   },
   buttonTextSecondary: {
@@ -1016,7 +1122,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: isSmallDevice ? 14 : 16,
     marginBottom: 12,
   },
   googleButton: {
@@ -1027,7 +1133,7 @@ const styles = StyleSheet.create({
   },
   socialButtonText: {
     color: Colors.surface,
-    fontSize: 16,
+    fontSize: isSmallDevice ? 14 : 16,
     fontWeight: '600',
     marginLeft: 12,
   },
@@ -1035,15 +1141,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   modalContent: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 24,
+    padding: isSmallDevice ? 16 : 24,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 500,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1052,12 +1162,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: isSmallDevice ? 18 : 20,
     fontWeight: 'bold',
     color: Colors.textDark,
+    flex: 1,
   },
   modalSubtitle: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
     color: Colors.textLight,
     marginBottom: 24,
   },
@@ -1076,7 +1187,7 @@ const styles = StyleSheet.create({
   },
   helpLinkText: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
     textDecorationLine: 'underline',
   },
   resendButton: {
@@ -1085,7 +1196,7 @@ const styles = StyleSheet.create({
   },
   resendButtonText: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
     fontWeight: '600',
   },
 });
