@@ -16,14 +16,13 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import api from '../services/api';
 
 export default function ReferalScreen({ navigation }) {
   const { colors } = useTheme();
@@ -59,43 +58,18 @@ export default function ReferalScreen({ navigation }) {
         return;
       }
       setIsLoading(true);
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
       
       // Get referal code
-      const codeResponse = await fetch(`${baseUrl}/referals/my-code`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (codeResponse.ok) {
-        const codeData = await codeResponse.json();
-        setReferalCode(codeData.referal_code || '');
-        setTotalReferals(codeData.total_referals || 0);
-        setTotalBonus(codeData.total_bonus || 0);
-      }
+      const codeData = await api.get('/referals/my-code');
+      setReferalCode(codeData.referal_code || '');
+      setTotalReferals(codeData.total_referals || 0);
+      setTotalBonus(codeData.total_bonus || 0);
 
       // Get all referals
-      const referalsResponse = await fetch(`${baseUrl}/referals`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (referalsResponse.ok) {
-        const referalsData = await referalsResponse.json();
-        setReferals(referalsData.referals_sent || []);
-        setTotalReferals(referalsData.total_referals || 0);
-        setTotalBonus(referalsData.total_bonus_earned || 0);
-      }
+      const referalsData = await api.get('/referals');
+      setReferals(referalsData.referals_sent || []);
+      setTotalReferals(referalsData.total_referals || 0);
+      setTotalBonus(referalsData.total_bonus_earned || 0);
     } catch (error) {
       console.error('Error loading referal data:', error);
       showToast('Ma\'lumotlarni yuklashda xatolik', 'error');
@@ -113,36 +87,12 @@ export default function ReferalScreen({ navigation }) {
 
     setIsInviting(true);
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/referals/invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Customer-ID': customerId,
-        },
-        body: JSON.stringify({
-          phone: invitePhone.trim(),
-        }),
+      await api.post('/referals/invite', {
+        phone: invitePhone.trim(),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        showToast('Do\'st taklif qilindi!', 'success');
-        setInvitePhone('');
-        loadReferalData();
-      } else {
-        const errorData = await response.json();
-        showToast(errorData.detail || 'Taklif qilishda xatolik', 'error');
-      }
+      showToast('Do\'st taklif qilindi!', 'success');
+      setInvitePhone('');
+      loadReferalData();
     } catch (error) {
       console.error('Error inviting friend:', error);
       showToast('Taklif qilishda xatolik', 'error');
@@ -177,35 +127,41 @@ export default function ReferalScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="referal" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Referal o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="people-outline"
         />
         <Footer currentScreen="referal" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="referal" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -301,7 +257,7 @@ export default function ReferalScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

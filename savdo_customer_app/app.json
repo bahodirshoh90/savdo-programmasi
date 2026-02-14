@@ -5,6 +5,7 @@
     "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#4f46e5"
@@ -14,21 +15,18 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.savdo.customerapp",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Kamera ruxsati QR kod va barcode skan qilish uchun kerak."
-      }
+      "bundleIdentifier": "com.savdo.customerapp"
     },
     "android": {
       "package": "com.savdo.customerapp",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#4f46e5"
       },
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "com.android.alarm.permission.SET_ALARM",
-        "CAMERA"
+        "com.android.alarm.permission.SET_ALARM"
       ],
       "notification": {
         "icon": "./assets/notification-icon.png",
@@ -50,14 +48,7 @@
           "sounds": [],
           "mode": "production"
         }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Kamera ruxsati QR kod va barcode skan qilish uchun kerak."
-        }
-      ],
-      "expo-barcode-scanner"
+      ]
     ],
     "scheme": "savdo",
     "extra": {

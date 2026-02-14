@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ChatListScreen({ navigation }) {
   const { colors } = useTheme();
@@ -132,16 +132,17 @@ export default function ChatListScreen({ navigation }) {
 
   if (isLoading && conversations.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+        <Footer currentScreen="chat" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={conversations}
         renderItem={renderConversation}
@@ -179,7 +180,7 @@ export default function ChatListScreen({ navigation }) {
         <Ionicons name="add" size={28} color={colors.surface} />
       </TouchableOpacity>
       <Footer currentScreen="chat" />
-    </View>
+    </FooterAwareView>
   );
 }
 

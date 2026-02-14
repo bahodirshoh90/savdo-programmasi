@@ -14,15 +14,18 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { useAuth } from '../context/AuthContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import { getProductPrice } from '../utils/pricing';
+import api from '../services/api';
 
 export default function FavoritesScreen({ navigation }) {
   const { settings, isLoading: settingsLoading } = useAppSettings();
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,27 +44,7 @@ export default function FavoritesScreen({ navigation }) {
         setRefreshing(false);
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/favorites`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Sevimli mahsulotlarni yuklashda xatolik');
-      }
-
-      const data = await response.json();
+      const data = await api.get('/favorites');
       setFavorites(data.favorites || []);
       
       // Build favorite status map
@@ -81,62 +64,20 @@ export default function FavoritesScreen({ navigation }) {
 
   const toggleFavorite = async (product) => {
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi');
-        return;
-      }
-
       const isFavorite = favoriteStatus[product.id] || false;
 
       if (isFavorite) {
         // Remove from favorites
-        const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-          ? API_ENDPOINTS.BASE_URL 
-          : `${API_ENDPOINTS.BASE_URL}/api`;
-        
-        const response = await fetch(
-          `${baseUrl}/favorites/${product.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'X-Customer-ID': customerId,
-            },
-          }
-        );
-
-        if (response.ok) {
-          setFavorites(prev => prev.filter(fav => fav.id !== product.id));
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatidan olib tashlashda xatolik');
-        }
+        await api.delete(`/favorites/${product.id}`);
+        setFavorites(prev => prev.filter(fav => fav.id !== product.id));
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
       } else {
         // Add to favorites
-        const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-          ? API_ENDPOINTS.BASE_URL 
-          : `${API_ENDPOINTS.BASE_URL}/api`;
-        
-        const response = await fetch(`${baseUrl}/favorites`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Customer-ID': customerId,
-          },
-          body: JSON.stringify({ product_id: product.id }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (!favorites.find(fav => fav.id === product.id)) {
-            setFavorites([product, ...favorites]);
-          }
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Sevimlilar ro\'yxatiga qo\'shishda xatolik');
+        await api.post('/favorites', { product_id: product.id });
+        if (!favorites.find(fav => fav.id === product.id)) {
+          setFavorites([product, ...favorites]);
         }
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -163,7 +104,7 @@ export default function FavoritesScreen({ navigation }) {
   const renderProduct = ({ item }) => {
     const isFavorite = favoriteStatus[item.id] || false;
     const imageUrl = getImageUrl(item.image_url);
-    const price = item.retail_price || item.regular_price || item.wholesale_price || 0;
+    const price = getProductPrice(item, user?.customer_type);
     const isOutOfStock = item.total_pieces !== undefined && item.total_pieces !== null && item.total_pieces <= 0;
 
     return (
@@ -226,41 +167,44 @@ export default function FavoritesScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Yuklanmoqda...</Text>
         </View>
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Sevimlilar o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="heart-dislike-outline"
         />
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Yuklanmoqda...</Text>
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="favorites" />
+      </FooterAwareView>
     );
   }
 
   if (favorites.length === 0) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <View style={styles.emptyContainer}>
           <Ionicons name="heart-outline" size={80} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>Sevimli mahsulotlar yo'q</Text>
@@ -275,12 +219,12 @@ export default function FavoritesScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         <Footer currentScreen="favorites" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sevimli Mahsulotlar</Text>
         <Text style={styles.headerSubtitle}>
@@ -307,7 +251,7 @@ export default function FavoritesScreen({ navigation }) {
         }
       />
       <Footer currentScreen="favorites" />
-    </View>
+    </FooterAwareView>
   );
 }
 

@@ -47,6 +47,28 @@ const tokenStorage = {
   },
 };
 
+const normalizeUser = (user, customerId = null) => ({
+  customer_id: user?.customer_id || customerId || user?.id,
+  name: user?.name || user?.customer_name,
+  phone: user?.phone,
+  ...user,
+});
+
+export const storeAuthSession = async ({ token, user, customer_id }) => {
+  const normalizedUser = normalizeUser(user, customer_id);
+
+  if (token) {
+    await tokenStorage.setItem('customer_token', token);
+  }
+
+  if (normalizedUser?.customer_id) {
+    await AsyncStorage.setItem('customer_id', normalizedUser.customer_id.toString());
+  }
+  await AsyncStorage.setItem('customer_data', JSON.stringify(normalizedUser));
+
+  return normalizedUser;
+};
+
 export const login = async (username, password) => {
   try {
     const response = await api.post(API_ENDPOINTS.AUTH.LOGIN, {
@@ -67,16 +89,10 @@ export const login = async (username, password) => {
       // Store token
       await tokenStorage.setItem('customer_token', token);
 
-      // Prepare user data
-      const userData = user || {
-        customer_id: customer_id,
-        name: customer_name || user?.name,
-        phone: user?.phone,
-      };
-
-      // Store user data
-      if (customer_id) {
-        await AsyncStorage.setItem('customer_id', customer_id.toString());
+      // Prepare and store user data
+      const userData = normalizeUser(user, customer_id);
+      if (userData?.customer_id) {
+        await AsyncStorage.setItem('customer_id', userData.customer_id.toString());
       }
       await AsyncStorage.setItem('customer_data', JSON.stringify(userData));
 

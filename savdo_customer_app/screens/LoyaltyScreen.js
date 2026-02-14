@@ -13,14 +13,13 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import api from '../services/api';
 
 export default function LoyaltyScreen({ navigation }) {
   const { colors } = useTheme();
@@ -52,39 +51,14 @@ export default function LoyaltyScreen({ navigation }) {
         return;
       }
       setIsLoading(true);
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
       
       // Get loyalty points
-      const pointsResponse = await fetch(`${baseUrl}/loyalty/points`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (pointsResponse.ok) {
-        const pointsData = await pointsResponse.json();
-        setLoyalty(pointsData);
-      }
+      const pointsData = await api.get('/loyalty/points');
+      setLoyalty(pointsData);
 
       // Get transactions
-      const transactionsResponse = await fetch(`${baseUrl}/loyalty/transactions?limit=50`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (transactionsResponse.ok) {
-        const transactionsData = await transactionsResponse.json();
-        setTransactions(transactionsData || []);
-      }
+      const transactionsData = await api.get('/loyalty/transactions?limit=50');
+      setTransactions(transactionsData || []);
     } catch (error) {
       console.error('Error loading loyalty data:', error);
       showToast('Ma\'lumotlarni yuklashda xatolik', 'error');
@@ -124,35 +98,41 @@ export default function LoyaltyScreen({ navigation }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="loyalty" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <FeatureUnavailable
           title="Bonus tizimi o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="trophy-outline"
         />
         <Footer currentScreen="loyalty" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="loyalty" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -267,7 +247,7 @@ export default function LoyaltyScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

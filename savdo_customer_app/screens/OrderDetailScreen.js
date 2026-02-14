@@ -15,7 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getOrder } from '../services/orders';
 import OrderTrackingStepper from '../components/OrderTrackingStepper';
 import websocketService from '../services/websocket';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -74,17 +74,21 @@ export default function OrderDetailScreen({ route }) {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <FooterAwareView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+        <Footer currentScreen="orders" />
+      </FooterAwareView>
     );
   }
 
   if (!order) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={styles.container}>
         <Text style={styles.errorText}>Buyurtma topilmadi</Text>
-      </View>
+        <Footer currentScreen="orders" />
+      </FooterAwareView>
     );
   }
 
@@ -106,7 +110,7 @@ export default function OrderDetailScreen({ route }) {
     : null;
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Order Tracking Stepper */}
       <OrderTrackingStepper
@@ -142,19 +146,26 @@ export default function OrderDetailScreen({ route }) {
       {/* Items */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Mahsulotlar:</Text>
-        {order.items?.map((item, index) => (
-          <View key={index} style={styles.itemRow}>
-            <View style={styles.itemLeft}>
-              <Text style={styles.itemName}>{item.product_name || 'Noma\'lum'}</Text>
-              <Text style={styles.itemDetails}>
-                {item.requested_quantity} x {item.unit_price?.toLocaleString('uz-UZ') || '0'} so'm
+        {order.items?.map((item, index) => {
+          const quantity = item.requested_quantity || item.pieces_sold || item.packages_sold || 0;
+          const unitPrice =
+            (item.piece_price && item.piece_price > 0 ? item.piece_price : item.package_price) ||
+            (quantity > 0 ? item.subtotal / quantity : 0);
+
+          return (
+            <View key={index} style={styles.itemRow}>
+              <View style={styles.itemLeft}>
+                <Text style={styles.itemName}>{item.product_name || 'Noma\'lum'}</Text>
+                <Text style={styles.itemDetails}>
+                  {quantity} x {unitPrice?.toLocaleString('uz-UZ') || '0'} so'm
+                </Text>
+              </View>
+              <Text style={styles.itemTotal}>
+                {item.subtotal?.toLocaleString('uz-UZ') || '0'} so'm
               </Text>
             </View>
-            <Text style={styles.itemTotal}>
-              {item.subtotal?.toLocaleString('uz-UZ') || '0'} so'm
-            </Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       {/* Total */}
@@ -168,7 +179,7 @@ export default function OrderDetailScreen({ route }) {
       </View>
       </ScrollView>
       <Footer currentScreen="orders" />
-    </View>
+    </FooterAwareView>
   );
 }
 

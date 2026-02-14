@@ -6,8 +6,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initializeNotifications, removeNotificationListeners } from './services/notifications';
 import { useAuth } from './context/AuthContext';
 
@@ -22,13 +23,14 @@ import OrderDetailScreen from './screens/OrderDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CompareProductsScreen from './screens/CompareProductsScreen';
-import QRScannerScreen from './screens/QRScannerScreen';
+import BannersScreen from './screens/BannersScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import NewChatScreen from './screens/NewChatScreen';
 import PriceAlertsScreen from './screens/PriceAlertsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import PaymentHistoryScreen from './screens/PaymentHistoryScreen';
+import ProductTagsScreen from './screens/ProductTagsScreen';
 import ReferalScreen from './screens/ReferalScreen';
 import LoyaltyScreen from './screens/LoyaltyScreen';
 
@@ -239,11 +241,6 @@ function AppNavigator() {
               options={{ title: 'Buyurtma detallari' }}
             />
             <Stack.Screen
-              name="QRScanner"
-              component={QRScannerScreen}
-              options={{ title: 'QR Kod Skaner', headerShown: false }}
-            />
-            <Stack.Screen
               name="ChatList"
               component={ChatListScreen}
               options={{ title: t('support') || 'Yordam', headerShown: false }}
@@ -283,6 +280,16 @@ function AppNavigator() {
               component={DashboardScreen}
               options={{ title: 'Statistika' }}
             />
+            <Stack.Screen
+              name="Banners"
+              component={BannersScreen}
+              options={{ title: 'Bannerlar' }}
+            />
+            <Stack.Screen
+              name="ProductTags"
+              component={ProductTagsScreen}
+              options={{ title: 'Mahsulot teglar' }}
+            />
           </>
         )}
       </Stack.Navigator>
@@ -292,20 +299,22 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <AppSettingsProvider>
-              <CartProvider>
-                <AppNavigator />
-                <StatusBar style="auto" />
-              </CartProvider>
-            </AppSettingsProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    <SafeAreaProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <AppSettingsProvider>
+                <CartProvider>
+                  <AppNavigator />
+                  <StatusBar style="auto" />
+                </CartProvider>
+              </AppSettingsProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
 

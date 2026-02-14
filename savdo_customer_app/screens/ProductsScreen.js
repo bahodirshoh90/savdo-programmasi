@@ -22,6 +22,7 @@ import ProductCard from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { useAuth } from '../context/AuthContext';
 import responsive from '../utils/responsive';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
@@ -29,11 +30,13 @@ import useOffline from '../hooks/useOffline';
 import offlineService from '../services/offlineService';
 import AnimatedView from '../components/AnimatedView';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 import websocketService from '../services/websocket';
+import api from '../services/api';
 
 export default function ProductsScreen({ navigation, route }) {
   const { addToCart, cartItems, removeFromCart, updateQuantity } = useCart();
+  const { user } = useAuth();
   const { isOnline, loadWithCache } = useOffline();
   const { showToast } = useToast();
   const { colors } = useTheme();
@@ -146,6 +149,21 @@ export default function ProductsScreen({ navigation, route }) {
     loadCategories();
     loadSearchHistory();
   }, []);
+
+  useEffect(() => {
+    if (route?.params?.compareMode) {
+      setCompareMode(true);
+      if (Array.isArray(route.params.selectedIds)) {
+        setSelectedForCompare(route.params.selectedIds);
+      }
+      setSelectForPriceAlert(false);
+    }
+    if (route?.params?.selectForPriceAlert) {
+      setSelectForPriceAlert(true);
+      setCompareMode(false);
+      setSelectedForCompare([]);
+    }
+  }, [route?.params?.compareMode, route?.params?.selectedIds, route?.params?.selectForPriceAlert]);
 
   const loadSearchHistory = async () => {
     try {
@@ -280,7 +298,7 @@ export default function ProductsScreen({ navigation, route }) {
     
     return () => {
       if (unsubscribe) {
-        websocketService.off('customer_type_changed', unsubscribe);
+        unsubscribe();
       }
     };
   }, []);
@@ -324,6 +342,8 @@ export default function ProductsScreen({ navigation, route }) {
       }
       // Navigate to price alert creation
       navigation.navigate('PriceAlertCreate', { product });
+      setSelectForPriceAlert(false);
+      navigation.setParams({ selectForPriceAlert: false });
     } else {
       // Navigate within ProductsStack - pass both productId and product object
       navigation.navigate('ProductDetail', { 
@@ -369,27 +389,12 @@ export default function ProductsScreen({ navigation, route }) {
       if (!isFavoritesEnabled) {
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/favorites`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
+      const data = await api.get('/favorites');
+      const statusMap = {};
+      (data.favorites || []).forEach(product => {
+        statusMap[product.id] = true;
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const statusMap = {};
-        (data.favorites || []).forEach(product => {
-          statusMap[product.id] = true;
-        });
-        setFavoriteStatus(statusMap);
-      }
+      setFavoriteStatus(statusMap);
     } catch (error) {
       console.error('Error loading favorite status:', error);
     }
@@ -401,52 +406,19 @@ export default function ProductsScreen({ navigation, route }) {
         showToast('Sevimlilar funksiyasi o\'chirilgan', 'error');
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        showToast('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi', 'error');
-        return;
-      }
 
       const isFavorite = favoriteStatus[product.id] || false;
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
 
       if (isFavorite) {
         // Remove from favorites
-        const response = await fetch(
-          `${baseUrl}/favorites/${product.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'X-Customer-ID': customerId,
-            },
-          }
-        );
-
-        if (response.ok) {
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
-          showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatidan olib tashlandi', 'success');
-        } else {
-          throw new Error('Sevimlilar ro\'yxatidan olib tashlashda xatolik');
-        }
+        await api.delete(`/favorites/${product.id}`);
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: false }));
+        showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatidan olib tashlandi', 'success');
       } else {
         // Add to favorites
-        const response = await fetch(`${baseUrl}/favorites`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Customer-ID': customerId,
-          },
-          body: JSON.stringify({ product_id: product.id }),
-        });
-
-        if (response.ok) {
-          setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
-          showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
-        } else {
-          throw new Error('Sevimlilar ro\'yxatiga qo\'shishda xatolik');
-        }
+        await api.post('/favorites', { product_id: product.id });
+        setFavoriteStatus(prev => ({ ...prev, [product.id]: true }));
+        showToast('Muvaffaqiyatli', 'Sevimlilar ro\'yxatiga qo\'shildi', 'success');
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -469,12 +441,13 @@ export default function ProductsScreen({ navigation, route }) {
         isFavorite={isFavoritesEnabled ? (favoriteStatus[item.id] || false) : false}
         onCompare={compareMode ? () => handleProductPress(item) : null}
         isInCompare={compareMode && selectedForCompare.includes(item.id)}
+        customerType={user?.customer_type}
       />
     </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Compare Mode Header */}
       {compareMode && (
         <View style={styles.compareHeader}>
@@ -496,9 +469,26 @@ export default function ProductsScreen({ navigation, route }) {
             onPress={() => {
               setCompareMode(false);
               setSelectedForCompare([]);
+              navigation.setParams({ compareMode: false, selectedIds: [] });
             }}
           >
             <Text style={styles.cancelCompareText}>Bekor qilish</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {selectForPriceAlert && (
+        <View style={styles.priceAlertBanner}>
+          <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+          <Text style={styles.priceAlertText}>Narx eslatmasi uchun mahsulot tanlang</Text>
+          <TouchableOpacity
+            style={styles.priceAlertCancel}
+            onPress={() => {
+              setSelectForPriceAlert(false);
+              navigation.setParams({ selectForPriceAlert: false });
+            }}
+          >
+            <Text style={styles.priceAlertCancelText}>Bekor qilish</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -531,12 +521,6 @@ export default function ProductsScreen({ navigation, route }) {
               <Ionicons name="search" size={20} color={Colors.textLight} style={styles.searchIcon} />
             )}
           </View>
-          <TouchableOpacity
-            style={styles.scanButton}
-            onPress={() => navigation.navigate('QRScanner')}
-          >
-            <Ionicons name="qr-code-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilters(true)}
@@ -715,7 +699,7 @@ export default function ProductsScreen({ navigation, route }) {
         </View>
       </Modal>
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 
@@ -843,14 +827,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.surface,
     fontWeight: '600',
-  },
-  scanButton: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.borderLight,
-    marginRight: 8,
   },
   filterButton: {
     padding: 8,
@@ -1027,5 +1003,34 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontSize: 14,
     fontWeight: '600',
+  },
+  priceAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.primary + '15',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 8,
+  },
+  priceAlertText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  priceAlertCancel: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  priceAlertCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
   },
 });

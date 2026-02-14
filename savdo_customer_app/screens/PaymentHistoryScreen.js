@@ -15,9 +15,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
+import api from '../services/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function PaymentHistoryScreen({ navigation }) {
   const { colors } = useTheme();
@@ -80,20 +81,8 @@ export default function PaymentHistoryScreen({ navigation }) {
       const customerId = await AsyncStorage.getItem('customer_id');
       if (!customerId) return;
 
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/debt/total`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTotalDebt(data.total_debt || 0);
-      }
+      const customer = await api.get(API_ENDPOINTS.CUSTOMERS.GET(customerId));
+      setTotalDebt(customer?.debt_balance || 0);
     } catch (error) {
       console.error('Error loading total debt:', error);
     }
@@ -125,14 +114,17 @@ export default function PaymentHistoryScreen({ navigation }) {
 
   if (isLoading && payments.length === 0) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="profile" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={styles.container}>
       <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollContent}
@@ -205,7 +197,7 @@ export default function PaymentHistoryScreen({ navigation }) {
       </View>
       </ScrollView>
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

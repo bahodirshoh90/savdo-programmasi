@@ -4585,15 +4585,18 @@ function setupWebSocket() {
         }
         // Chat message from customer
         if (data.type === 'new_chat_message' || data.type === 'chat_message') {
-            const messageData = data.message || data.data || {};
-            const customerName = messageData.sender_name || messageData.customer_name || 'Noma\'lum mijoz';
-            const messageText = messageData.message || '';
-            const conversationId = messageData.conversation_id || data.conversation_id;
+            const payload = data.message || data.data || {};
+            const innerMessage = payload.message || payload.data || payload || {};
+            const customerName = innerMessage.sender_name || payload.customer_name || payload.sender_name || 'Noma\'lum mijoz';
+            const rawText = innerMessage.message || innerMessage.text || payload.message || '';
+            const messageText = typeof rawText === 'string' ? rawText : JSON.stringify(rawText);
+            const conversationId = payload.conversation_id || innerMessage.conversation_id || data.conversation_id;
             
             console.log('[WebSocket] New chat message received:', messageData);
             
             // Show toast notification
-            const toastMessage = `💬 ${customerName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
+            const preview = messageText.substring(0, 50);
+            const toastMessage = `💬 ${customerName}: ${preview}${messageText.length > 50 ? '...' : ''}`;
             showToast(toastMessage, 'info', 10000);
             
             // Refresh conversations page if active

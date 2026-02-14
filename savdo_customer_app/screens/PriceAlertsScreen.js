@@ -17,17 +17,20 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../config/api';
 import Colors from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { useAuth } from '../context/AuthContext';
 import FeatureUnavailable from '../components/FeatureUnavailable';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
+import api from '../services/api';
+import { getProductPrice } from '../utils/pricing';
 
 export default function PriceAlertsScreen({ navigation, route }) {
   const { colors } = useTheme();
   const { settings, isLoading: settingsLoading } = useAppSettings();
+  const { user } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -61,26 +64,8 @@ export default function PriceAlertsScreen({ navigation, route }) {
         setIsRefreshing(false);
         return;
       }
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        setIsLoading(false);
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/price-alerts`, {
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAlerts(data || []);
-      }
+      const data = await api.get('/price-alerts');
+      setAlerts(data || []);
     } catch (error) {
       console.error('Error loading price alerts:', error);
     } finally {
@@ -102,45 +87,15 @@ export default function PriceAlertsScreen({ navigation, route }) {
     }
 
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) {
-        Alert.alert('Xatolik', 'Foydalanuvchi ma\'lumotlari topilmadi');
-        return;
-      }
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/price-alerts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Customer-ID': customerId,
-        },
-        body: JSON.stringify({
-          product_id: selectedProduct.id,
-          target_price: price,
-        }),
+      await api.post('/price-alerts', {
+        product_id: selectedProduct.id,
+        target_price: price,
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        Alert.alert('Muvaffaqiyatli', 'Narx eslatmasi qo\'shildi');
-        setShowAddModal(false);
-        setSelectedProduct(null);
-        setTargetPrice('');
-        await loadAlerts();
-      } else {
-        let errorMessage = 'Eslatma qo\'shishda xatolik';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        Alert.alert('Xatolik', errorMessage);
-      }
+      Alert.alert('Muvaffaqiyatli', 'Narx eslatmasi qo\'shildi');
+      setShowAddModal(false);
+      setSelectedProduct(null);
+      setTargetPrice('');
+      await loadAlerts();
     } catch (error) {
       console.error('Error adding price alert:', error);
       const errorMessage = error.message || 'Eslatma qo\'shishda xatolik';
@@ -150,24 +105,9 @@ export default function PriceAlertsScreen({ navigation, route }) {
 
   const handleDeleteAlert = async (alertId) => {
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/price-alerts/${alertId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Customer-ID': customerId,
-        },
-      });
-
-      if (response.ok) {
-        Alert.alert('Muvaffaqiyatli', 'Eslatma o\'chirildi');
-        await loadAlerts();
-      }
+      await api.delete(`/price-alerts/${alertId}`);
+      Alert.alert('Muvaffaqiyatli', 'Eslatma o\'chirildi');
+      await loadAlerts();
     } catch (error) {
       console.error('Error deleting price alert:', error);
       Alert.alert('Xatolik', 'Eslatmani o\'chirishda xatolik');
@@ -176,27 +116,10 @@ export default function PriceAlertsScreen({ navigation, route }) {
 
   const handleToggleAlert = async (alert) => {
     try {
-      const customerId = await AsyncStorage.getItem('customer_id');
-      if (!customerId) return;
-
-      const baseUrl = API_ENDPOINTS.BASE_URL.endsWith('/api') 
-        ? API_ENDPOINTS.BASE_URL 
-        : `${API_ENDPOINTS.BASE_URL}/api`;
-      
-      const response = await fetch(`${baseUrl}/price-alerts/${alert.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Customer-ID': customerId,
-        },
-        body: JSON.stringify({
-          is_active: !alert.is_active,
-        }),
+      await api.put(`/price-alerts/${alert.id}`, {
+        is_active: !alert.is_active,
       });
-
-      if (response.ok) {
-        await loadAlerts();
-      }
+      await loadAlerts();
     } catch (error) {
       console.error('Error toggling price alert:', error);
     }
@@ -305,35 +228,41 @@ export default function PriceAlertsScreen({ navigation, route }) {
 
   if (settingsLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="price-alerts" />
+      </FooterAwareView>
     );
   }
 
   if (!isFeatureEnabled) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <FeatureUnavailable
           title="Narx eslatmalari o'chirilgan"
           description="Administrator bu funksiyani vaqtincha o'chirgan."
           icon="notifications-off-outline"
         />
         <Footer currentScreen="price-alerts" />
-      </View>
+      </FooterAwareView>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <Footer currentScreen="price-alerts" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Narx Eslatmalari</Text>
         <TouchableOpacity
@@ -424,7 +353,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
                 <View style={[styles.productInfo, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.productName, { color: colors.text }]}>{selectedProduct.name}</Text>
                   <Text style={[styles.productPrice, { color: colors.primary }]}>
-                    Joriy narx: {(selectedProduct.retail_price || selectedProduct.regular_price || 0).toLocaleString('uz-UZ')} so'm
+                    Joriy narx: {getProductPrice(selectedProduct, user?.customer_type).toLocaleString('uz-UZ')} so'm
                   </Text>
                 </View>
 
@@ -483,7 +412,7 @@ export default function PriceAlertsScreen({ navigation, route }) {
       </Modal>
 
       <Footer currentScreen="profile" />
-    </View>
+    </FooterAwareView>
   );
 }
 

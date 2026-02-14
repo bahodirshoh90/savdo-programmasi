@@ -14,8 +14,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import Colors from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import Footer from '../components/Footer';
+import Footer, { FooterAwareView } from '../components/Footer';
 
 export default function ProductVariantsScreen({ navigation, route }) {
   const { productId, onSelectVariant } = route.params || {};
@@ -165,16 +166,19 @@ export default function ProductVariantsScreen({ navigation, route }) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Variantlar yuklanmoqda...</Text>
-      </View>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Variantlar yuklanmoqda...</Text>
+        </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
   if (variants.length === 0) {
     return (
-      <View style={styles.container}>
+      <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -193,12 +197,13 @@ export default function ProductVariantsScreen({ navigation, route }) {
             Bu mahsulot uchun variantlar mavjud emas
           </Text>
         </View>
-      </View>
+        <Footer currentScreen="products" />
+      </FooterAwareView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <FooterAwareView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -238,7 +243,7 @@ export default function ProductVariantsScreen({ navigation, route }) {
         </View>
       )}
       <Footer currentScreen="products" />
-    </View>
+    </FooterAwareView>
   );
 }
 
