@@ -1,6 +1,9 @@
 const API_BASE = '/api';
+// Mapbox public token - can be configured in deployment environment
+const MAPBOX_ACCESS_TOKEN = window.MAPBOX_TOKEN || 'pk.eyJ1IjoiYmFob2RpcnNob2g5MCIsImEiOiJjbWoxd2E1ODEwbmNsM2RzYjFpd3kzcW5oIn0.-sMWxZGVsVs1ngMlMAPR4A';
 let map = null;
 let salesChart = null;
+let brandChart = null;
 
 // loadSellersMarkers will be assigned after function declaration
 
@@ -63,7 +66,6 @@ function checkAuth() {
 
 async function verifyAdminAuth() {
     try {
-        console.log('[ADMIN] Verifying admin auth...');
         const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${currentAdminToken}`,
@@ -73,30 +75,24 @@ async function verifyAdminAuth() {
         
         if (response.ok) {
             const user = await response.json();
-            console.log('[ADMIN] User data received:', user);
             // Check if user has admin permissions (has admin role or specific permissions)
             const hasAdminAccess = user.role_name?.toLowerCase().includes('admin') || 
                                   user.permissions?.includes('admin.settings') ||
                                   user.permissions?.includes('admin.sellers');
             
-            console.log('[ADMIN] Has admin access:', hasAdminAccess);
             
             if (hasAdminAccess) {
                 currentAdminUser = user;
-                console.log('[ADMIN] Showing admin panel...');
                 showAdminPanel();
                 // Ensure navigation and dashboard are loaded
                 setTimeout(() => {
                     if (typeof setupNavigation === 'function') {
-                        console.log('[ADMIN] Setting up navigation...');
                         setupNavigation();
                     }
                     if (typeof loadDashboard === 'function') {
-                        console.log('[ADMIN] Loading dashboard...');
                         loadDashboard();
                     }
                     if (typeof setupWebSocket === 'function') {
-                        console.log('[ADMIN] Setting up WebSocket...');
                         setupWebSocket();
                     }
                 }, 100);
@@ -174,11 +170,9 @@ async function handleLogin(e) {
 
 function showAdminPanel() {
     try {
-        console.log('[ADMIN] showAdminPanel called');
         const loginPage = document.getElementById('login-page');
         if (loginPage) {
             loginPage.style.display = 'none';
-            console.log('[ADMIN] Login page hidden');
         } else {
             console.warn('[ADMIN] Login page element not found');
         }
@@ -186,7 +180,6 @@ function showAdminPanel() {
         const adminPanel = document.getElementById('admin-panel');
         if (adminPanel) {
             adminPanel.style.display = 'flex';
-            console.log('[ADMIN] Admin panel displayed');
         } else {
             console.error('[ADMIN] Admin panel element not found!');
             alert('Admin panel element topilmadi. Sahifani yangilang.');
@@ -197,12 +190,10 @@ function showAdminPanel() {
         const adminNameEl = document.getElementById('admin-user-name');
         if (adminNameEl && currentAdminUser) {
             adminNameEl.textContent = currentAdminUser.name || 'Admin';
-            console.log('[ADMIN] Admin name updated:', currentAdminUser.name);
         }
         
         // Ensure navigation is set up
         if (typeof setupNavigation === 'function') {
-            console.log('[ADMIN] Setting up navigation...');
             setupNavigation();
         } else {
             console.warn('[ADMIN] setupNavigation function not found');
@@ -210,13 +201,11 @@ function showAdminPanel() {
         
         // Show dashboard by default
         if (typeof showPage === 'function') {
-            console.log('[ADMIN] Showing dashboard page...');
             showPage('dashboard');
         } else {
             console.warn('[ADMIN] showPage function not found');
         }
         
-        console.log('[ADMIN] Admin panel shown successfully');
     } catch (error) {
         console.error('[ADMIN] Error showing admin panel:', error);
         console.error('[ADMIN] Error stack:', error.stack);
@@ -252,7 +241,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
-    
+    // Banner mahsulot qidiruv (dropdown)
+    if (typeof setupBannerProductSearch === 'function') {
+        setTimeout(setupBannerProductSearch, 100);
+    }
     // Check authentication
     checkAuth();
 });
@@ -372,21 +364,81 @@ function showPage(pageName) {
     }
 }
 
+// Dashboard helpers
+function clearDashboardFilters() {
+    const brandInput = document.getElementById('dashboard-brand-filter');
+    const supplierInput = document.getElementById('dashboard-supplier-filter');
+    if (brandInput) brandInput.value = '';
+    if (supplierInput) supplierInput.value = '';
+    loadDashboard();
+}
+
+function updateNewOrdersBadge() {
+    const badge = document.getElementById('new-orders-badge');
+    if (!badge) return;
+    fetch(`${API_BASE}/orders?status=pending&limit=100`, { headers: getAuthHeaders() })
+        .then(r => r.ok ? r.json() : [])
+        .then(orders => {
+            const count = Array.isArray(orders) ? orders.filter(o => o.status === 'pending').length : 0;
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'inline-block' : 'none';
+        })
+        .catch(() => {});
+}
+
 // Dashboard
 async function loadDashboard() {
     try {
-        const [products, orders, sales, customers] = await Promise.all([
-            fetch(`${API_BASE}/products?limit=1`).then(r => r.json()).then(async (data) => {
-                const count = await fetch(`${API_BASE}/products/count`).then(r => r.json());
+        // Get filters
+        const period = document.getElementById('dashboard-period')?.value || '';
+        const brandFilter = document.getElementById('dashboard-brand-filter')?.value?.trim() || '';
+        const supplierFilter = document.getElementById('dashboard-supplier-filter')?.value?.trim() || '';
+        
+        // Build statistics URL
+        let statsUrl = `${API_BASE}/statistics`;
+        const params = new URLSearchParams();
+        if (period) params.append('period', period);
+        if (brandFilter) params.append('brand', brandFilter);
+        if (supplierFilter) params.append('supplier', supplierFilter);
+        if (params.toString()) {
+            statsUrl += '?' + params.toString();
+        }
+        
+        const [products, orders, sales, customers, initialStats] = await Promise.all([
+            fetch(`${API_BASE}/products?limit=1`, { headers: getAuthHeaders() }).then(r => r.json()).then(async (data) => {
+                const count = await fetch(`${API_BASE}/products/count`, { headers: getAuthHeaders() }).then(r => r.json());
                 return { length: count.count || 0, data };
             }).catch(e => ({ length: 0, data: [] })),
-            fetch(`${API_BASE}/orders?limit=1`).then(r => r.json()).then(data => ({ length: data.length || 0 })).catch(e => ({ length: 0 })),
-            fetch(`${API_BASE}/sales?limit=1`).then(r => r.json()).then(data => ({ length: data.length || 0 })).catch(e => ({ length: 0 })),
-            fetch(`${API_BASE}/customers?limit=1`).then(r => r.json()).then(async (data) => {
-                const count = await fetch(`${API_BASE}/customers/count`).then(r => r.json());
+            fetch(`${API_BASE}/orders?limit=1`, { headers: getAuthHeaders() }).then(r => r.json()).then(data => ({ length: data.length || 0 })).catch(e => ({ length: 0 })),
+            fetch(`${API_BASE}/sales?limit=1`, { headers: getAuthHeaders() }).then(r => r.json()).then(data => ({ length: data.length || 0 })).catch(e => ({ length: 0 })),
+            fetch(`${API_BASE}/customers?limit=1`, { headers: getAuthHeaders() }).then(r => r.json()).then(async (data) => {
+                const count = await fetch(`${API_BASE}/customers/count`, { headers: getAuthHeaders() }).then(r => r.json());
                 return { length: count.count || 0, data };
-            }).catch(e => ({ length: 0, data: [] }))
+            }).catch(e => ({ length: 0, data: [] })),
+            fetch(statsUrl, { headers: getAuthHeaders() }).then(r => r.json()).catch(e => ({}))
         ]);
+        
+        // Use initialStats from Promise.all, if empty or failed, fetch separately with date range
+        let stats = initialStats || {};
+        if (!stats || Object.keys(stats).length === 0) {
+            // Fallback: fetch separately if Promise.all failed
+            let url = `${API_BASE}/statistics`;
+            const params = new URLSearchParams();
+            if (period) params.append('period', period);
+            if (brandFilter) params.append('brand', brandFilter);
+            if (supplierFilter) params.append('supplier', supplierFilter);
+            if (params.toString()) {
+                url += '?' + params.toString();
+            } else {
+                const endDate = new Date().toISOString();
+                const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                url += `?start_date=${startDate}&end_date=${endDate}`;
+            }
+            stats = await fetch(url, { headers: getAuthHeaders() }).then(r => r.json()).catch(e => {
+                console.error('Error loading statistics:', e);
+                return {};
+            });
+        }
 
         if (document.getElementById('total-products')) {
             // products.length contains the count from /api/products/count
@@ -399,25 +451,10 @@ async function loadDashboard() {
         if (document.getElementById('total-customers')) {
             document.getElementById('total-customers').textContent = customers.length || 0;
         }
-
-        // Load detailed statistics with period filter
-        const period = document.getElementById('dashboard-period')?.value || '';
-        let url = `${API_BASE}/statistics`;
-        if (period) {
-            url += `?period=${period}`;
-        } else {
-            const endDate = new Date().toISOString();
-            const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-            url += `?start_date=${startDate}&end_date=${endDate}`;
-        }
-        const stats = await fetch(url).then(r => r.json()).catch(e => {
-            console.error('Error loading statistics:', e);
-            return {};
-        });
         
         // Load inventory value and statistics
         try {
-            const inventoryValue = await fetch(`${API_BASE}/inventory/value`).then(r => r.json());
+            const inventoryValue = await fetch(`${API_BASE}/inventory/value`, { headers: getAuthHeaders() }).then(r => r.json());
             if (document.getElementById('inventory-value-by-cost')) {
                 document.getElementById('inventory-value-by-cost').textContent = formatMoney(inventoryValue.total_value_by_cost || 0);
             }
@@ -453,7 +490,7 @@ async function loadDashboard() {
         
         // Load total debt
         try {
-            const totalDebt = await fetch(`${API_BASE}/debt/total`).then(r => r.json());
+            const totalDebt = await fetch(`${API_BASE}/debt/total`, { headers: getAuthHeaders() }).then(r => r.json());
             if (document.getElementById('total-debt')) {
                 document.getElementById('total-debt').textContent = formatMoney(totalDebt.total_debt || 0);
             }
@@ -465,27 +502,23 @@ async function loadDashboard() {
         }
         
         // Display profit statistics and total sales count
-        console.log('Statistics loaded:', stats);
         if (stats) {
             // Update total sales count from statistics (accurate count)
             if (document.getElementById('total-sales')) {
                 const totalSalesCount = stats.total_sales !== undefined ? stats.total_sales : 0;
                 document.getElementById('total-sales').textContent = totalSalesCount;
-                console.log('Total sales count updated from statistics:', totalSalesCount);
             }
             
             // Update total profit
             if (document.getElementById('total-profit')) {
                 const profit = stats.total_profit !== undefined ? stats.total_profit : 0;
                 document.getElementById('total-profit').textContent = formatMoney(profit);
-                console.log('Profit displayed:', profit);
             }
             
             // Update online orders count
             if (document.getElementById('online-orders')) {
                 const onlineOrdersCount = stats.online_orders_count !== undefined ? stats.online_orders_count : 0;
                 document.getElementById('online-orders').textContent = onlineOrdersCount;
-                console.log('Online orders count updated:', onlineOrdersCount);
             }
             
             // Update total orders count
@@ -498,7 +531,6 @@ async function loadDashboard() {
                     totalOrdersCount = (stats.online_orders_count || 0) + (stats.offline_orders_count || 0);
                 }
                 document.getElementById('total-orders').textContent = totalOrdersCount;
-                console.log('Total orders count updated:', totalOrdersCount);
             }
         } else {
             console.error('Statistics not loaded');
@@ -532,10 +564,23 @@ async function loadDashboard() {
         
         // Load all sales for chart
         try {
-            const allSales = await fetch(`${API_BASE}/sales?limit=1000`).then(r => r.json()).catch(e => []);
+            const allSales = await fetch(`${API_BASE}/sales?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json()).catch(e => []);
             updateSalesChart(allSales || []);
         } catch (e) {
             console.error('Error loading sales for chart:', e);
+        }
+        // Load brand sales for chart (same period as dashboard)
+        try {
+            let byBrandUrl = `${API_BASE}/statistics/by-brand`;
+            const byBrandParams = new URLSearchParams();
+            if (period) byBrandParams.append('period', period);
+            if (brandFilter) byBrandParams.append('brand', brandFilter);
+            if (supplierFilter) byBrandParams.append('supplier', supplierFilter);
+            if (byBrandParams.toString()) byBrandUrl += '?' + byBrandParams.toString();
+            const byBrandRes = await fetch(byBrandUrl, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => ({ brands: [] }));
+            updateBrandChart(byBrandRes.brands || []);
+        } catch (e) {
+            console.error('Error loading brand chart:', e);
         }
         
         // Update top products and customers
@@ -628,6 +673,48 @@ function updateSalesChart(sales) {
     });
 }
 
+function updateBrandChart(brands) {
+    const ctx = document.getElementById('brandSalesChart');
+    if (!ctx) return;
+    if (brandChart) {
+        brandChart.destroy();
+        brandChart = null;
+    }
+    if (!brands || brands.length === 0) {
+        return;
+    }
+    const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+    brandChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: brands.map(b => b.brand || 'N/A'),
+            datasets: [{
+                label: 'Sotuv (so\'m)',
+                data: brands.map(b => b.amount),
+                backgroundColor: brands.map((_, i) => colors[i % colors.length]),
+                borderColor: brands.map((_, i) => colors[i % colors.length]),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value >= 1e6 ? (value / 1e6).toFixed(1) + 'M' : value >= 1e3 ? (value / 1e3).toFixed(0) + 'k' : value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // Products
 let productFilterTimeout;
 let adminProductBarcodeScanner = null;
@@ -659,7 +746,6 @@ function initAdminProductBarcodeScanner() {
         maxLength: 50,
         timeout: 100,
         onScan: (barcode) => {
-            console.log('Admin: Barcode scanned:', barcode);
             // Set search input value and trigger search
             searchInput.value = barcode;
             handleProductSearch();
@@ -668,7 +754,6 @@ function initAdminProductBarcodeScanner() {
     
     // Attach to search input
     adminProductBarcodeScanner.attach(searchInput);
-    console.log('Admin product barcode scanner initialized');
 }
 
 function clearProductFilters() {
@@ -685,60 +770,29 @@ function clearProductFilters() {
 // Load categories for filter dropdown
 async function loadCategories() {
     try {
-        // Fetch products in batches to get all categories (max limit is 1000)
-        let allProducts = [];
-        let skip = 0;
-        const limit = 1000;
-        let hasMore = true;
-        
-        while (hasMore) {
-            const response = await fetch(`${API_BASE}/products?skip=${skip}&limit=${limit}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            const products = await response.json();
-            if (!Array.isArray(products)) {
-                throw new Error('Invalid response format');
-            }
-            allProducts = allProducts.concat(products);
-            if (products.length < limit) {
-                hasMore = false;
-            } else {
-                skip += limit;
-            }
-        }
-        
-        const categories = new Set();
-        allProducts.forEach(product => {
-            if (product.category && product.category.trim()) {
-                const category = product.category.trim();
-                categories.add(category);
-            }
-        });
+        const response = await fetch(`${API_BASE}/categories?limit=1000`, { headers: getAuthHeaders() });
+        if (!response.ok) return;
+        const categories = await response.json();
+        if (!Array.isArray(categories)) return;
         
         const categoryFilter = document.getElementById('product-category-filter');
-        if (categoryFilter) {
-            // Save current selected value
-            const currentValue = categoryFilter.value;
-            
-            // Clear all options except the first one
-            while (categoryFilter.children.length > 1) {
-                categoryFilter.removeChild(categoryFilter.lastChild);
-            }
-            
-            // Add categories sorted
-            const sortedCategories = Array.from(categories).sort();
-            sortedCategories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category;
-                option.textContent = category;
-                categoryFilter.appendChild(option);
-            });
-            
-            // Restore selected value if it still exists
-            if (currentValue && Array.from(categoryFilter.options).some(opt => opt.value === currentValue)) {
-                categoryFilter.value = currentValue;
-            }
+        if (!categoryFilter) return;
+        
+        const currentValue = categoryFilter.value;
+        while (categoryFilter.children.length > 1) {
+            categoryFilter.removeChild(categoryFilter.lastChild);
+        }
+        
+        categories.sort((a, b) => (a.display_order || 0) - (b.display_order || 0) || (a.name || '').localeCompare(b.name || ''));
+        categories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.name || '-';
+            categoryFilter.appendChild(option);
+        });
+        
+        if (currentValue && Array.from(categoryFilter.options).some(opt => opt.value === currentValue)) {
+            categoryFilter.value = currentValue;
         }
     } catch (error) {
         console.error('Error loading categories:', error);
@@ -747,14 +801,87 @@ async function loadCategories() {
 
 async function loadProducts() {
     try {
+        const soldPeriodFilter = document.getElementById('sold-period-filter')?.value || '';
         const search = document.getElementById('product-search')?.value || '';
-        const category = document.getElementById('product-category-filter')?.value || '';
+        const categoryFilterVal = document.getElementById('product-category-filter')?.value || '';
+        const categoryId = categoryFilterVal ? parseInt(categoryFilterVal, 10) : null;
+        const category = !categoryId ? (categoryFilterVal || '') : ''; // legacy name only if no id
         const brand = document.getElementById('product-brand-filter')?.value || '';
         const supplier = document.getElementById('product-supplier-filter')?.value || '';
         const location = document.getElementById('product-location-filter')?.value || '';
         const stockFilter = document.getElementById('stock-filter')?.value || 'all';
         const sortValue = document.getElementById('product-sort')?.value || '';
         const skip = (currentProductPage - 1) * productsPerPage;
+        
+        const soldPeriodTh = document.getElementById('products-sold-period-th');
+        if (soldPeriodTh) soldPeriodTh.style.display = soldPeriodFilter ? '' : 'none';
+        
+        // Kam/umuman sotilmagan filter: boshqa API
+        if (soldPeriodFilter) {
+            const res = await fetch(`${API_BASE}/products/unsold-or-low-sold?period=${encodeURIComponent(soldPeriodFilter)}&max_sold=0&skip=${skip}&limit=${productsPerPage}`, { headers: getAuthHeaders() });
+            if (!res.ok) throw new Error('Ro\'yxatni yuklashda xatolik');
+            const products = await res.json();
+            const tbody = document.getElementById('products-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            selectedProducts.clear();
+            updateBulkDeleteButton();
+            if (products.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="17" style="text-align: center; padding: 2rem;">Bu davrda sotilmagan yoki kam sotilgan mahsulotlar yo\'q</td>`;
+                tbody.appendChild(row);
+                document.getElementById('products-pagination').innerHTML = '';
+                return;
+            }
+            totalProducts = products.length;
+            products.forEach(product => {
+                const row = document.createElement('tr');
+                const packagesInStock = product.packages_in_stock || 0;
+                const piecesInStock = product.pieces_in_stock || 0;
+                const piecesPerPackage = product.pieces_per_package && product.pieces_per_package > 0 ? product.pieces_per_package : 1;
+                const calculatedTotalPieces = (packagesInStock * piecesPerPackage) + piecesInStock;
+                const totalPieces = (product.total_pieces !== undefined && product.total_pieces !== null && product.total_pieces > 0) ? product.total_pieces : calculatedTotalPieces;
+                const stockClass = totalPieces === 0 ? 'badge-danger' : totalPieces <= 10 ? 'badge-warning' : '';
+                let imageUrl = product.image_url;
+                if (!imageUrl || imageUrl === 'undefined' || imageUrl === 'null' || (imageUrl && imageUrl.trim() === '')) imageUrl = null;
+                else if (imageUrl.startsWith('/uploads')) imageUrl = window.location.origin + imageUrl;
+                else if (!imageUrl.startsWith('http')) imageUrl = window.location.origin + '/uploads/products/' + imageUrl;
+                const soldInPeriod = product.sold_in_period != null ? product.sold_in_period : 0;
+                row.innerHTML = `
+                    <td><input type="checkbox" class="product-checkbox" value="${product.id}" onchange="toggleProductSelection(${product.id})"></td>
+                    <td>${product.id}</td>
+                    <td class="product-image-cell"></td>
+                    <td>${escapeHtml(product.name)}</td>
+                    <td>${escapeHtml(product.category || '-')}</td>
+                    <td>${escapeHtml(product.item_number || '-')}</td>
+                    <td>${escapeHtml(product.barcode || '-')}</td>
+                    <td>${product.pieces_per_package}</td>
+                    <td>${formatMoney(product.wholesale_price)}</td>
+                    <td>${formatMoney(product.retail_price)}</td>
+                    <td>${formatMoney(product.regular_price)}</td>
+                    <td>${product.packages_in_stock || 0}</td>
+                    <td>${product.pieces_in_stock || 0}</td>
+                    <td><span class="badge ${stockClass}">${totalPieces}</span></td>
+                    <td><strong>${soldInPeriod}</strong> dona</td>
+                    <td class="product-location-cell"></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn action-btn-edit" onclick="editProduct(${product.id})"><i class="fas fa-edit"></i></button>
+                            <button class="action-btn action-btn-delete" onclick="deleteProduct(${product.id})"><i class="fas fa-trash"></i></button>
+                            <button class="action-btn action-btn-view" onclick="viewProductBarcode(${product.id})"><i class="fas fa-barcode"></i></button>
+                            <button class="action-btn action-btn-view" onclick="viewProductHistory(${product.id})" title="Sotuv tarixi"><i class="fas fa-history"></i></button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+                const imgCell = row.querySelector('.product-image-cell');
+                if (imgCell && imageUrl) { const img = document.createElement('img'); img.src = imageUrl; img.alt = product.name; img.style.maxWidth = '40px'; img.style.maxHeight = '40px'; img.onerror = () => { img.style.display = 'none'; }; imgCell.appendChild(img); }
+                const locCell = row.querySelector('.product-location-cell');
+                if (locCell) locCell.textContent = product.location || '-';
+            });
+            document.getElementById('products-pagination').innerHTML = totalProducts > productsPerPage ? `<span>Ko\'rsatilgan: ${products.length} ta</span>` : '';
+            return;
+        }
         
         // Parse sort value (format: "field_order" e.g., "name_asc", "stock_desc")
         // Default: omborda borlar birinchi (stock desc), keyin yo'qlari
@@ -776,7 +903,8 @@ async function loadProducts() {
         params.append('limit', productsPerPage);
         
         if (search) params.append('search', search);
-        if (category) params.append('category', category);
+        if (categoryId) params.append('category_id', categoryId);
+        else if (category) params.append('category', category);
         if (brand) params.append('brand', brand);
         if (supplier) params.append('supplier', supplier);
         if (location) params.append('location', location);
@@ -807,7 +935,8 @@ async function loadProducts() {
         // Build count URL with same filters
         const countParams = new URLSearchParams();
         if (search) countParams.append('search', search);
-        if (category) countParams.append('category', category);
+        if (categoryId) countParams.append('category_id', categoryId);
+        else if (category) countParams.append('category', category);
         if (brand) countParams.append('brand', brand);
         if (supplier) countParams.append('supplier', supplier);
         if (location) countParams.append('location', location);
@@ -826,7 +955,7 @@ async function loadProducts() {
                 console.error('Error fetching products:', e);
                 return [];
             }),
-            fetch(`${API_BASE}/products/count?${countParams.toString()}`).then(r => r.json()).catch(e => {
+            fetch(`${API_BASE}/products/count?${countParams.toString()}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(e => {
                 console.error('Error fetching products count:', e);
                 return { count: 0 };
             })
@@ -864,9 +993,8 @@ async function loadProducts() {
             // Only show warning/error badge if stock is actually low (<= 10) or out (0)
             const stockClass = totalPieces === 0 ? 'badge-danger' : totalPieces <= 10 ? 'badge-warning' : '';
             
-            // Check if product is slow moving (not sold for 30+ days)
-            const isSlowMoving = product.is_slow_moving || (product.days_since_last_sale && product.days_since_last_sale >= 30);
-            if (isSlowMoving) {
+            // Sariq rang faqat omborda kam qolgan (≤10 dona) bo'lganda
+            if (totalPieces <= 10 && totalPieces > 0) {
                 row.style.backgroundColor = '#fff9e6'; // Sariq rang (light yellow)
                 row.style.borderLeft = '4px solid #ffc107'; // Sariq chekka
             }
@@ -1007,7 +1135,6 @@ async function loadProducts() {
                     this.parentNode.replaceChild(span, this);
                 };
                 img.onload = function() {
-                    console.log('Image loaded:', imageUrl);
                 };
                 imageCell.appendChild(img);
             } else {
@@ -1094,12 +1221,17 @@ async function bulkDeleteProducts() {
     if (!confirm(`${selectedProducts.size} ta mahsulotni o'chirishni xohlaysizmi?`)) return;
     
     try {
+        const headers = { ...getAuthHeaders(), 'Content-Type': 'application/json' };
         const response = await fetch(`${API_BASE}/products/bulk-delete`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(Array.from(selectedProducts))
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            alert(result.detail || result.message || `Xatolik (${response.status})`);
+            return;
+        }
         alert(result.message);
         selectedProducts.clear();
         loadProducts();
@@ -1131,7 +1263,7 @@ function printProductsTable() {
 
 async function viewProductHistory(productId) {
     try {
-        const history = await fetch(`${API_BASE}/products/${productId}/sales-history`).then(r => r.json());
+        const history = await fetch(`${API_BASE}/products/${productId}/sales-history`, { headers: getAuthHeaders() }).then(r => r.json());
         let historyHtml = '<h2>Sotuv tarixi</h2><table><thead><tr><th>Sana</th><th>Mijoz</th><th>Miqdor</th><th>Summa</th></tr></thead><tbody>';
         history.forEach(h => {
             const historyDate = new Date(h.date).toLocaleString('uz-UZ', {
@@ -1242,7 +1374,7 @@ async function showAddProductModal() {
 
 async function editProduct(id) {
     try {
-        const product = await fetch(`${API_BASE}/products/${id}`).then(r => r.json());
+        const product = await fetch(`${API_BASE}/products/${id}`, { headers: getAuthHeaders() }).then(r => r.json());
         document.getElementById('product-modal-title').textContent = 'Mahsulotni Tahrirlash';
         document.getElementById('product-id').value = product.id;
         document.getElementById('product-name').value = product.name;
@@ -1252,7 +1384,7 @@ async function editProduct(id) {
         await loadProductCategories();
         
         // Set category_id if available, otherwise use category name
-        const categorySelect = document.getElementById('product-category-select');
+        const categorySelect = document.getElementById('product-category');
         if (categorySelect) {
             if (product.category_id) {
                 categorySelect.value = product.category_id;
@@ -1262,14 +1394,13 @@ async function editProduct(id) {
                 const category = categories.find(c => c.name === product.category);
                 if (category) {
                     categorySelect.value = category.id;
+                } else {
+                    // If category not found by ID or name, set empty
+                    categorySelect.value = '';
                 }
+            } else {
+                categorySelect.value = '';
             }
-        }
-        
-        // Legacy category field (for backward compatibility)
-        const categoryInput = document.getElementById('product-category');
-        if (categoryInput) {
-            categoryInput.value = product.category || '';
         }
         
         document.getElementById('product-brand').value = product.brand || '';
@@ -1295,6 +1426,11 @@ async function editProduct(id) {
         document.getElementById('product-regular-price').value = product.regular_price || 0;
         document.getElementById('product-packages-in-stock').value = product.packages_in_stock;
         document.getElementById('product-pieces-in-stock').value = product.pieces_in_stock;
+        document.getElementById('product-is-on-sale').checked = !!product.is_on_sale;
+        document.getElementById('product-discount-percent').value = product.discount_percent ?? '';
+        const saleAppliesEl = document.getElementById('product-sale-applies-to');
+        if (saleAppliesEl) saleAppliesEl.value = product.sale_applies_to || 'retail';
+        document.getElementById('product-season').value = product.season || '';
         document.getElementById('product-modal').style.display = 'block';
     } catch (error) {
         alert('Xatolik: ' + error.message);
@@ -1314,13 +1450,10 @@ async function handleProductImageUpload(event) {
         
         // Debug: Check if seller ID exists
         const sellerId = localStorage.getItem('admin_seller_id');
-        console.log('Image upload - Seller ID from localStorage:', sellerId);
-        console.log('Image upload - Headers:', headers);
         
         // Ensure X-Seller-ID is set (fallback to currentAdminUser.id)
         if (!headers['X-Seller-ID'] && currentAdminUser && currentAdminUser.id) {
             headers['X-Seller-ID'] = currentAdminUser.id.toString();
-            console.log('Image upload - Using currentAdminUser.id as X-Seller-ID:', currentAdminUser.id);
         }
         
         // If still no seller ID, show error
@@ -1352,6 +1485,70 @@ async function handleProductImageUpload(event) {
         console.error('Image upload error:', error);
         alert('Rasm yuklashda xatolik: ' + error.message);
     }
+}
+
+// Qo'shimcha rasmlar (ProductImage) yuklash
+async function handleMultiImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const productIdInput = document.getElementById('product-id');
+    const productId = productIdInput ? productIdInput.value : '';
+    if (!productId) {
+        alert('Avval mahsulotni saqlang, keyin qo\'shimcha rasmlarni yuklang.');
+        event.target.value = '';
+        return;
+    }
+
+    const container = document.getElementById('product-images-container');
+    let displayOrder = container ? container.children.length : 0;
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('display_order', String(displayOrder));
+        formData.append('is_primary', 'false');
+
+        try {
+            const headers = getAuthHeaders ? getAuthHeaders() : {};
+            if (headers['Content-Type']) {
+                delete headers['Content-Type'];
+            }
+
+            const response = await fetch(`${API_BASE}/products/${productId}/images`, {
+                method: 'POST',
+                headers,
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => 'Unknown error');
+                throw new Error(`Server error: ${response.status} ${errorText}`);
+            }
+
+            const result = await response.json();
+            if (container && result.image_url) {
+                let url = result.image_url;
+                if (!url.startsWith('http')) {
+                    url = window.location.origin + (url.startsWith('/') ? url : '/' + url);
+                }
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = 'Rasm';
+                img.style.cssText = 'width: 60px; height: 60px; object-fit: cover; border-radius: 4px; margin-right: 6px; margin-bottom: 6px; border: 1px solid var(--border-color);';
+                container.appendChild(img);
+            }
+        } catch (error) {
+            console.error('Qo\'shimcha rasm yuklashda xatolik:', error);
+            alert('Qo\'shimcha rasm yuklashda xatolik: ' + error.message);
+            break;
+        }
+
+        displayOrder += 1;
+    }
+
+    // Fayl inputini tozalash
+    event.target.value = '';
 }
 
 function updateProductImagePreview(imageUrl) {
@@ -1454,15 +1651,38 @@ async function saveProduct(e) {
     data.packages_in_stock = packagesInStock;
     data.pieces_in_stock = piecesInStock;
     
+    // Aksiyada bo'lganda ulgurji va dona narx tekshiruvi
+    if (document.getElementById('product-is-on-sale')?.checked) {
+        if (!data.wholesale_price || data.wholesale_price <= 0) {
+            alert('Aksiyada bo\'lganda ulgurji narx (dona uchun) 0 dan katta bo\'lishi kerak.');
+            return;
+        }
+        if (!data.retail_price || data.retail_price <= 0) {
+            alert('Aksiyada bo\'lganda dona narx 0 dan katta bo\'lishi kerak.');
+            return;
+        }
+    }
+    
     // Optional fields - include even if null/empty for update
     if (id) {
         // For update, include all fields explicitly
         data.item_number = document.getElementById('product-item-number').value.trim() || null;
         data.barcode = document.getElementById('product-barcode').value || null;
-        data.category = document.getElementById('product-category').value.trim() || null;
+        const categoryIdValue = document.getElementById('product-category').value.trim();
+        if (categoryIdValue) {
+            data.category_id = parseInt(categoryIdValue);
+        } else {
+            data.category_id = null;
+        }
         data.brand = document.getElementById('product-brand').value.trim() || null;
         data.supplier = document.getElementById('product-supplier').value.trim() || null;
         data.location = location;
+        data.is_on_sale = document.getElementById('product-is-on-sale')?.checked || false;
+        const discountVal = document.getElementById('product-discount-percent')?.value;
+        data.discount_percent = discountVal ? parseFloat(discountVal) : null;
+        const saleAppliesEl = document.getElementById('product-sale-applies-to');
+        data.sale_applies_to = saleAppliesEl ? (saleAppliesEl.value || 'retail') : 'retail';
+        data.season = document.getElementById('product-season')?.value?.trim() || null;
         data.image_url = imageUrl;
         data.received_date = receivedDate ? new Date(receivedDate).toISOString() : null;
     } else {
@@ -1473,8 +1693,10 @@ async function saveProduct(e) {
         const barcodeValue = document.getElementById('product-barcode').value;
         if (barcodeValue) data.barcode = barcodeValue;
         
-        const categoryValue = document.getElementById('product-category').value.trim();
-        if (categoryValue) data.category = categoryValue;
+        const categoryIdValue = document.getElementById('product-category').value.trim();
+        if (categoryIdValue) {
+            data.category_id = parseInt(categoryIdValue);
+        }
         
         const brandValue = document.getElementById('product-brand').value.trim();
         if (brandValue) data.brand = brandValue;
@@ -1485,29 +1707,30 @@ async function saveProduct(e) {
         if (location) data.location = location;
         if (imageUrl) data.image_url = imageUrl;
         if (receivedDate) data.received_date = new Date(receivedDate).toISOString();
+        data.is_on_sale = document.getElementById('product-is-on-sale')?.checked || false;
+        const discountVal = document.getElementById('product-discount-percent')?.value;
+        data.discount_percent = discountVal ? parseFloat(discountVal) : null;
+        const saleAppliesEl = document.getElementById('product-sale-applies-to');
+        data.sale_applies_to = saleAppliesEl ? (saleAppliesEl.value || 'retail') : 'retail';
+        data.season = document.getElementById('product-season')?.value?.trim() || null;
     }
 
     try {
         const url = id ? `${API_BASE}/products/${id}` : `${API_BASE}/products`;
         const method = id ? 'PUT' : 'POST';
         
-        console.log('Sending product data:', JSON.stringify(data, null, 2));
         
         const response = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
-        console.log('Response status:', response.status, response.statusText);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
         // Get response text first (before checking ok)
         let responseText = '';
         try {
             responseText = await response.text();
-            console.log('Response text length:', responseText ? responseText.length : 0);
-            console.log('Response text (first 500 chars):', responseText ? responseText.substring(0, 500) : '(empty)');
         } catch (textError) {
             console.error('Error reading response text:', textError);
             responseText = '';
@@ -1581,7 +1804,7 @@ async function saveTotalPiecesInline(productId, inputElement) {
     
     try {
         // Get product details first
-        const product = await fetch(`${API_BASE}/products/${productId}`).then(r => r.json());
+        const product = await fetch(`${API_BASE}/products/${productId}`, { headers: getAuthHeaders() }).then(r => r.json());
         const piecesPerPackage = product.pieces_per_package || 1;
         
         // Calculate packages_in_stock and pieces_in_stock from total_pieces
@@ -1634,6 +1857,88 @@ async function saveTotalPiecesInline(productId, inputElement) {
     }
 }
 
+function openImageSearchModal() {
+    const modal = document.getElementById('image-search-modal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.getElementById('image-search-file').value = '';
+        document.getElementById('image-search-status').textContent = '';
+        document.getElementById('image-search-results').style.display = 'none';
+        document.getElementById('image-search-results-list').innerHTML = '';
+    }
+}
+
+function closeImageSearchModal() {
+    const modal = document.getElementById('image-search-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitImageSearch() {
+    const fileInput = document.getElementById('image-search-file');
+    const statusEl = document.getElementById('image-search-status');
+    const resultsWrap = document.getElementById('image-search-results');
+    const resultsList = document.getElementById('image-search-results-list');
+    const method = document.getElementById('image-search-method')?.value || 'phash';
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        statusEl.textContent = 'Iltimos, rasm faylini tanlang.';
+        statusEl.style.color = 'var(--danger, #ef4444)';
+        return;
+    }
+    const file = fileInput.files[0];
+    if (!file.type.startsWith('image/')) {
+        statusEl.textContent = 'Faqat rasm fayllari qabul qilinadi.';
+        statusEl.style.color = 'var(--danger, #ef4444)';
+        return;
+    }
+    statusEl.textContent = 'Qidirilmoqda...';
+    statusEl.style.color = '';
+    resultsWrap.style.display = 'none';
+    resultsList.innerHTML = '';
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const url = `${API_BASE}/products/search-by-image?method=${encodeURIComponent(method)}&max_results=20`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: formData
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || response.statusText);
+        }
+        const data = await response.json();
+        const products = data.products || [];
+        statusEl.textContent = products.length ? `${products.length} ta mahsulot topildi.` : (data.message || 'O\'xshash mahsulot topilmadi.');
+        statusEl.style.color = products.length ? 'var(--success, #10b981)' : '';
+        if (products.length) {
+            resultsWrap.style.display = 'block';
+            resultsList.innerHTML = `
+                <table class="table">
+                    <thead><tr><th>ID</th><th>Nomi</th><th>Narx</th><th></th></tr></thead>
+                    <tbody>
+                        ${products.map(p => `
+                            <tr>
+                                <td>${p.id}</td>
+                                <td>${escapeHtml(p.name || '-')}</td>
+                                <td>${formatMoney(p.retail_price || p.regular_price || 0)}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="editProduct(${p.id}); closeImageSearchModal();">Tahrirlash</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="closeImageSearchModal(); loadProducts();">Ro'yxatda ko'rsatish</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        statusEl.textContent = 'Xatolik: ' + error.message;
+        statusEl.style.color = 'var(--danger, #ef4444)';
+        console.error('Image search error:', error);
+    }
+}
+
 async function deleteProduct(id) {
     if (!confirm('Bu mahsulotni o\'chirishni xohlaysizmi?')) return;
     
@@ -1645,15 +1950,31 @@ async function deleteProduct(id) {
     }
 }
 
+function openBarcodeModal(qrDataUrl, productId) {
+    const modal = document.getElementById('barcode-qr-modal');
+    const imgEl = document.getElementById('barcode-qr-image');
+    const linkEl = document.getElementById('barcode-qr-download');
+    if (!modal || !imgEl) return;
+    imgEl.src = qrDataUrl;
+    imgEl.alt = 'QR kod';
+    if (linkEl) {
+        linkEl.href = qrDataUrl;
+        linkEl.download = `product-${productId}-qr.png`;
+    }
+    modal.style.display = 'block';
+}
+function closeBarcodeModal() {
+    const modal = document.getElementById('barcode-qr-modal');
+    if (modal) modal.style.display = 'none';
+}
 async function viewProductBarcode(id) {
     try {
-        const barcode = await fetch(`${API_BASE}/products/${id}/barcode`).then(r => r.json());
-        const img = document.createElement('img');
-        img.src = barcode.qr_code;
-        img.style.width = '300px';
-        img.style.height = '300px';
-        alert('QR kod yaratildi!');
-        // You can show this in a modal or download it
+        const barcode = await fetch(`${API_BASE}/products/${id}/barcode`, { headers: getAuthHeaders() }).then(r => r.json());
+        if (!barcode.qr_code) {
+            alert('QR kod yaratilmadi.');
+            return;
+        }
+        openBarcodeModal(barcode.qr_code, id);
     } catch (error) {
         alert('Xatolik: ' + error.message);
     }
@@ -1740,6 +2061,25 @@ function importProducts() {
                 if (result.errors_count > 0) {
                     message += `\nXatolar: ${result.errors_count} ta`;
                 }
+                
+                // Yangilangan mahsulotlarni ko'rsatish
+                const updatedProducts = result.updated_products || [];
+                if (updatedProducts.length > 0) {
+                    message += `\n\n--- YANGILANGAN MAHSULOTLAR (${updatedProducts.length} ta) ---`;
+                    updatedProducts.forEach((p, i) => {
+                        const parts = [p.name];
+                        if (p.item_number) parts.push(`Kod: ${p.item_number}`);
+                        if (p.barcode) parts.push(`Barcode: ${p.barcode}`);
+                        if (p.added_packages > 0 || p.added_pieces > 0) {
+                            const stockParts = [];
+                            if (p.added_packages > 0) stockParts.push(`+${p.added_packages} qop`);
+                            if (p.added_pieces > 0) stockParts.push(`+${p.added_pieces} dona`);
+                            parts.push(`Omborga: ${stockParts.join(', ')} → Jami: ${p.new_total} dona`);
+                        }
+                        message += `\n${i + 1}. ${parts.join(' | ')}`;
+                    });
+                }
+                
                 alert(message);
                 loadProducts(); // Reload products list
             } else {
@@ -1792,7 +2132,6 @@ async function exportSales() {
 
 async function exportStatistics(format = 'excel') {
     try {
-        const period = document.getElementById('dashboard-period')?.value || '';
         const startDate = prompt('Boshlanish sanasi (YYYY-MM-DD) yoki bo\'sh qoldiring:');
         const endDate = prompt('Tugash sanasi (YYYY-MM-DD) yoki bo\'sh qoldiring:');
         
@@ -1801,16 +2140,14 @@ async function exportStatistics(format = 'excel') {
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
         params.append('format', format);
+        const brandFilter = document.getElementById('dashboard-brand-filter')?.value?.trim();
+        const supplierFilter = document.getElementById('dashboard-supplier-filter')?.value?.trim();
+        if (brandFilter) params.append('brand', brandFilter);
+        if (supplierFilter) params.append('supplier', supplierFilter);
         if (params.toString()) url += '?' + params.toString();
         
-        const sellerId = localStorage.getItem('admin_seller_id');
-        const headers = {};
-        if (sellerId) {
-            headers['X-Seller-ID'] = sellerId;
-        }
-        
         const response = await fetch(url, {
-            headers: headers
+            headers: getAuthHeaders()
         });
         
         if (!response.ok) {
@@ -1849,8 +2186,8 @@ async function loadCustomers() {
         if (search) url += `&search=${encodeURIComponent(search)}`;
         
         const [customers, countData] = await Promise.all([
-            fetch(url).then(r => r.json()),
-            fetch(`${API_BASE}/customers/count?${type ? `customer_type=${type}&` : ''}${search ? `search=${encodeURIComponent(search)}` : ''}`).then(r => r.json())
+            fetch(url, { headers: getAuthHeaders() }).then(r => r.json()),
+            fetch(`${API_BASE}/customers/count?${type ? `customer_type=${type}&` : ''}${search ? `search=${encodeURIComponent(search)}` : ''}`, { headers: getAuthHeaders() }).then(r => r.json())
         ]);
         
         totalCustomers = countData.count;
@@ -1898,10 +2235,11 @@ async function loadCustomers() {
 
 async function viewCustomerHistory(customerId, customerName) {
     try {
-        console.log('Loading customer history for:', customerId);
-        const [salesRes, debtRes] = await Promise.all([
-            fetch(`${API_BASE}/customers/${customerId}/sales-history?limit=100`),
-            fetch(`${API_BASE}/customers/${customerId}/debt-history?limit=100`)
+        const authHeaders = { headers: getAuthHeaders() };
+        const [salesRes, debtRes, customerRes] = await Promise.all([
+            fetch(`${API_BASE}/customers/${customerId}/sales-history?limit=100`, authHeaders),
+            fetch(`${API_BASE}/customers/${customerId}/debt-history?limit=100`, authHeaders),
+            fetch(`${API_BASE}/customers/${customerId}`, authHeaders)
         ]);
         
         if (!salesRes.ok) {
@@ -1910,10 +2248,19 @@ async function viewCustomerHistory(customerId, customerName) {
         
         const sales = await salesRes.json();
         const debtHistory = debtRes.ok ? await debtRes.json() : [];
+        const customer = customerRes.ok ? await customerRes.json() : null;
+        
+        // Joriy qarz balansini mijoz ma'lumotlaridan olish (to'g'ri usul)
+        const currentDebtBalance = customer?.debt_balance || 0;
         
         const totalSalesAmount = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-        const totalDebt = debtHistory.filter(d => d.amount < 0).reduce((sum, d) => sum + Math.abs(d.amount), 0);
+        
+        // Qarz tarixi statistikasi (faqat ko'rsatish uchun)
+        const totalDebtAdded = debtHistory.filter(d => d.amount < 0).reduce((sum, d) => sum + Math.abs(d.amount), 0);
         const totalPaid = debtHistory.filter(d => d.amount > 0).reduce((sum, d) => sum + d.amount, 0);
+        
+        // Jami qarz = joriy qarz balansi (to'g'ri)
+        const totalDebt = currentDebtBalance;
         
         let historyHtml = `
             <h2 style="margin-bottom: 1rem;"><i class="fas fa-history"></i> ${escapeHtml(customerName)} - Tarix</h2>
@@ -1923,8 +2270,9 @@ async function viewCustomerHistory(customerId, customerName) {
                     <strong>Jami summa:</strong> ${formatMoney(totalSalesAmount)}
                 </div>
                 <div>
-                    <strong>Jami qarz:</strong> ${formatMoney(totalDebt)}<br>
-                    <strong>To'langan:</strong> ${formatMoney(totalPaid)}
+                    <strong>Joriy qarz:</strong> ${formatMoney(totalDebt)}<br>
+                    <strong>Jami qarz qo'shilgan:</strong> ${formatMoney(totalDebtAdded)}<br>
+                    <strong>Jami to'langan:</strong> ${formatMoney(totalPaid)}
                 </div>
             </div>
             
@@ -1948,6 +2296,9 @@ async function viewCustomerHistory(customerId, customerName) {
                     document.getElementById('btn-sales-history').classList.remove('btn-primary');
                 ">
                     <i class="fas fa-file-invoice-dollar"></i> Qarz tarixi
+                </button>
+                <button class="btn btn-success" onclick="showPayDebtModal(${customerId}, '${escapeHtml(customerName)}', ${currentDebtBalance})" style="margin-left: auto;">
+                    <i class="fas fa-money-bill-wave"></i> Qarz to'lash
                 </button>
             </div>
             
@@ -2001,9 +2352,8 @@ async function viewCustomerHistory(customerId, customerName) {
                         <td style="padding: 0.75rem; text-align: right; border: 1px solid #ddd;">${formatMoney(paymentAmount)}</td>
                         <td style="padding: 0.75rem; text-align: right; border: 1px solid #ddd; font-weight: 600; ${debtOrReturnClass}">${debtOrReturnText}</td>
                         <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">
-                            <button class="btn btn-sm btn-primary" onclick="window.open('${API_BASE}/sales/${sale.id}/receipt', '_blank')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-                                <i class="fas fa-receipt"></i> Chek
-                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="printSaleReceipt(${sale.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" title="PDF"> <i class="fas fa-receipt"></i> PDF</button>
+                            <button class="btn btn-sm btn-success" onclick="downloadSaleReceiptExcel(${sale.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" title="Excel"><i class="fas fa-file-excel"></i> Excel</button>
                         </td>
                     </tr>
                 `;
@@ -2098,6 +2448,67 @@ async function viewCustomerHistory(customerId, customerName) {
     }
 }
 
+function showPayDebtModal(customerId, customerName, currentDebt) {
+    document.getElementById('pay-debt-customer-id').value = customerId;
+    document.getElementById('pay-debt-customer-name').value = customerName;
+    document.getElementById('pay-debt-current-debt').value = formatMoney(currentDebt || 0);
+    document.getElementById('pay-debt-amount').value = '';
+    document.getElementById('pay-debt-reason').value = '';
+    document.getElementById('pay-debt-modal').style.display = 'block';
+}
+
+async function processPayDebt(e) {
+    e.preventDefault();
+    const customerId = parseInt(document.getElementById('pay-debt-customer-id').value);
+    const amount = parseFloat(document.getElementById('pay-debt-amount').value);
+    const reason = document.getElementById('pay-debt-reason').value.trim();
+    
+    if (!amount || amount <= 0) {
+        alert('To\'g\'ri summa kiriting');
+        return;
+    }
+    
+    if (!reason) {
+        alert('Sabab/Izoh kiriting');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('amount', amount);
+        formData.append('reason', reason);
+        
+        const response = await fetch(`${API_BASE}/customers/${customerId}/pay-debt`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Qarz to\'lashda xatolik');
+        }
+        
+        const result = await response.json();
+        alert(result.message || 'Qarz muvaffaqiyatli to\'landi');
+        closeModal('pay-debt-modal');
+        
+        // Reload customer list and dashboard
+        await loadCustomers();
+        loadDashboard();
+        
+        // If customer history modal is open, reload it
+        const historyModal = document.querySelector('.modal');
+        if (historyModal && historyModal.innerHTML.includes('Tarix')) {
+            // Reload history
+            const customerName = document.getElementById('pay-debt-customer-name').value;
+            viewCustomerHistory(customerId, customerName);
+        }
+    } catch (error) {
+        alert('Xatolik: ' + error.message);
+    }
+}
+
 let customerSearchTimeout;
 function handleCustomerSearch() {
     clearTimeout(customerSearchTimeout);
@@ -2116,7 +2527,7 @@ function showAddCustomerModal() {
 
 async function editCustomer(id) {
     try {
-        const customer = await fetch(`${API_BASE}/customers/${id}`).then(r => r.json());
+        const customer = await fetch(`${API_BASE}/customers/${id}`, { headers: getAuthHeaders() }).then(r => r.json());
         document.getElementById('customer-modal-title').textContent = 'Mijozni Tahrirlash';
         document.getElementById('customer-id').value = customer.id;
         document.getElementById('customer-name').value = customer.name;
@@ -2288,18 +2699,17 @@ async function loadOrders() {
         totalOrders = countResponse.count || 0;
         
         console.log('Orders loaded:', orders ? orders.length : 0);
-        console.log('Total orders:', totalOrders);
         console.log('Orders data:', orders);
         
         // Check if orders is actually an array
         if (!Array.isArray(orders)) {
             console.error('Orders is not an array:', typeof orders, orders);
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Xatolik: Serverdan noto\'g\'ri javob olindi</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">Xatolik: Serverdan noto\'g\'ri javob olindi</td></tr>';
             return;
         }
         
         if (orders.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Buyurtmalar topilmadi</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">Buyurtmalar topilmadi</td></tr>';
             // Render pagination even if no orders
             if (totalOrders > 0) {
                 renderPagination('orders-pagination', currentOrderPage, ordersPerPage, totalOrders, (page) => {
@@ -2319,6 +2729,7 @@ async function loadOrders() {
                 <td>${escapeHtml(order.customer_name || 'Noma\'lum')}</td>
                 <td>${escapeHtml(order.seller_name || 'Noma\'lum')}</td>
                 <td>${formatMoney(order.total_amount || 0)}</td>
+                <td>${order.delivery_address ? `<span title="${escapeHtml(order.delivery_address)}" style="cursor: help; text-decoration: underline; color: var(--primary-color);">${escapeHtml(order.delivery_address.length > 30 ? order.delivery_address.substring(0, 30) + '...' : order.delivery_address)}</span>` : '<span style="color: #999;">-</span>'}</td>
                 <td><span class="badge badge-${getStatusBadgeClass(order.status)}">${getStatusText(order.status)}</span></td>
                 <td>${order.is_offline ? '<span class="badge badge-warning">Offline</span>' : '<span class="badge badge-success">Online</span>'}</td>
                 <td>
@@ -2326,11 +2737,18 @@ async function loadOrders() {
                         <button class="action-btn action-btn-view" onclick="viewOrder(${order.id})" title="Ko'rish">
                             <i class="fas fa-eye"></i>
                         </button>
+                        <button class="action-btn action-btn-print" onclick="printOrderReceipt(${order.id})" title="Chop etish (PDF)">
+                            <i class="fas fa-print"></i>
+                        </button>
+                        <button class="action-btn action-btn-view" onclick="downloadOrderReceiptExcel(${order.id})" title="Excel yuklab olish">
+                            <i class="fas fa-file-excel"></i>
+                        </button>
                         ${order.status === 'pending' ? `<button class="action-btn action-btn-edit" onclick="updateOrderStatus(${order.id}, 'processing')" title="Qabul qilish">Qabul qilish</button>` : ''}
                         ${['pending', 'processing'].includes(order.status) ? `<button class="action-btn action-btn-success" onclick="showOrderPaymentModal(${order.id}, ${order.total_amount || 0})" title="To'lov">To'lov</button>` : ''}
                         ${order.status === 'processing' ? `<button class="action-btn action-btn-success" onclick="updateOrderStatus(${order.id}, 'completed')" title="Tugallash">Tugallash</button>` : ''}
                         ${['pending', 'processing'].includes(order.status) ? `<button class="action-btn action-btn-delete" onclick="cancelOrder(${order.id})" title="Bekor qilish">Bekor</button>` : ''}
                         ${order.status === 'completed' ? `<button class="action-btn action-btn-delete" onclick="returnOrder(${order.id})" title="Qaytarish">Qaytarish</button>` : ''}
+                        <button class="action-btn action-btn-delete" onclick="deleteOrder(${order.id})" title="O'chirish"><i class="fas fa-trash"></i></button>
                     </div>
                 </td>
             `;
@@ -2351,12 +2769,14 @@ async function loadOrders() {
             }
         }
         
-        console.log('Successfully rendered', orders.length, 'orders');
+        
+        // Update new orders badge
+        updateNewOrdersBadge();
     } catch (error) {
         console.error('Error loading orders:', error);
         const tbody = document.getElementById('orders-tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color: red;">Xatolik yuz berdi: ' + (error.message || 'Noma\'lum xatolik') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="color: red;">Xatolik yuz berdi: ' + (error.message || 'Noma\'lum xatolik') + '</td></tr>';
         }
     }
 }
@@ -2364,7 +2784,7 @@ async function loadOrders() {
 // Load customers for order filter search
 async function loadCustomersForOrderFilter() {
     try {
-        const customers = await fetch(`${API_BASE}/customers?limit=1000`).then(r => r.json());
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json());
         allCustomersForOrderFilter = customers;
     } catch (error) {
         console.error('Error loading customers for order filter:', error);
@@ -2520,6 +2940,22 @@ async function viewOrder(orderId) {
                                 <strong>Holat:</strong><br>
                                 <span class="badge badge-${getStatusBadgeClass(order.status)}">${getStatusText(order.status)}</span>
                             </div>
+                            ${order.delivery_address ? `
+                            <div style="grid-column: 1 / -1;">
+                                <strong>Yetkazib berish manzili:</strong><br>
+                                ${escapeHtml(order.delivery_address)}
+                                ${order.delivery_latitude && order.delivery_longitude ? `
+                                <br><small style="color: #666;">
+                                    GPS: ${order.delivery_latitude.toFixed(6)}, ${order.delivery_longitude.toFixed(6)}
+                                    ${order.delivery_latitude && order.delivery_longitude ? `
+                                    <a href="https://www.google.com/maps?q=${order.delivery_latitude},${order.delivery_longitude}" target="_blank" style="color: var(--primary-color); text-decoration: underline; margin-left: 0.5rem;">
+                                        <i class="fas fa-map-marker-alt"></i> Xaritada ko'rish
+                                    </a>
+                                    ` : ''}
+                                </small>
+                                ` : ''}
+                            </div>
+                            ` : ''}
                         </div>
                     </div>
                     
@@ -2539,10 +2975,21 @@ async function viewOrder(orderId) {
                     </table>
                     
                     <div style="text-align: right; padding: 1rem; background: #f5f5f5; border-radius: 0.375rem; margin-bottom: 1rem;">
+                        ${order.bonus_points_used && order.bonus_points_used > 0 ? `
+                        <div style="margin-bottom: 0.5rem; color: #10b981; font-size: 0.9em;">
+                            <strong>Bonus ishlatildi: ${order.bonus_points_used} ball (${formatMoney(order.bonus_points_used)} so'm chegirma)</strong>
+                        </div>
+                        ` : ''}
                         <strong style="font-size: 1.2em;">Jami: ${formatMoney(order.total_amount || 0)}</strong>
                     </div>
                     
                     <div class="form-actions">
+                        <button type="button" class="btn btn-primary" onclick="printOrderReceipt(${order.id})" title="Chop etish (PDF)">
+                            <i class="fas fa-print"></i> Chop etish
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="downloadOrderReceiptExcel(${order.id})" title="Excel yuklab olish">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
                         <button type="button" class="btn btn-secondary" onclick="closeModal('order-detail-modal')">Yopish</button>
                     </div>
                 </div>
@@ -2581,6 +3028,22 @@ async function returnOrder(orderId) {
     await updateOrderStatus(orderId, 'returned');
 }
 
+async function deleteOrder(orderId) {
+    if (!confirm('Buyurtmani butunlay o\'chirishni xohlaysizmi? Bu amalni qaytarib bo\'lmaydi.')) return;
+    try {
+        const res = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || data.message || 'Xatolik');
+        alert(data.message || 'Buyurtma o\'chirildi');
+        loadOrders();
+    } catch (e) {
+        alert('Xatolik: ' + (e.message || 'Noma\'lum xatolik'));
+    }
+}
+
 function showOrderPaymentModal(orderId, orderAmount) {
     document.getElementById('payment-order-id').value = orderId;
     document.getElementById('payment-order-amount').value = formatMoney(orderAmount);
@@ -2602,6 +3065,7 @@ async function processOrderPayment(e) {
         
         const response = await fetch(`${API_BASE}/orders/${orderId}/payment`, {
             method: 'POST',
+            headers: getAuthHeaders(),
             body: formData
         });
         
@@ -2660,7 +3124,7 @@ function getStatusBadgeClass(status) {
 // Sellers
 async function loadSellers() {
     try {
-        const sellers = await fetch(`${API_BASE}/sellers`).then(r => r.json());
+        const sellers = await fetch(`${API_BASE}/sellers`, { headers: getAuthHeaders() }).then(r => r.json());
         const tbody = document.getElementById('sellers-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
@@ -2782,7 +3246,7 @@ async function showAddSellerModal() {
 
 async function loadRolesForDropdown() {
     try {
-        const roles = await fetch(`${API_BASE}/roles`).then(r => r.json());
+        const roles = await fetch(`${API_BASE}/roles`, { headers: getAuthHeaders() }).then(r => r.json());
         const select = document.getElementById('seller-role-id');
         if (!select) return;
         select.innerHTML = '<option value="">Role tanlash</option>';
@@ -2915,7 +3379,7 @@ function showSellerLoginInfo(username) {
 
 async function editSeller(id) {
     try {
-        const seller = await fetch(`${API_BASE}/sellers/${id}`).then(r => r.json());
+        const seller = await fetch(`${API_BASE}/sellers/${id}`, { headers: getAuthHeaders() }).then(r => r.json());
         document.getElementById('seller-modal-title').textContent = 'Sotuvchini Tahrirlash';
         document.getElementById('seller-id').value = seller.id;
         document.getElementById('seller-name').value = seller.name;
@@ -3055,8 +3519,7 @@ async function loadGPSMap() {
     try {
         // Initialize map if not exists
         if (!map) {
-            console.log('Initializing map...');
-            mapboxgl.accessToken = 'pk.eyJ1IjoiYmFob2RpcnNob2g5MCIsImEiOiJjbWoxd2E1ODEwbmNsM2RzYjFpd3kzcW5oIn0.-sMWxZGVsVs1ngMlMAPR4A';
+            mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
             map = new mapboxgl.Map({
                 container: 'map',
                 style: 'mapbox://styles/mapbox/streets-v11',
@@ -3091,7 +3554,7 @@ async function loadGPSMap() {
         }
     } catch (error) {
         console.error('Error initializing map:', error);
-        mapContainer.innerHTML = `<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Xarita yuklashda xatolik: ${error.message}</p></div>`;
+        mapContainer.innerHTML = `<div style="padding: 2rem; text-align: center; color: #dc2626;"><p>Xarita yuklashda xatolik: ${escapeHtml(error.message)}</p></div>`;
     }
 }
 
@@ -3108,7 +3571,6 @@ async function loadSellersMarkers() {
         
         const response = await fetch(apiUrl);
         
-        console.log('Response status:', response.status, response.statusText);
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -3364,7 +3826,7 @@ async function loadSales() {
         if (sellerId) params.append('seller_id', sellerId);
         if (customerId) params.append('customer_id', customerId);
         
-        let sales = await fetch(`${API_BASE}/sales?${params.toString()}`).then(r => r.json());
+        let sales = await fetch(`${API_BASE}/sales?${params.toString()}`, { headers: getAuthHeaders() }).then(r => r.json());
         
         // Apply status filter on client side if needed (since backend doesn't have status filter)
         if (statusFilter) {
@@ -3379,6 +3841,17 @@ async function loadSales() {
                 return true;
             });
         }
+
+        // Safety: remove potential duplicate rows by sale.id so that
+        // sotuvlar ro'yxatida bitta sotuv faqat bir marta ko'rinadi,
+        // statistikadagi yagona sotuv bilan mos bo'ladi.
+        const seenSaleIds = new Set();
+        sales = sales.filter((sale) => {
+            if (!sale || sale.id == null) return false;
+            if (seenSaleIds.has(sale.id)) return false;
+            seenSaleIds.add(sale.id);
+            return true;
+        });
         
         // Apply client-side pagination if filters are active
         let paginatedSales = sales;
@@ -3420,11 +3893,26 @@ async function loadSales() {
         }
         
         for (const sale of paginatedSales) {
-            const paymentMethodText = {
-                'cash': 'Naqd',
-                'card': 'Plastik',
-                'bank_transfer': 'Hisob raqam'
-            }[sale.payment_method || 'cash'] || sale.payment_method || 'Naqd';
+            let paymentMethodText = '';
+            if (sale.payment_method === 'mixed' && sale.payment_breakdown) {
+                let breakdown = sale.payment_breakdown;
+                if (typeof breakdown === 'string') {
+                    try { breakdown = JSON.parse(breakdown); } catch(e) { breakdown = {}; }
+                }
+                const parts = [];
+                if (breakdown.cash > 0) parts.push(`Naqd: ${formatMoney(breakdown.cash)}`);
+                if (breakdown.card > 0) parts.push(`Karta: ${formatMoney(breakdown.card)}`);
+                if (breakdown.transfer > 0) parts.push(`O'tkazma: ${formatMoney(breakdown.transfer)}`);
+                paymentMethodText = parts.join(', ');
+            } else {
+                paymentMethodText = {
+                    'cash': 'Naqd',
+                    'card': 'Plastik',
+                    'bank_transfer': 'Hisob raqam',
+                    'transfer': 'O\'tkazma',
+                    'mixed': 'Aralash'
+                }[sale.payment_method || 'cash'] || sale.payment_method || 'Naqd';
+            }
             
             // Calculate profit for this sale using cached products
             let saleProfit = 0;
@@ -3501,8 +3989,11 @@ async function loadSales() {
                             <button class="action-btn action-btn-view" onclick="viewSaleReceipt(${sale.id})" title="Ko'rish">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <button class="action-btn action-btn-print" onclick="printSaleReceipt(${sale.id})" title="Chop etish">
+                            <button class="action-btn action-btn-print" onclick="printSaleReceipt(${sale.id})" title="Chop etish (PDF)">
                                 <i class="fas fa-print"></i>
+                            </button>
+                            <button class="action-btn action-btn-view" onclick="downloadSaleReceiptExcel(${sale.id})" title="Excel yuklab olish">
+                                <i class="fas fa-file-excel"></i>
                             </button>
                             <button class="action-btn action-btn-delete" onclick="deleteSale(${sale.id})" title="Bekor qilish">
                                 <i class="fas fa-times"></i>
@@ -3518,7 +4009,7 @@ async function loadSales() {
         const totalSalesCount = hasFilters ? sales.length : (() => {
             try {
                 // Try to get from stats API for unfiltered view
-                const stats = fetch(`${API_BASE}/statistics`).then(r => r.json()).catch(() => ({}));
+                const stats = fetch(`${API_BASE}/statistics`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => ({}));
                 return stats.total_sales || sales.length || 0;
             } catch (e) {
                 return sales.length < salesPerPage 
@@ -3530,7 +4021,7 @@ async function loadSales() {
         // Use filtered count if filters active, otherwise use API estimate
         const displayTotal = hasFilters ? sales.length : (async () => {
             try {
-                const stats = await fetch(`${API_BASE}/statistics`).then(r => r.json()).catch(() => ({}));
+                const stats = await fetch(`${API_BASE}/statistics`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => ({}));
                 return stats.total_sales || sales.length || 0;
             } catch (error) {
                 console.error('Error getting sales count:', error);
@@ -3554,7 +4045,7 @@ async function loadSales() {
 // Load sellers for filter dropdown
 async function loadSellersForFilter() {
     try {
-        const sellers = await fetch(`${API_BASE}/sellers`).then(r => r.json());
+        const sellers = await fetch(`${API_BASE}/sellers`, { headers: getAuthHeaders() }).then(r => r.json());
         allSellersForSaleFilter = sellers;
         const select = document.getElementById('sale-seller-filter');
         if (!select) return;
@@ -3579,7 +4070,7 @@ async function loadSellersForFilter() {
 // Load customers for sale filter search
 async function loadCustomersForSaleFilter() {
     try {
-        const customers = await fetch(`${API_BASE}/customers?limit=1000`).then(r => r.json());
+        const customers = await fetch(`${API_BASE}/customers?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json());
         allCustomersForSaleFilter = customers;
     } catch (error) {
         console.error('Error loading customers for filter:', error);
@@ -3645,7 +4136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function editSaleInAdmin(saleId) {
     try {
         // Fetch sale data
-        const sale = await fetch(`${API_BASE}/sales/${saleId}`).then(r => r.json());
+        const sale = await fetch(`${API_BASE}/sales/${saleId}`, { headers: getAuthHeaders() }).then(r => r.json());
         
         // Populate modal
         document.getElementById('edit-sale-id').value = sale.id;
@@ -3653,7 +4144,7 @@ async function editSaleInAdmin(saleId) {
         document.getElementById('edit-sale-payment-method').value = sale.payment_method || 'cash';
         
         // Load customers for dropdown
-        const customersRes = await fetch(`${API_BASE}/customers?limit=1000`).then(r => r.json());
+        const customersRes = await fetch(`${API_BASE}/customers?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json());
         const customerSelect = document.getElementById('edit-sale-customer-select');
         customerSelect.innerHTML = '<option value="">Mijozni tanlang</option>';
         customersRes.forEach(customer => {
@@ -3676,7 +4167,7 @@ async function editSaleInAdmin(saleId) {
         saleItemsContainer.innerHTML = '';
         
         // Load all products
-        const productsRes = await fetch(`${API_BASE}/products?limit=1000`).then(r => r.json());
+        const productsRes = await fetch(`${API_BASE}/products?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json());
         
         // Get customer to determine price type
         const customer = customersRes.find(c => c.id === sale.customer_id);
@@ -3975,7 +4466,8 @@ async function deleteSale(saleId) {
     
     try {
         const response = await fetch(`${API_BASE}/sales/${saleId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -4098,7 +4590,7 @@ async function loadPendingSales() {
         console.error('Error loading pending sales:', error);
         const tbody = document.getElementById('pending-sales-tbody');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color: red;">Xatolik: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color: red;">Xatolik: ${escapeHtml(error.message || 'Noma\'lum xatolik')}</td></tr>`;
         }
     }
 }
@@ -4295,14 +4787,14 @@ async function rejectSale(saleId) {
 
 async function viewSaleDetails(saleId) {
     try {
-        const sale = await fetch(`${API_BASE}/sales/${saleId}`).then(r => r.json());
+        const sale = await fetch(`${API_BASE}/sales/${saleId}`, { headers: getAuthHeaders() }).then(r => r.json());
         
         // Calculate profit for each item
         let totalProfit = 0;
         let totalCost = 0;
         
         const itemsWithProfit = await Promise.all(sale.items.map(async (item) => {
-            const product = await fetch(`${API_BASE}/products/${item.product_id}`).then(r => r.json()).catch(() => null);
+            const product = await fetch(`${API_BASE}/products/${item.product_id}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => null);
             if (product) {
                 const costPrice = product.cost_price;
                 const itemSubtotal = item.subtotal || 0;
@@ -4496,16 +4988,83 @@ async function viewSaleReceipt(id) {
     window.open(`${API_BASE}/sales/${id}/receipt`, '_blank');
 }
 
+// Qog'oz formatini olish (Sozlamalar > Chek sozlamalari)
+function getReceiptFormat() {
+    const el = document.getElementById('receipt-paper-format');
+    return (el && el.value) || localStorage.getItem('receipt_paper_format') || 'a4';
+}
+
 // Chekni to'g'ridan-to'g'ri chop etish
 async function printSaleReceipt(id) {
     try {
-        const printWindow = window.open(`${API_BASE}/sales/${id}/receipt`, '_blank');
-        printWindow.onload = function() {
-            printWindow.print();
-        };
+        const format = getReceiptFormat();
+        const url = `${API_BASE}/sales/${id}/receipt?format=${encodeURIComponent(format)}`;
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+            printWindow.onload = function() {
+                printWindow.print();
+            };
+        } else {
+            alert('Brauzer pop-up bloklovchi qilmoqda. Chop etish uchun pop-uplarga ruxsat bering.');
+        }
     } catch (error) {
         console.error('Chek chop etishda xatolik:', error);
         alert('Chek chop etishda xatolik: ' + error.message);
+    }
+}
+
+// Buyurtma chekini chop etish (tayyorlash uchun)
+async function printOrderReceipt(orderId) {
+    try {
+        const format = getReceiptFormat();
+        const url = `${API_BASE}/orders/${orderId}/receipt?format=${encodeURIComponent(format)}`;
+        const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (printWindow) {
+            printWindow.onload = function() {
+                printWindow.print();
+            };
+        } else {
+            alert('Brauzer pop-up bloklovchi qilmoqda. Chop etish uchun pop-uplarga ruxsat bering.');
+        }
+    } catch (error) {
+        console.error('Buyurtma chekini chop etishda xatolik:', error);
+        alert('Chek chop etishda xatolik: ' + error.message);
+    }
+}
+
+// Chekni Excel sifatida yuklab olish (sotuv)
+async function downloadSaleReceiptExcel(id) {
+    try {
+        const url = `${API_BASE}/sales/${id}/receipt?download_as=excel`;
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error('Yuklab olishda xatolik');
+        const blob = await response.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob);
+        a.download = `chek_sotuv_${id}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(a.href);
+    } catch (error) {
+        console.error('Excel chek yuklab olishda xatolik:', error);
+        alert('Excel chek yuklab olishda xatolik: ' + error.message);
+    }
+}
+
+// Chekni Excel sifatida yuklab olish (buyurtma)
+async function downloadOrderReceiptExcel(orderId) {
+    try {
+        const url = `${API_BASE}/orders/${orderId}/receipt?download_as=excel`;
+        const response = await fetch(url, { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error('Yuklab olishda xatolik');
+        const blob = await response.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob);
+        a.download = `chek_buyurtma_${orderId}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(a.href);
+    } catch (error) {
+        console.error('Excel chek yuklab olishda xatolik:', error);
+        alert('Excel chek yuklab olishda xatolik: ' + error.message);
     }
 }
 
@@ -4554,13 +5113,32 @@ async function exportSales() {
 // WebSocket
 function setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
     
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'new_order' || data.type === 'new_sale') {
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'new_order' || data.type === 'new_sale') {
+            // Show toast notification
+            if (data.type === 'new_order') {
+                const orderData = data.data || {};
+                const customerName = orderData.customer_name || 'Noma\'lum mijoz';
+                const totalAmount = orderData.total_amount || 0;
+                const bonusUsed = orderData.bonus_points_used || 0;
+                let message = `🛒 Yangi buyurtma: ${customerName} - ${formatMoney(totalAmount)} so'm`;
+                if (bonusUsed > 0) {
+                    message += ` (${bonusUsed} ball ishlatildi, chegirma: ${formatMoney(bonusUsed)} so'm)`;
+                }
+                showToast(message, 'info', 8000);
+                
+                // Update new orders badge
+                updateNewOrdersBadge();
+            }
+            
             // Refresh current page if on orders or sales
-            const activePage = document.querySelector('.page.active').id;
+            const activePage = document.querySelector('.page.active')?.id;
             if (activePage === 'orders') loadOrders();
             if (activePage === 'sales') loadSales();
             if (activePage === 'dashboard') loadDashboard();
@@ -4592,7 +5170,8 @@ function setupWebSocket() {
             const conversationData = data.data || {};
             const customerName = conversationData.customer_name || 'Noma\'lum mijoz';
             const subject = conversationData.subject || 'Yordam';
-            showToast(`💬 Yangi suhbat: ${customerName} - ${subject}`, 'info', 8000);
+            const message = conversationData.message || '';
+            showToast(`💬 Yangi suhbat: ${customerName} - ${subject}${message ? ': ' + message.substring(0, 30) + '...' : ''}`, 'info', 8000);
             const activePage = document.querySelector('.page.active')?.id;
             if (activePage === 'conversations' && typeof loadConversations === 'function') {
                 loadConversations();
@@ -4601,16 +5180,18 @@ function setupWebSocket() {
 
         // Chat message from customer
         if (data.type === 'new_chat_message' || data.type === 'chat_message') {
-            const messageData = data.message || data.data || {};
-            const customerName = messageData.sender_name || messageData.customer_name || 'Noma\'lum mijoz';
-            const messageText = messageData.message || '';
-            const conversationId = messageData.conversation_id || data.conversation_id;
-            
-            console.log('[WebSocket] New chat message received:', messageData);
+            // Backend sends: { type: "new_chat_message", data: { conversation_id, customer_id, message: { id, sender_type, sender_name, message, created_at } } }
+            const dataPayload = data.data || {};
+            const messageObj = dataPayload.message || {};
+            const conversationId = dataPayload.conversation_id || data.conversation_id;
+            const customerName = messageObj.sender_name || dataPayload.customer_name || 'Noma\'lum mijoz';
+            const messageText = messageObj.message || '';
             
             // Show toast notification
-            const toastMessage = `💬 ${customerName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
-            showToast(toastMessage, 'info', 10000);
+            if (messageText) {
+                const toastMessage = `💬 ${customerName}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`;
+                showToast(toastMessage, 'info', 10000);
+            }
             
             // Refresh conversations page if active
             const activePage = document.querySelector('.page.active')?.id;
@@ -4626,42 +5207,39 @@ function setupWebSocket() {
         }
         
         // Mijozdan yordam so'rovi
-        if (data.type === 'help_request') {
+        if (data.type === 'help_request' || data.type === 'help_request_created') {
             const helpData = data.data || {};
-            const message = `📞 Yordam so'rovi: ${helpData.username || helpData.customer_name || 'Noma\'lum mijoz'}\n${helpData.message || ''}`;
-            showToast(message, 'info', 10000); // Show for 10 seconds
+            const customerName = helpData.username || helpData.customer_name || 'Noma\'lum mijoz';
+            const messageText = helpData.message || '';
+            const message = `📞 Yordam so'rovi: ${customerName}\n${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`;
+            showToast(message, 'info', 10000);
             
-            // Refresh help requests page if active
+            // Refresh help requests page if active (with delay to ensure DB is updated)
             const activePage = document.querySelector('.page.active')?.id;
-            if (activePage === 'help-requests') {
-                loadHelpRequests();
+            if (activePage === 'help-requests' && typeof loadHelpRequests === 'function') {
+                setTimeout(() => loadHelpRequests(), 1000);
             }
             
             // Update badge count
-            if (typeof loadHelpRequests === 'function') {
-                // Load help requests to update badge
-                setTimeout(() => {
-                    fetch(`${API_BASE}/help-requests?status=pending`, {
-                        headers: getAuthHeaders()
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        const pendingCount = data.requests?.filter(r => r.status === 'pending').length || 0;
-                        const badge = document.getElementById('help-requests-badge');
-                        if (badge) {
-                            if (pendingCount > 0) {
-                                badge.textContent = pendingCount;
-                                badge.style.display = 'inline-block';
-                            } else {
-                                badge.style.display = 'none';
-                            }
-                        }
-                    })
-                    .catch(err => console.error('Error updating badge:', err));
-                }, 500);
-            }
-            
-            console.log('[WebSocket] Help request received:', helpData);
+            setTimeout(() => {
+                fetch(`${API_BASE}/help-requests`, { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : {})
+                .then(data => {
+                    const requests = data.requests || data.items || [];
+                    const pendingCount = Array.isArray(requests) ? requests.filter(r => r.status === 'pending').length : 0;
+                    const badge = document.getElementById('help-requests-badge');
+                    if (badge) {
+                        badge.textContent = pendingCount;
+                        badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+                    }
+                    // Refresh page again after badge update if still active
+                    const currentActivePage = document.querySelector('.page.active')?.id;
+                    if (currentActivePage === 'help-requests' && typeof loadHelpRequests === 'function') {
+                        loadHelpRequests();
+                    }
+                })
+                .catch(() => {});
+            }, 800);
         }
         // Buyurtma status o'zgarganida
         if (data.type === 'order_status_update') {
@@ -4695,6 +5273,9 @@ function setupWebSocket() {
             
             const message = `📦 Buyurtma #${statusData.order_id} holati: ${statusData.status_name || statusData.status}`;
             showToast(message, 'info');
+        }
+        } catch (error) {
+            console.error('[WebSocket] Error parsing message:', error, event.data);
         }
     };
     
@@ -4783,13 +5364,13 @@ function renderPagination(containerId, currentPage, itemsPerPage, totalItems, on
 // Roles & Permissions
 async function loadRoles() {
     try {
-        const roles = await fetch(`${API_BASE}/roles`).then(r => r.json());
+        const roles = await fetch(`${API_BASE}/roles`, { headers: getAuthHeaders() }).then(r => r.json());
         const tbody = document.getElementById('roles-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
 
         // Get all sellers to count per role
-        const sellers = await fetch(`${API_BASE}/sellers?limit=1000`).then(r => r.json());
+        const sellers = await fetch(`${API_BASE}/sellers?limit=1000`, { headers: getAuthHeaders() }).then(r => r.json());
 
         for (const role of roles) {
             const sellersCount = sellers.filter(s => s.role_id === role.id).length;
@@ -4826,7 +5407,7 @@ async function loadRoles() {
 
 async function loadAllPermissions() {
     try {
-        const permissions = await fetch(`${API_BASE}/permissions`).then(r => r.json());
+        const permissions = await fetch(`${API_BASE}/permissions`, { headers: getAuthHeaders() }).then(r => r.json());
         const tbody = document.getElementById('permissions-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
@@ -4883,7 +5464,7 @@ async function showAddRoleModal() {
 
 async function loadPermissionsCheckboxes(selectedPermissionIds = []) {
     try {
-        const permissions = await fetch(`${API_BASE}/permissions`).then(r => r.json());
+        const permissions = await fetch(`${API_BASE}/permissions`, { headers: getAuthHeaders() }).then(r => r.json());
         const container = document.getElementById('permissions-checkboxes');
         if (!container) return;
         container.innerHTML = '';
@@ -4900,7 +5481,7 @@ async function loadPermissionsCheckboxes(selectedPermissionIds = []) {
         Object.keys(grouped).sort().forEach(category => {
             const categoryDiv = document.createElement('div');
             categoryDiv.style.marginBottom = '1.5rem';
-            categoryDiv.innerHTML = `<h4 style="margin-bottom: 0.5rem; color: var(--primary-color);">${category.toUpperCase()}</h4>`;
+            categoryDiv.innerHTML = `<h4 style="margin-bottom: 0.5rem; color: var(--primary-color);">${escapeHtml(category.toUpperCase())}</h4>`;
             
             grouped[category].forEach(perm => {
                 const checkboxDiv = document.createElement('div');
@@ -4924,7 +5505,7 @@ async function loadPermissionsCheckboxes(selectedPermissionIds = []) {
 
 async function editRole(roleId) {
     try {
-        const role = await fetch(`${API_BASE}/roles/${roleId}`).then(r => r.json());
+        const role = await fetch(`${API_BASE}/roles/${roleId}`, { headers: getAuthHeaders() }).then(r => r.json());
         document.getElementById('role-modal-title').textContent = `Role Tahrirlash: ${role.name}`;
         document.getElementById('role-id').value = role.id;
         document.getElementById('role-name').value = role.name;
@@ -4970,7 +5551,7 @@ async function saveRole(e) {
     if (id) {
         // Check if this is a system role - if so, only update description
         try {
-            const existingRole = await fetch(`${API_BASE}/roles/${id}`).then(r => r.json());
+            const existingRole = await fetch(`${API_BASE}/roles/${id}`, { headers: getAuthHeaders() }).then(r => r.json());
             if (existingRole.is_system) {
                 data.description = document.getElementById('role-description').value;
             } else {
@@ -5031,7 +5612,7 @@ async function deleteRole(roleId) {
 
 async function viewRolePermissions(roleId) {
     try {
-        const role = await fetch(`${API_BASE}/roles/${roleId}`).then(r => r.json());
+        const role = await fetch(`${API_BASE}/roles/${roleId}`, { headers: getAuthHeaders() }).then(r => r.json());
         const modal = document.getElementById('role-permissions-modal');
         const title = document.getElementById('role-permissions-title');
         const list = document.getElementById('role-permissions-list');
@@ -5127,9 +5708,8 @@ async function viewSellerHistory(sellerId, sellerName) {
                         <td style="padding: 0.75rem; text-align: right; border: 1px solid #ddd; font-weight: 600;">${formatMoney(sale.total_amount || 0)}</td>
                         <td style="padding: 0.75rem; border: 1px solid #ddd;">${paymentMethod}</td>
                         <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">
-                            <button class="btn btn-sm btn-primary" onclick="window.open('${API_BASE}/sales/${sale.id}/receipt', '_blank')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-                                <i class="fas fa-receipt"></i> Chek
-                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="printSaleReceipt(${sale.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" title="PDF"> <i class="fas fa-receipt"></i> PDF</button>
+                            <button class="btn btn-sm btn-success" onclick="downloadSaleReceiptExcel(${sale.id})" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" title="Excel"><i class="fas fa-file-excel"></i> Excel</button>
                         </td>
                     </tr>
                 `;
@@ -5170,8 +5750,8 @@ async function viewSellerHistory(sellerId, sellerName) {
 
 async function viewSellerPermissions(sellerId) {
     try {
-        const permissions = await fetch(`${API_BASE}/sellers/${sellerId}/permissions`).then(r => r.json());
-        const seller = await fetch(`${API_BASE}/sellers/${sellerId}`).then(r => r.json());
+        const permissions = await fetch(`${API_BASE}/sellers/${sellerId}/permissions`, { headers: getAuthHeaders() }).then(r => r.json());
+        const seller = await fetch(`${API_BASE}/sellers/${sellerId}`, { headers: getAuthHeaders() }).then(r => r.json());
         
         const modal = document.getElementById('role-permissions-modal');
         const title = document.getElementById('role-permissions-title');
@@ -5210,25 +5790,49 @@ async function viewSellerPermissions(sellerId) {
     }
 }
 
+// Help Requests pagination
+let currentHelpRequestPage = 1;
+const helpRequestsPerPage = 1000; // Load all requests at once
+
 // Help Requests
 async function loadHelpRequests() {
     try {
         const statusFilter = document.getElementById('help-request-status-filter')?.value || '';
-        const url = statusFilter ? `${API_BASE}/help-requests?status=${statusFilter}` : `${API_BASE}/help-requests`;
+        const skip = (currentHelpRequestPage - 1) * helpRequestsPerPage;
+        const limit = helpRequestsPerPage;
+        
+        let url = `${API_BASE}/help-requests?skip=${skip}&limit=${limit}`;
+        if (statusFilter) {
+            url += `&status=${statusFilter}`;
+        }
         
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
         
         if (!response.ok) {
-            throw new Error('Help requestlarni yuklashda xatolik');
+            const errorText = await response.text();
+            console.error('[loadHelpRequests] API Error:', response.status, errorText);
+            throw new Error(`Help requestlarni yuklashda xatolik: ${response.status}`);
         }
         
         const data = await response.json();
-        const requests = data.requests || [];
+        const requests = data.requests || data.items || [];
+        const totalRequests = data.total !== undefined && data.total !== null ? data.total : requests.length;
+        console.log('[loadHelpRequests] Requests loaded:', requests.length, 'of', totalRequests, 'total');
+        console.log('[loadHelpRequests] Will show pagination if totalPages > 1:', Math.ceil(totalRequests / helpRequestsPerPage));
+        console.log('[loadHelpRequests] Request IDs:', requests.map(r => r.id));
+        console.log('[loadHelpRequests] Request statuses:', requests.map(r => ({ id: r.id, status: r.status })));
+        
         const tbody = document.getElementById('help-requests-tbody');
         
+        if (!tbody) {
+            console.error('[loadHelpRequests] help-requests-tbody element not found');
+            return;
+        }
+        
         if (requests.length === 0) {
+            console.log('[loadHelpRequests] No requests found, showing empty message');
             tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Help requestlar topilmadi</td></tr>';
             return;
         }
@@ -5268,26 +5872,68 @@ async function loadHelpRequests() {
                             <i class="fas fa-check"></i> Hal qilindi
                         </button>
                     ` : ''}
-                    <button class="btn btn-secondary" onclick="viewHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                    <button class="btn btn-secondary" onclick="viewHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
                         <i class="fas fa-eye"></i> Ko'rish
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteHelpRequest(${req.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        <i class="fas fa-trash"></i> O'chirish
                     </button>
                 </td>
             </tr>
         `).join('');
         
-        // Update badge count
-        const pendingCount = requests.filter(r => r.status === 'pending').length;
-        const badge = document.getElementById('help-requests-badge');
-        if (badge) {
-            if (pendingCount > 0) {
-                badge.textContent = pendingCount;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
+        // Update badge count (count all pending, not just current page)
+        // Fetch all pending requests for badge count
+        fetch(`${API_BASE}/help-requests?status=pending&limit=1000`, {
+            headers: getAuthHeaders()
+        })
+        .then(res => res.json())
+        .then(badgeData => {
+            const allPendingRequests = badgeData.requests || [];
+            const pendingCount = allPendingRequests.length;
+            const badge = document.getElementById('help-requests-badge');
+            if (badge) {
+                if (pendingCount > 0) {
+                    badge.textContent = pendingCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        })
+        .catch(err => {
+            console.error('[loadHelpRequests] Error fetching pending count:', err);
+            // Fallback to current page count
+            const pendingCount = requests.filter(r => r.status === 'pending').length;
+            const badge = document.getElementById('help-requests-badge');
+            if (badge) {
+                if (pendingCount > 0) {
+                    badge.textContent = pendingCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+        
+        // Render pagination if needed
+        const totalPages = Math.ceil(totalRequests / helpRequestsPerPage);
+        if (totalPages > 1) {
+            renderPagination('help-requests-pagination', currentHelpRequestPage, helpRequestsPerPage, totalRequests, (page) => {
+                currentHelpRequestPage = page;
+                loadHelpRequests();
+            });
+        } else {
+            // Remove pagination if exists
+            const existingPagination = document.getElementById('help-requests-pagination');
+            if (existingPagination) {
+                existingPagination.innerHTML = '';
             }
         }
+        
+        console.log('[loadHelpRequests] Successfully loaded and rendered', requests.length, 'of', totalRequests, 'help requests');
     } catch (error) {
-        console.error('Error loading help requests:', error);
+        console.error('[loadHelpRequests] Error loading help requests:', error);
         const tbody = document.getElementById('help-requests-tbody');
         if (tbody) {
             tbody.innerHTML = 
@@ -5320,6 +5966,21 @@ async function resolveHelpRequest(requestId) {
     } catch (error) {
         console.error('Error resolving help request:', error);
         alert('Xatolik: ' + error.message);
+    }
+}
+
+async function deleteHelpRequest(requestId) {
+    if (!confirm('Bu yordam so\'rovini o\'chirishni xohlaysizmi?')) return;
+    try {
+        const response = await fetch(`${API_BASE}/help-requests/${requestId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'O\'chirishda xatolik');
+        showToast('Yordam so\'rovi o\'chirildi');
+        loadHelpRequests();
+    } catch (error) {
+        alert('Xatolik: ' + (error.message || 'Noma\'lum xatolik'));
     }
 }
 
@@ -5435,8 +6096,11 @@ async function loadConversations() {
                     <td>${unreadCount > 0 ? `<span class="badge badge-danger">${unreadCount}</span>` : '-'}</td>
                     <td>${formatDate(lastMessageTime)}</td>
                     <td>
-                        <button class="btn btn-secondary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="openConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">
                             <i class="fas fa-comments"></i> Ko'rish
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteConversation(${conv.id})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <i class="fas fa-trash"></i> O'chirish
                         </button>
                     </td>
                 </tr>
@@ -5446,7 +6110,7 @@ async function loadConversations() {
         console.error('Error loading conversations:', error);
         const tbody = document.getElementById('conversations-tbody');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #ef4444;">Xatolik: ${escapeHtml(error.message || 'Noma\'lum xatolik')}</td></tr>`;
         }
     }
 }
@@ -5461,6 +6125,23 @@ async function openConversation(conversationId) {
     const modal = document.getElementById('conversation-modal');
     if (modal) {
         modal.style.display = 'block';
+    }
+}
+
+async function deleteConversation(conversationId) {
+    if (!confirm('Bu suhbatni o\'chirishni xohlaysizmi? Barcha xabarlar o\'chiriladi.')) return;
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'O\'chirishda xatolik');
+        showToast('Suhbat o\'chirildi');
+        if (currentConversationId === conversationId) closeConversationModal();
+        currentConversationId = null;
+        loadConversations();
+    } catch (error) {
+        alert('Xatolik: ' + (error.message || 'Noma\'lum xatolik'));
     }
 }
 
@@ -5505,12 +6186,12 @@ async function loadConversationMessages(conversationId) {
         }
 
         container.innerHTML = messages.map(msg => {
-            const isAdmin = msg.sender_type === 'admin';
+            const isAdmin = msg.sender_type === 'admin' || msg.sender_type === 'seller';
             return `
                 <div class="chat-message ${isAdmin ? 'admin' : 'customer'}">
                     <div class="chat-bubble">
-                        ${!isAdmin ? `<div><strong>${escapeHtml(msg.sender_name || 'Mijoz')}</strong></div>` : ''}
-                        <div>${escapeHtml(msg.message || '')}</div>
+                        ${!isAdmin ? `<strong>${escapeHtml(msg.sender_name || 'Mijoz')}</strong>` : ''}
+                        <div style="margin-top: ${!isAdmin ? '0.25rem' : '0'}; margin-bottom: 0.5rem;">${escapeHtml(msg.message || '')}</div>
                         <div class="chat-meta">${formatDate(msg.created_at)}</div>
                     </div>
                 </div>
@@ -5522,7 +6203,7 @@ async function loadConversationMessages(conversationId) {
         console.error('Error loading conversation messages:', error);
         const container = document.getElementById('conversation-messages');
         if (container) {
-            container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${error.message}</div>`;
+            container.innerHTML = `<div style="text-align: center; color: #ef4444;">Xatolik: ${escapeHtml(error.message || 'Noma\'lum xatolik')}</div>`;
         }
     }
 }
@@ -5728,8 +6409,8 @@ async function loadAuditLogs() {
         if (endDate) url += `&end_date=${endDate}T23:59:59`;
         
         const [logs, countData] = await Promise.all([
-            fetch(url).then(r => r.json()),
-            fetch(`${API_BASE}/audit-logs/count?${actionFilter ? `action=${actionFilter}&` : ''}${startDate ? `start_date=${startDate}T00:00:00&` : ''}${endDate ? `end_date=${endDate}T23:59:59` : ''}`).then(r => r.json())
+            fetch(url, { headers: getAuthHeaders() }).then(r => r.json()),
+            fetch(`${API_BASE}/audit-logs/count?${actionFilter ? `action=${actionFilter}&` : ''}${startDate ? `start_date=${startDate}T00:00:00&` : ''}${endDate ? `end_date=${endDate}T23:59:59` : ''}`, { headers: getAuthHeaders() }).then(r => r.json())
         ]);
         
         const tbody = document.getElementById('audit-logs-tbody');
@@ -5825,9 +6506,7 @@ async function deleteAuditLogs() {
         
         const response = await fetch(`${API_BASE}/audit-logs?${params.toString()}`, {
             method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: getAuthHeaders()
         });
         
         if (!response.ok) {
@@ -5869,6 +6548,8 @@ async function loadSettings() {
         document.getElementById('store-tin').value = settings.store_tin || '';
         document.getElementById('receipt-footer-text').value = settings.receipt_footer_text || '';
         document.getElementById('receipt-show-logo').checked = settings.receipt_show_logo !== false;
+        const fmtEl = document.getElementById('receipt-paper-format');
+        if (fmtEl) fmtEl.value = settings.receipt_paper_format || localStorage.getItem('receipt_paper_format') || 'a4';
         
         // Load work schedule settings
         if (settings.work_start_time) {
@@ -5984,6 +6665,14 @@ function setupSettingsListeners() {
         });
     }
     
+    // Qog'oz formati o'zgarishi - darhol localStorage'da saqlash
+    const receiptFormatEl = document.getElementById('receipt-paper-format');
+    if (receiptFormatEl) {
+        receiptFormatEl.addEventListener('change', () => {
+            localStorage.setItem('receipt_paper_format', receiptFormatEl.value);
+        });
+    }
+    
     // Save settings
     const saveBtn = document.getElementById('save-settings-btn');
     if (saveBtn) {
@@ -6009,6 +6698,7 @@ async function saveSettings(additionalData = {}) {
             store_tin: document.getElementById('store-tin').value || null,
             receipt_footer_text: document.getElementById('receipt-footer-text').value || null,
             receipt_show_logo: document.getElementById('receipt-show-logo').checked,
+            receipt_paper_format: document.getElementById('receipt-paper-format')?.value || 'a4',
             work_start_time: document.getElementById('work-start-time').value || null,
             work_end_time: document.getElementById('work-end-time').value || null,
             work_days: workDays || null,
@@ -6166,7 +6856,7 @@ async function loadCustomerReferals() {
     const search = document.getElementById('referal-search')?.value?.trim();
     const status = document.getElementById('referal-status-filter')?.value;
 
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Yuklanmoqda...</td></tr>';
 
     try {
         const params = new URLSearchParams();
@@ -6184,7 +6874,7 @@ async function loadCustomerReferals() {
         const items = data.items || [];
 
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Maʼlumot topilmadi</td></tr>';
             return;
         }
 
@@ -6215,12 +6905,20 @@ async function loadCustomerReferals() {
                 <td>${formatMoney(item.bonus_amount || 0)}</td>
                 <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
                 <td>${formatDate(item.created_at)}</td>
+                <td>
+                    <div class="action-buttons">
+                        ${item.status === 'registered' && !item.bonus_amount ? 
+                            `<button class="action-btn action-btn-success" onclick="awardReferalBonus(${item.id})" title="Bonus berish">
+                                <i class="fas fa-gift"></i> Bonus
+                            </button>` : ''}
+                    </div>
+                </td>
             `;
             tbody.appendChild(row);
         });
     } catch (error) {
         console.error('Error loading referals:', error);
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
     }
 }
 
@@ -6229,7 +6927,7 @@ async function loadCustomerLoyalty() {
     if (!tbody) return;
 
     const search = document.getElementById('loyalty-search')?.value?.trim();
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Yuklanmoqda...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center">Yuklanmoqda...</td></tr>';
 
     try {
         const params = new URLSearchParams();
@@ -6246,27 +6944,53 @@ async function loadCustomerLoyalty() {
         const data = await response.json();
         const items = data.items || [];
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Maʼlumot topilmadi</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">Maʼlumot topilmadi</td></tr>';
             return;
         }
 
         tbody.innerHTML = '';
         items.forEach(item => {
+            const vipColors = {
+                'platinum': 'badge-secondary',
+                'gold': 'badge-warning',
+                'silver': 'badge-info',
+                'bronze': 'badge-dark'
+            };
+            const vipLabels = {
+                'platinum': 'Platina',
+                'gold': 'Oltin',
+                'silver': 'Kumush',
+                'bronze': 'Bronza'
+            };
+            const vipClass = vipColors[item.vip_level] || 'badge-dark';
+            const vipLabel = vipLabels[item.vip_level] || item.vip_level || 'Bronza';
+            
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.id}</td>
                 <td>${escapeHtml(item.customer_name || '-')}</td>
                 <td>${escapeHtml(item.customer_phone || '-')}</td>
-                <td>${item.points ?? 0}</td>
-                <td>${item.total_spent ?? 0}</td>
-                <td>${item.total_earned ?? 0}</td>
+                <td><strong>${(item.points ?? 0).toLocaleString('uz-UZ')}</strong></td>
+                <td>${(item.total_spent ?? 0).toLocaleString('uz-UZ')}</td>
+                <td>${(item.total_earned ?? 0).toLocaleString('uz-UZ')}</td>
+                <td><span class="badge ${vipClass}">${vipLabel}</span></td>
                 <td>${formatDate(item.updated_at)}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn action-btn-edit" onclick="editLoyaltyPoints(${item.customer_id}, ${item.points ?? 0})" title="Bonus ball qo'shish/olib tashlash">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn action-btn-view" onclick="viewLoyaltyTransactions(${item.customer_id})" title="Tranzaksiyalarni ko'rish">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </td>
             `;
             tbody.appendChild(row);
         });
     } catch (error) {
         console.error('Error loading loyalty:', error);
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color: red;">${escapeHtml(error.message || 'Xatolik')}</td></tr>`;
     }
 }
 
@@ -6524,7 +7248,7 @@ async function loadCustomerPayments() {
 
 async function loadBanners() {
     try {
-        const banners = await fetch(`${API_BASE}/banners`).then(r => r.json());
+        const banners = await fetch(`${API_BASE}/banners`, { headers: getAuthHeaders() }).then(r => r.json());
         const tbody = document.getElementById('banners-tbody');
         if (!tbody) return;
         
@@ -6572,6 +7296,9 @@ async function loadBanners() {
     }
 }
 
+let bannerProductSearchDebounce = null;
+let bannerSelectedProduct = null;
+
 async function showAddBannerModal() {
     document.getElementById('banner-id').value = '';
     document.getElementById('banner-modal-title').textContent = 'Yangi Banner';
@@ -6582,17 +7309,17 @@ async function showAddBannerModal() {
     document.getElementById('banner-rotation-interval').value = '3000';
     document.getElementById('banner-is-active').checked = true;
     document.getElementById('banner-image-preview').innerHTML = '';
-    document.getElementById('banner-product-select').value = '';
-    
-    // Load products for dropdown
-    await loadProductsForBanner();
-    
+    document.getElementById('banner-product-search').value = '';
+    document.getElementById('banner-product-results').style.display = 'none';
+    document.getElementById('banner-product-results').innerHTML = '';
+    document.getElementById('banner-product-selected').style.display = 'none';
+    bannerSelectedProduct = null;
     document.getElementById('banner-modal').style.display = 'block';
 }
 
 async function editBanner(id) {
     try {
-        const banner = await fetch(`${API_BASE}/banners/${id}`).then(r => r.json());
+        const banner = await fetch(`${API_BASE}/banners/${id}`, { headers: getAuthHeaders() }).then(r => r.json());
         document.getElementById('banner-id').value = banner.id;
         document.getElementById('banner-modal-title').textContent = 'Bannerni Tahrirlash';
         document.getElementById('banner-title').value = banner.title || '';
@@ -6601,22 +7328,26 @@ async function editBanner(id) {
         document.getElementById('banner-display-order').value = banner.display_order || 0;
         document.getElementById('banner-rotation-interval').value = banner.rotation_interval || 3000;
         document.getElementById('banner-is-active').checked = banner.is_active !== false;
-        
-        // Load products and check if link_url matches a product
-        await loadProductsForBanner();
-        
-        // Try to match link_url to a product
-        if (banner.link_url) {
-            const products = await fetch(`${API_BASE}/products?limit=1000`).then(r => r.json());
-            const matchedProduct = products.find(p => `/product/${p.id}` === banner.link_url);
-            if (matchedProduct) {
-                document.getElementById('banner-product-select').value = matchedProduct.id;
+        document.getElementById('banner-product-results').style.display = 'none';
+        document.getElementById('banner-product-results').innerHTML = '';
+        if (banner.link_url && banner.link_url.match(/^\/product\/(\d+)$/)) {
+            const productId = parseInt(banner.link_url.replace(/^\/product\/(\d+)$/, '$1'), 10);
+            try {
+                const product = await fetch(`${API_BASE}/products/${productId}`, { headers: getAuthHeaders() }).then(r => r.json());
+                bannerSelectedProduct = { id: product.id, name: product.name };
+                document.getElementById('banner-product-search').value = '';
+                document.getElementById('banner-product-selected-name').textContent = product.name;
+                document.getElementById('banner-product-selected').style.display = 'block';
+            } catch (e) {
+                bannerSelectedProduct = null;
+                document.getElementById('banner-product-search').value = '';
+                document.getElementById('banner-product-selected').style.display = 'none';
             }
         } else {
-            document.getElementById('banner-product-select').value = '';
+            bannerSelectedProduct = null;
+            document.getElementById('banner-product-search').value = '';
+            document.getElementById('banner-product-selected').style.display = 'none';
         }
-        
-        // Show preview if image URL exists
         if (banner.image_url) {
             const imageUrl = banner.image_url.startsWith('http') ? banner.image_url : `${window.location.origin}${banner.image_url}`;
             document.getElementById('banner-image-preview').innerHTML = `
@@ -6625,7 +7356,6 @@ async function editBanner(id) {
         } else {
             document.getElementById('banner-image-preview').innerHTML = '';
         }
-        
         document.getElementById('banner-modal').style.display = 'block';
     } catch (error) {
         console.error('Error loading banner:', error);
@@ -6726,39 +7456,96 @@ async function saveBanner(event) {
     }
 }
 
-async function loadProductsForBanner() {
-    try {
-        const products = await fetch(`${API_BASE}/products?limit=1000`).then(r => r.json());
-        const select = document.getElementById('banner-product-select');
-        if (!select) return;
-        
-        // Clear existing options except the first one
-        select.innerHTML = '<option value="">Mahsulot tanlash...</option>';
-        
-        // Add products to dropdown
-        products.forEach(product => {
-            const option = document.createElement('option');
-            option.value = product.id;
-            option.textContent = product.name;
-            select.appendChild(option);
+function setupBannerProductSearch() {
+    const searchEl = document.getElementById('banner-product-search');
+    const resultsEl = document.getElementById('banner-product-results');
+    const selectedEl = document.getElementById('banner-product-selected');
+    const selectedNameEl = document.getElementById('banner-product-selected-name');
+    const clearBtn = document.getElementById('banner-product-clear');
+    const linkUrlInput = document.getElementById('banner-link-url');
+    if (!searchEl || !resultsEl) return;
+
+    searchEl.addEventListener('input', function() {
+        if (bannerProductSearchDebounce) clearTimeout(bannerProductSearchDebounce);
+        const q = (this.value || '').trim();
+        if (bannerSelectedProduct) {
+            bannerSelectedProduct = null;
+            selectedEl.style.display = 'none';
+            linkUrlInput.value = '';
+        }
+        if (!q) {
+            resultsEl.style.display = 'none';
+            resultsEl.innerHTML = '';
+            return;
+        }
+        bannerProductSearchDebounce = setTimeout(function() {
+            searchProductsForBanner(q);
+        }, 300);
+    });
+    searchEl.addEventListener('focus', function() {
+        const q = (this.value || '').trim();
+        if (q && resultsEl.innerHTML) resultsEl.style.display = 'block';
+    });
+    document.addEventListener('click', function(e) {
+        if (resultsEl && !resultsEl.contains(e.target) && e.target !== searchEl) {
+            resultsEl.style.display = 'none';
+        }
+    });
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            bannerSelectedProduct = null;
+            searchEl.value = '';
+            selectedEl.style.display = 'none';
+            if (linkUrlInput.value.startsWith('/product/')) linkUrlInput.value = '';
+            resultsEl.style.display = 'none';
+            resultsEl.innerHTML = '';
         });
-    } catch (error) {
-        console.error('Error loading products for banner:', error);
     }
 }
 
-function handleBannerProductSelect(event) {
-    const productId = event.target.value;
+async function searchProductsForBanner(query) {
+    const resultsEl = document.getElementById('banner-product-results');
     const linkUrlInput = document.getElementById('banner-link-url');
-    
-    if (productId) {
-        // Auto-fill link URL with product URL
-        linkUrlInput.value = `/product/${productId}`;
-    } else {
-        // Clear if no product selected
-        if (linkUrlInput.value.startsWith('/product/')) {
-            linkUrlInput.value = '';
+    const selectedEl = document.getElementById('banner-product-selected');
+    const selectedNameEl = document.getElementById('banner-product-selected-name');
+    const searchEl = document.getElementById('banner-product-search');
+    if (!resultsEl) return;
+    resultsEl.innerHTML = '<div style="padding:10px;color:var(--text-light);">Qidirilmoqda...</div>';
+    resultsEl.style.display = 'block';
+    try {
+        const url = `${API_BASE}/products?search=${encodeURIComponent(query)}&limit=50`;
+        const products = await fetch(url, { headers: getAuthHeaders() }).then(r => r.json());
+        if (!Array.isArray(products)) {
+            resultsEl.innerHTML = '<div style="padding:10px;color:var(--text-light);">Natija topilmadi</div>';
+            return;
         }
+        if (products.length === 0) {
+            resultsEl.innerHTML = '<div style="padding:10px;color:var(--text-light);">Mahsulot topilmadi</div>';
+            return;
+        }
+        resultsEl.innerHTML = products.map(function(p) {
+            const sub = [p.item_number, p.barcode].filter(Boolean).join(' · ');
+            return '<div class="banner-product-result-item" data-id="' + p.id + '" data-name="' + escapeHtml(p.name) + '">' +
+                '<span class="banner-product-result-name">' + escapeHtml(p.name) + '</span>' +
+                (sub ? '<span class="banner-product-result-sub">' + escapeHtml(sub) + '</span>' : '') +
+                '</div>';
+        }).join('');
+        resultsEl.querySelectorAll('.banner-product-result-item').forEach(function(el) {
+            el.addEventListener('click', function() {
+                const id = el.getAttribute('data-id');
+                const name = el.getAttribute('data-name');
+                bannerSelectedProduct = { id: parseInt(id, 10), name: name };
+                linkUrlInput.value = '/product/' + id;
+                selectedNameEl.textContent = name;
+                selectedEl.style.display = 'block';
+                searchEl.value = '';
+                resultsEl.style.display = 'none';
+                resultsEl.innerHTML = '';
+            });
+        });
+    } catch (error) {
+        console.error('Banner product search error:', error);
+        resultsEl.innerHTML = '<div style="padding:10px;color:var(--danger);">Xatolik yuz berdi</div>';
     }
 }
 
@@ -6837,24 +7624,8 @@ async function loadCategoriesList() {
             return;
         }
         
-        // Get product counts for each category
-        const productCounts = {};
-        try {
-            const productsResponse = await fetch(`${API_BASE}/products?limit=10000`, { headers });
-            if (productsResponse.ok) {
-                const products = await productsResponse.json();
-                products.forEach(product => {
-                    if (product.category_id) {
-                        productCounts[product.category_id] = (productCounts[product.category_id] || 0) + 1;
-                    }
-                });
-            }
-        } catch (e) {
-            console.error('Error loading product counts:', e);
-        }
-        
         tbody.innerHTML = categories.map(category => {
-            const productCount = productCounts[category.id] || 0;
+            const productCount = category.product_count != null ? category.product_count : 0;
             const createdDate = category.created_at ? new Date(category.created_at).toLocaleDateString('uz-UZ') : '-';
             return `
                 <tr>
@@ -6886,7 +7657,7 @@ async function loadCategoriesList() {
         console.error('Error loading categories:', error);
         const tbody = document.getElementById('categories-tbody');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Xatolik: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Xatolik: ${escapeHtml(error.message || 'Noma\'lum xatolik')}</td></tr>`;
         }
     }
 }
@@ -7044,7 +7815,7 @@ async function loadProductCategories() {
         const categories = await response.json();
         
         // Update product category select
-        const select = document.getElementById('product-category-select');
+        const select = document.getElementById('product-category');
         if (select) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Kategoriya tanlash...</option>';
@@ -7079,5 +7850,256 @@ async function loadProductCategories() {
         }
     } catch (error) {
         console.error('Error loading categories from API:', error);
+    }
+}
+
+function clearDashboardFilters() {
+    const brandFilter = document.getElementById('dashboard-brand-filter');
+    const supplierFilter = document.getElementById('dashboard-supplier-filter');
+    const periodSelect = document.getElementById('dashboard-period');
+    
+    if (brandFilter) brandFilter.value = '';
+    if (supplierFilter) supplierFilter.value = '';
+    if (periodSelect) periodSelect.value = '';
+    
+    loadDashboard();
+}
+
+async function updateNewOrdersBadge() {
+    try {
+        const response = await fetch(`${API_BASE}/orders?status=pending&limit=100`, {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const orders = await response.json();
+            const pendingCount = Array.isArray(orders) ? orders.filter(o => o.status === 'pending').length : 0;
+            const badge = document.getElementById('new-orders-badge');
+            if (badge) {
+                if (pendingCount > 0) {
+                    badge.textContent = pendingCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error updating new orders badge:', error);
+    }
+}
+
+// Update badges on page load
+async function updateAllBadges() {
+    await Promise.all([
+        updateNewOrdersBadge(),
+        updateHelpRequestsBadge()
+    ]);
+}
+
+async function updateHelpRequestsBadge() {
+    try {
+        const response = await fetch(`${API_BASE}/help-requests?status=pending`, {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const data = await response.json();
+            const requests = data.requests || data.items || [];
+            const pendingCount = Array.isArray(requests) ? requests.filter(r => r.status === 'pending').length : 0;
+            const badge = document.getElementById('help-requests-badge');
+            if (badge) {
+                if (pendingCount > 0) {
+                    badge.textContent = pendingCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error updating help requests badge:', error);
+    }
+}
+
+// ==================== REFERAL BONUS MANAGEMENT ====================
+
+async function awardReferalBonus(referalId) {
+    if (!confirm('Bu referal uchun bonus berishni tasdiqlaysizmi?')) {
+        return;
+    }
+    
+    try {
+        const bonusAmount = prompt('Bonus miqdorini kiriting (so\'m):');
+        if (!bonusAmount || isNaN(bonusAmount) || parseFloat(bonusAmount) <= 0) {
+            alert('To\'g\'ri bonus miqdorini kiriting');
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE}/admin/referals/${referalId}/award-bonus`, {
+            method: 'POST',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ bonus_amount: parseFloat(bonusAmount) })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Bonus berishda xatolik');
+        }
+        
+        const result = await response.json();
+        alert(result.message || 'Bonus muvaffaqiyatli berildi!');
+        loadCustomerReferals();
+    } catch (error) {
+        console.error('Error awarding bonus:', error);
+        alert('Bonus berishda xatolik: ' + error.message);
+    }
+}
+
+// ==================== LOYALTY PROGRAM MANAGEMENT ====================
+
+function showAddBonusModal() {
+    const customerId = prompt('Mijoz ID ni kiriting:');
+    if (!customerId || isNaN(customerId)) {
+        alert('To\'g\'ri mijoz ID kiriting');
+        return;
+    }
+    
+    editLoyaltyPoints(parseInt(customerId), 0);
+}
+
+async function editLoyaltyPoints(customerId, currentPoints) {
+    const action = confirm(`Hozirgi bonus: ${currentPoints.toLocaleString('uz-UZ')}\n\nQo'shish uchun OK, olib tashlash uchun Bekor qilish bosing`);
+    
+    if (action === null) return; // User cancelled
+    
+    const amount = prompt(`${action ? 'Qo\'shiladigan' : 'Olib tashlanadigan'} bonus miqdorini kiriting:`);
+    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+        alert('To\'g\'ri bonus miqdorini kiriting');
+        return;
+    }
+    
+    const points = parseInt(amount);
+    if (action) {
+        // Add points
+        try {
+            const response = await fetch(`${API_BASE}/admin/loyalty/${customerId}/add-points`, {
+                method: 'POST',
+                headers: {
+                    ...getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    points: points,
+                    description: `Admin tomonidan qo'shilgan: ${points} ball`
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Bonus qo\'shishda xatolik');
+            }
+            
+            const result = await response.json();
+            alert(result.message || `Bonus muvaffaqiyatli qo'shildi! Yangi balans: ${result.new_balance}`);
+            loadCustomerLoyalty();
+        } catch (error) {
+            console.error('Error adding points:', error);
+            alert('Bonus qo\'shishda xatolik: ' + error.message);
+        }
+    } else {
+        // Remove points
+        try {
+            const response = await fetch(`${API_BASE}/admin/loyalty/${customerId}/remove-points`, {
+                method: 'POST',
+                headers: {
+                    ...getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    points: points,
+                    description: `Admin tomonidan olib tashlangan: ${points} ball`
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Bonus olib tashlashda xatolik');
+            }
+            
+            const result = await response.json();
+            alert(result.message || `Bonus muvaffaqiyatli olib tashlandi! Yangi balans: ${result.new_balance}`);
+            loadCustomerLoyalty();
+        } catch (error) {
+            console.error('Error removing points:', error);
+            alert('Bonus olib tashlashda xatolik: ' + error.message);
+        }
+    }
+}
+
+async function viewLoyaltyTransactions(customerId) {
+    try {
+        const response = await fetch(`${API_BASE}/loyalty/transactions?limit=100`, {
+            headers: {
+                ...getAuthHeaders(),
+                'X-Customer-ID': customerId.toString()
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Tranzaksiyalarni yuklashda xatolik');
+        }
+        
+        const transactions = await response.json();
+        
+        let transactionsHtml = '<table style="width: 100%; margin-top: 1rem;"><thead><tr><th>ID</th><th>Turi</th><th>Miqdor</th><th>Tavsif</th><th>Sana</th></tr></thead><tbody>';
+        
+        if (transactions && transactions.length > 0) {
+            transactions.forEach(t => {
+                const typeLabel = t.transaction_type === 'earned' ? 'Yig\'ilgan' :
+                                 t.transaction_type === 'spent' ? 'Sarflangan' :
+                                 t.transaction_type === 'expired' ? 'Muddati o\'tgan' : t.transaction_type;
+                const typeClass = t.points > 0 ? 'badge-success' : 'badge-danger';
+                
+                transactionsHtml += `
+                    <tr>
+                        <td>${t.id}</td>
+                        <td><span class="badge ${typeClass}">${typeLabel}</span></td>
+                        <td>${t.points > 0 ? '+' : ''}${t.points.toLocaleString('uz-UZ')}</td>
+                        <td>${escapeHtml(t.description || '-')}</td>
+                        <td>${formatDate(t.created_at)}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            transactionsHtml += '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Tranzaksiyalar topilmadi</td></tr>';
+        }
+        
+        transactionsHtml += '</tbody></table>';
+        
+        // Show in modal
+        let modal = document.getElementById('loyalty-transactions-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.id = 'loyalty-transactions-modal';
+            document.body.appendChild(modal);
+        }
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <span class="close" onclick="closeModal('loyalty-transactions-modal')">&times;</span>
+                <h2>Bonus Tranzaksiyalari</h2>
+                ${transactionsHtml}
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('loyalty-transactions-modal')">Yopish</button>
+                </div>
+            </div>
+        `;
+        modal.style.display = 'block';
+    } catch (error) {
+        console.error('Error loading transactions:', error);
+        alert('Tranzaksiyalarni yuklashda xatolik: ' + error.message);
     }
 }
